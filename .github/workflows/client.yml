@@ -23,15 +23,14 @@ jobs:
         id: package_name
         run: |
           echo ::set-output name=name::S3.Player.Api.Client
-          echo ::set-output name=dll_name::Player.Api
+          echo ::set-output name=dll_name::S3.Player.Api
           echo ::set-output name=directory::S3.Player.Api
 
       - uses: actions/checkout@v2
 
       - name: Build Package
         run: |
-          dotnet new tool-manifest
-          dotnet tool install --version 5.6.3 Swashbuckle.AspNetCore.Cli
+          dotnet tool install -g --version 5.6.3 Swashbuckle.AspNetCore.Cli
           cd ${{ steps.package_name.outputs.directory }}
           dotnet build -c Release /p:version=${{ github.event.inputs.clientVersion }}
           
@@ -44,11 +43,11 @@ jobs:
         run: |
           npm install autorest@3.0.6247
           find . -name "*autorest*"
-          cd src/${{ steps.package_name.outputs.name }}
+          cd ${{ steps.package_name.outputs.name }}
 
       - name: Create NuGet Package
         run: |
-          cd src/${{ steps.package_name.outputs.name }}
+          cd ${{ steps.package_name.outputs.name }}
           dotnet pack -c Release /p:version=${{ github.event.inputs.clientVersion }}  \
           /p:authors="Carnegie Mellon University/Software Engineering Institute"      \
           /p:description="AutoRest generated client for Crucible's ${{ steps.package_name.outputs.dll_name }}"   \
@@ -84,6 +83,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: src/${{ steps.package_name.outputs.name }}/bin/Release/${{ steps.package_name.outputs.name }}.${{ github.event.inputs.clientVersion }}.nupkg
+          asset_path: ${{ steps.package_name.outputs.name }}/bin/Release/${{ steps.package_name.outputs.name }}.${{ github.event.inputs.clientVersion }}.nupkg
           asset_name: ${{ steps.package_name.outputs.name }}.${{ github.event.inputs.clientVersion }}.nupkg
           asset_content_type: application/zip
