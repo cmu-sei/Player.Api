@@ -8,7 +8,7 @@ version: "3.6"
 
 services:
   player-api:
-    image: artifactory.sei.cmu.edu/cwd-docker/crucible-bamboo/player-api:latest
+    image: cmusei/player-api:development
     # Overrides the default entrypoint to update certificates.
     entrypoint: bash -c "update-ca-certificates && dotnet S3.Player.Api.dll"
     volumes:
@@ -31,7 +31,7 @@ version: "3.6"
 
 services:
   player-api:
-    image: artifactory.sei.cmu.edu/cwd-docker/crucible-bamboo/player-api:latest
+    image: cmusei/player-api:development
     # Overrides the default entrypoint to update certificates.
     entrypoint: bash -c "update-ca-certificates && dotnet S3.Player.Api.dll"
     deploy:
