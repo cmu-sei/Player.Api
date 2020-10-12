@@ -14,5 +14,5 @@ jobs:
     steps:
       - name: List Package
         run: |
-          PACKAGENAME=S3.Player.Api.Client
+          PACKAGENAME=Player.Api.Client
           curl -H "Content-Length: 0" -H "X-NuGet-ApiKey: ${{ secrets.NUGET_APIKEY_UNLIST }}" -X POST https://www.nuget.org/api/v2/package/$PACKAGENAME/${{ github.event.inputs.clientVersion }}
