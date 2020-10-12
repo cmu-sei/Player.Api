@@ -21,6 +21,7 @@ jobs:
         id: package_name
         run: |
           echo ::set-output name=name::S3.Player.Api.Client
+          echo ::set-output name=packagename::Player.Api.Client
           echo ::set-output name=dll_name::S3.Player.Api
           echo ::set-output name=directory::S3.Player.Api
 
@@ -47,6 +48,7 @@ jobs:
         run: |
           cd ${{ steps.package_name.outputs.name }}
           dotnet pack -c Release /p:version=${{ github.event.inputs.clientVersion }}  \
+          /p:id=${{ steps.package_name.outputs.packagename }}                         \
           /p:authors="Carnegie Mellon University/Software Engineering Institute"      \
           /p:description="AutoRest generated client for Crucible's ${{ steps.package_name.outputs.dll_name }}"   \
           --include-source
