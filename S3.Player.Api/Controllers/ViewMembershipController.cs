@@ -61,7 +61,7 @@ namespace S3.Player.Api.Controllers
         /// Accessible to Super Users or the specified User
         /// </remarks>
         /// <returns></returns>
-        [HttpGet("/users/{userId}/view-memberships")]
+        [HttpGet("users/{userId}/view-memberships")]
         [ProducesResponseType(typeof(IEnumerable<ViewMembership>), (int)HttpStatusCode.OK)]
         [SwaggerOperation(operationId: "getViewMemberships")]
         public async Task<IActionResult> GetByUserId(Guid userId)

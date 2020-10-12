@@ -16,7 +16,9 @@ using System.Net;
 namespace S3.Player.Api.Controllers
 {
     [Authorize]
-    public abstract class BaseController : Controller
+    [Route("api/")]
+    [ApiController]
+    public abstract class BaseController : ControllerBase
     {
     }
 }

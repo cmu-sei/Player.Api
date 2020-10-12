@@ -156,7 +156,7 @@ namespace S3.Player.Api
                         .SingleOrDefault(x => x.StartsWith("bearer="))?.Split('=')[1];
 
                     if (!String.IsNullOrWhiteSpace(token))
-                        context.Request.Headers.Add("Authorization", new[] {$"Bearer {token}"});
+                        context.Request.Headers.Add("Authorization", new[] { $"Bearer {token}" });
                 }
 
                 await next.Invoke();
@@ -166,6 +166,7 @@ namespace S3.Player.Api
             app.UseSwagger();
             app.UseSwaggerUI(c =>
             {
+                c.RoutePrefix = "api";
                 c.SwaggerEndpoint("/swagger/v1/swagger.json", "Player v1");
                 c.OAuthClientId(_authOptions.ClientId);
                 c.OAuthClientSecret(_authOptions.ClientSecret);
