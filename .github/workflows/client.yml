@@ -48,7 +48,6 @@ jobs:
         run: |
           cd ${{ steps.package_name.outputs.name }}
           dotnet pack -c Release /p:version=${{ github.event.inputs.clientVersion }}  \
-          /p:id=${{ steps.package_name.outputs.packagename }}                         \
           /p:authors="Carnegie Mellon University/Software Engineering Institute"      \
           /p:description="AutoRest generated client for Crucible's ${{ steps.package_name.outputs.dll_name }}"   \
           --include-source
@@ -58,6 +57,8 @@ jobs:
           unzip ${{ steps.package_name.outputs.name }}.${{ github.event.inputs.clientVersion }}.nupkg.bak -d tmp
           chmod -R 755 tmp
           cd tmp
+          sed -i 's/<id>S3.Player.Api.Client<\/id>/<id>${{ steps.package_name.outputs.packagename }}<\/id>/g' ${{ steps.package_name.outputs.name }}.nuspec
+          sed -i 'g/<\/version>/a \    <license type="expression">MIT<\/license>' ${{ steps.package_name.outputs.name }}.nuspec
           sed -i '/<\/version>/a \    <license type="expression">MIT<\/license>' ${{ steps.package_name.outputs.name }}.nuspec
           sed -i '/<\/version>/a \    <licenseUrl>https:\/\/licenses.nuget.org\/MIT<\/licenseUrl>' ${{ steps.package_name.outputs.name }}.nuspec
           sed -i '/<\/version>/a \    <projectUrl>https:\/\/github.com\/cmu-sei\/crucible<\/projectUrl>' ${{ steps.package_name.outputs.name }}.nuspec
