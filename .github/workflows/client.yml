@@ -56,7 +56,6 @@ jobs:
           unzip ${{ steps.package_name.outputs.name }}.${{ github.event.inputs.clientVersion }}.nupkg.bak -d tmp
           chmod -R 755 tmp
           cd tmp
-          sed -i '/<\/version>/a \    <owners>Carnegie Mellon University\/Software Engineering Institute<\/owners>' ${{ steps.package_name.outputs.name }}.nuspec
           sed -i '/<\/version>/a \    <license type="expression">MIT<\/license>' ${{ steps.package_name.outputs.name }}.nuspec
           sed -i '/<\/version>/a \    <licenseUrl>https:\/\/licenses.nuget.org\/MIT<\/licenseUrl>' ${{ steps.package_name.outputs.name }}.nuspec
           sed -i '/<\/version>/a \    <projectUrl>https:\/\/github.com\/cmu-sei\/crucible<\/projectUrl>' ${{ steps.package_name.outputs.name }}.nuspec
