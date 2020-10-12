@@ -1,10 +1,10 @@
-name: Build Client
+name: Build Client Package
 
 on: 
   workflow_dispatch:
     inputs:
       clientVersion:
-        description: 'Version of the Client package'     
+        description: 'Version of the Client package'
         required: true
 
 jobs:
