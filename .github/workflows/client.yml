@@ -40,6 +40,7 @@ jobs:
 
       - name: Run AutoRest
         run: |
+          pwd
           npm install autorest@3.0.6247
           find . -name "*autorest*"
           ./node_modules/.bin/autorest .
