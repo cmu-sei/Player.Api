@@ -40,9 +40,9 @@ jobs:
 
       - name: Run AutoRest
         run: |
-          npm install -g autorest@3.0.6247
+          npm install autorest@3.0.6247
           find . -name "*autorest*"
-          autorest .
+          ./node_modules/.bin/autorest .
           cd ${{ steps.package_name.outputs.name }}
 
       # - name: Create NuGet Package
