@@ -37,6 +37,8 @@ jobs:
         run: |
           cd ${{ steps.package_name.outputs.directory }}
           dotnet swagger tofile --output ../${{ steps.package_name.outputs.name }}/swagger.json bin/Release/*/${{ steps.package_name.outputs.dll_name }}.dll v1
+          pwd
+          ls
 
       - name: Run AutoRest
         run: |
