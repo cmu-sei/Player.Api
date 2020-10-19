@@ -32,7 +32,7 @@ namespace S3.Player.Api.Infrastructure.Extensions
 
             services.AddSwaggerGen(c =>
             {
-                c.SwaggerDoc("v1", new Info { Title = "Scenario Player API", Version = "v1" });
+                c.SwaggerDoc("v1", new Info { Title = "Player API", Version = "v1" });
 
                 c.AddSecurityDefinition("oauth2", new OAuth2Scheme
                 {
@@ -57,4 +57,3 @@ namespace S3.Player.Api.Infrastructure.Extensions
         }
     }
 }
-
