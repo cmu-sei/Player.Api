@@ -177,9 +177,9 @@ namespace S3.Player.Api
 
             app.UseSignalR(routes =>
                 {
-                    routes.MapHub<Hubs.ViewHub>("/notifications/view");
-                    routes.MapHub<Hubs.TeamHub>("/notifications/team");
-                    routes.MapHub<Hubs.UserHub>("/notifications/user");
+                    routes.MapHub<Hubs.ViewHub>("/hubs/view");
+                    routes.MapHub<Hubs.TeamHub>("/hubs/team");
+                    routes.MapHub<Hubs.UserHub>("/hubs/user");
                 }
             );
 
