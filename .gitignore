@@ -314,4 +314,4 @@ Version.cs
 Version.h
 Version.cpp
 *.db
-S3.Player.Api/appsettings.Development.json
+Player.Api/appsettings.Development.json
