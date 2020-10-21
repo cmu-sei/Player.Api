@@ -21,7 +21,6 @@ jobs:
         id: package_name
         run: |
           echo ::set-output name=name::Player.Api.Client
-          echo ::set-output name=packagename::Player.Api.Client
           echo ::set-output name=dll_name::Player.Api
           echo ::set-output name=directory::Player.Api
 
@@ -66,7 +65,7 @@ jobs:
       - name: Publish to Nuget.org as Unlisted
         run: |
           dotnet nuget push ${{ steps.package_name.outputs.name }}/bin/Release/${{ steps.package_name.outputs.name }}.${{ github.event.inputs.clientVersion }}.nupkg -k ${{ secrets.NUGET_APIKEY }} -s https://api.nuget.org/v3/index.json
-          dotnet nuget delete ${{ steps.package_name.outputs.packagename }} ${{ github.event.inputs.clientVersion }} --non-interactive -k ${{ secrets.NUGET_APIKEY_UNLIST }} -s https://api.nuget.org/v3/index.json
+          dotnet nuget delete ${{ steps.package_name.outputs.name }} ${{ github.event.inputs.clientVersion }} --non-interactive -k ${{ secrets.NUGET_APIKEY_UNLIST }} -s https://api.nuget.org/v3/index.json
 
       - name: Create Release
         id: create_release
