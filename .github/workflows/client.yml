@@ -20,10 +20,9 @@ jobs:
       - name: Setup Package Name
         id: package_name
         run: |
-          echo ::set-output name=name::S3.Player.Api.Client
-          echo ::set-output name=packagename::Player.Api.Client
-          echo ::set-output name=dll_name::S3.Player.Api
-          echo ::set-output name=directory::S3.Player.Api
+          echo ::set-output name=name::Player.Api.Client
+          echo ::set-output name=dll_name::Player.Api
+          echo ::set-output name=directory::Player.Api
 
       - uses: actions/checkout@v2
 
@@ -57,7 +56,6 @@ jobs:
           unzip ${{ steps.package_name.outputs.name }}.${{ github.event.inputs.clientVersion }}.nupkg.bak -d tmp
           chmod -R 755 tmp
           cd tmp
-          sed -i 's|S3\.Player|Player|g' ${{ steps.package_name.outputs.name }}.nuspec
           sed -i '/<\/version>/a \    <license type="expression">MIT<\/license>' ${{ steps.package_name.outputs.name }}.nuspec
           sed -i '/<\/version>/a \    <licenseUrl>https:\/\/licenses.nuget.org\/MIT<\/licenseUrl>' ${{ steps.package_name.outputs.name }}.nuspec
           sed -i '/<\/version>/a \    <projectUrl>https:\/\/github.com\/cmu-sei\/crucible<\/projectUrl>' ${{ steps.package_name.outputs.name }}.nuspec
@@ -67,7 +65,7 @@ jobs:
       - name: Publish to Nuget.org as Unlisted
         run: |
           dotnet nuget push ${{ steps.package_name.outputs.name }}/bin/Release/${{ steps.package_name.outputs.name }}.${{ github.event.inputs.clientVersion }}.nupkg -k ${{ secrets.NUGET_APIKEY }} -s https://api.nuget.org/v3/index.json
-          dotnet nuget delete ${{ steps.package_name.outputs.packagename }} ${{ github.event.inputs.clientVersion }} --non-interactive -k ${{ secrets.NUGET_APIKEY_UNLIST }} -s https://api.nuget.org/v3/index.json
+          dotnet nuget delete ${{ steps.package_name.outputs.name }} ${{ github.event.inputs.clientVersion }} --non-interactive -k ${{ secrets.NUGET_APIKEY_UNLIST }} -s https://api.nuget.org/v3/index.json
 
       - name: Create Release
         id: create_release
