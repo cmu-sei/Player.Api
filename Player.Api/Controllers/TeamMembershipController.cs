@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.Services;
 using Player.Api.ViewModels;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using Swashbuckle.AspNetCore.Annotations;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -41,7 +41,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("team-memberships/{id}")]
         [ProducesResponseType(typeof(TeamMembership), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getTeamMembership")]
+        [SwaggerOperation(OperationId = "getTeamMembership")]
         public async Task<IActionResult> Get(Guid id)
         {
             var membership = await _teamMembershipService.GetAsync(id);
@@ -63,7 +63,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("users/{userId}/views/{viewId}/team-memberships")]
         [ProducesResponseType(typeof(IEnumerable<TeamMembership>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getTeamMemberships")]
+        [SwaggerOperation(OperationId = "getTeamMemberships")]
         public async Task<IActionResult> GetByViewIdForUser(Guid viewId, Guid userId)
         {
             var list = await _teamMembershipService.GetByViewIdForUserAsync(viewId, userId);
@@ -82,7 +82,7 @@ namespace Player.Api.Controllers
         /// <param name="form">The updated Team Membership values</param>
         [HttpPut("team-memberships/{id}")]
         [ProducesResponseType(typeof(TeamMembership), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "updateTeamMembership")]
+        [SwaggerOperation(OperationId = "updateTeamMembership")]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] TeamMembershipForm form)
         {
             var updatedMembership = await _teamMembershipService.UpdateAsync(id, form);

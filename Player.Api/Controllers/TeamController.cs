@@ -21,7 +21,7 @@ using Player.Api.Services;
 using Player.Api.ViewModels;
 using Microsoft.AspNetCore.SignalR;
 using Player.Api.Hubs;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace Player.Api.Controllers
 {
@@ -51,7 +51,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("teams")]
         [ProducesResponseType(typeof(IEnumerable<Team>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getTeams")]
+        [SwaggerOperation(OperationId = "getTeams")]
         public async Task<IActionResult> Get(CancellationToken ct)
         {
             var list = await _teamService.GetAsync(ct);
@@ -71,7 +71,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("views/{id}/teams")]
         [ProducesResponseType(typeof(IEnumerable<Team>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getViewTeams")]
+        [SwaggerOperation(OperationId = "getViewTeams")]
         public async Task<IActionResult> GetByView(Guid id, CancellationToken ct)
         {
             var list = await _teamService.GetByViewIdAsync(id, ct);
@@ -92,7 +92,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("users/{userId}/views/{viewId}/teams")]
         [ProducesResponseType(typeof(IEnumerable<Team>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getUserViewTeams")]
+        [SwaggerOperation(OperationId = "getUserViewTeams")]
         public async Task<IActionResult> GetByViewForUser(Guid viewId, Guid userId, CancellationToken ct)
         {
             var list = await _teamService.GetByViewIdForUserAsync(viewId, userId, ct);
@@ -111,7 +111,7 @@ namespace Player.Api.Controllers
         /// </remarks>
         /// <param name="id">The id of the View</param>
         [HttpGet("me/views/{id}/teams")]
-        [SwaggerOperation(operationId: "getMyViewTeams")]
+        [SwaggerOperation(OperationId = "getMyViewTeams")]
         public async Task<IActionResult> GetByViewForMe(Guid id)
         {
             return RedirectToAction(nameof(this.GetByViewForUser), new { userId = User.GetId(), viewId = id });
@@ -130,7 +130,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("teams/{id}")]
         [ProducesResponseType(typeof(Team), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getTeam")]
+        [SwaggerOperation(OperationId = "getTeam")]
         public async Task<IActionResult> Get(Guid id, CancellationToken ct)
         {
             var team = await _teamService.GetAsync(id, ct);
@@ -154,7 +154,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpPost("views/{id}/teams")]
         [ProducesResponseType(typeof(Team), (int)HttpStatusCode.Created)]
-        [SwaggerOperation(operationId: "createTeam")]
+        [SwaggerOperation(OperationId = "createTeam")]
         public async Task<IActionResult> Create([FromRoute] Guid id, [FromBody] TeamForm form, CancellationToken ct)
         {
             var createdTeam = await _teamService.CreateAsync(id, form, ct);
@@ -174,7 +174,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpPut("teams/{id}")]
         [ProducesResponseType(typeof(Team), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "updateTeam")]
+        [SwaggerOperation(OperationId = "updateTeam")]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] TeamForm form, CancellationToken ct)
         {
             var updatedTeam = await _teamService.UpdateAsync(id, form, ct);
@@ -193,7 +193,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpDelete("teams/{id}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
-        [SwaggerOperation(operationId: "deleteTeam")]
+        [SwaggerOperation(OperationId = "deleteTeam")]
         public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
         {
             await _teamService.DeleteAsync(id, ct);
@@ -214,7 +214,7 @@ namespace Player.Api.Controllers
         [HttpPost("teams/{id}/notifications")]
         [ProducesResponseType(typeof(string), (int)HttpStatusCode.OK)]
         [ProducesResponseType(typeof(string), (int)HttpStatusCode.Forbidden)]
-        [SwaggerOperation(operationId: "broadcastToTeam")]
+        [SwaggerOperation(OperationId = "broadcastToTeam")]
         public async Task<IActionResult> Broadcast([FromRoute] Guid id, [FromBody] Notification incomingData, CancellationToken ct)
         {
             if (!incomingData.IsValid())
@@ -244,7 +244,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpPost("users/{userId}/teams/{teamId}/primary")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "setUserPrimaryTeam")]
+        [SwaggerOperation(OperationId = "setUserPrimaryTeam")]
         public async Task<IActionResult> SetPrimary(Guid teamId, Guid userId, CancellationToken ct)
         {
             var team = await _teamService.SetPrimaryAsync(teamId, userId, ct);

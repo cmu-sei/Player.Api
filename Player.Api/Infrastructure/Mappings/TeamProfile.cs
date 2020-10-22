@@ -33,9 +33,9 @@ namespace Player.Api.Infrastructure.Mappings
                 .ForMember(dest => dest.Permissions, opt => opt.MapFrom(src => src.Permissions.Select(x => x.Permission)));
 
             CreateMap<TeamDTO, Team>()
-                .ForMember(dest => dest.CanManage, opt => opt.ResolveUsing<ManageTeamResolver>())
-                .ForMember(dest => dest.IsMember, opt => opt.ResolveUsing<TeamMemberResolver>())
-                .ForMember(dest => dest.IsPrimary, opt => opt.ResolveUsing<PrimaryTeamResolver>());
+                .ForMember(dest => dest.CanManage, opt => opt.MapFrom<ManageTeamResolver>())
+                .ForMember(dest => dest.IsMember, opt => opt.MapFrom<TeamMemberResolver>())
+                .ForMember(dest => dest.IsPrimary, opt => opt.MapFrom<PrimaryTeamResolver>());
         }
     }
 

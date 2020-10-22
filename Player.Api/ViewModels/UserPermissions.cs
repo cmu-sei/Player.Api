@@ -8,8 +8,7 @@ Carnegie Mellon(R) and CERT(R) are registered in the U.S. Patent and Trademark O
 DM20-0181
 */
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+using System.Text.Json.Serialization;
 using Player.Api.Data.Data.Models;
 using System;
 using System.Collections.Generic;

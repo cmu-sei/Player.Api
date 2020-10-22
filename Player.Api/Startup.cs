@@ -21,11 +21,12 @@ using Player.Api.Data.Data;
 using Player.Api.Options;
 using Player.Api.Services;
 using System;
-using Newtonsoft.Json.Converters;
+using System.Text.Json.Serialization;
 using AutoMapper;
 using Player.Api.Infrastructure.Filters;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Principal;
+using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Authentication;
 using Player.Api.Infrastructure.ClaimsTransformers;
 using Microsoft.AspNetCore.Authorization;
@@ -33,6 +34,7 @@ using System.Linq;
 using Player.Api.Infrastructure.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Player.Api.Infrastructure.Extensions;
+using Player.Api.Infrastructure.Mappings;
 
 namespace Player.Api
 {
@@ -79,7 +81,7 @@ namespace Player.Api
             services.AddSignalR()
             .AddJsonProtocol(options =>
             {
-                options.PayloadSerializerSettings.Converters.Add(new StringEnumConverter());
+                options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             });
 
             services.AddMvc(options =>
@@ -89,9 +91,9 @@ namespace Player.Api
             })
             .AddJsonOptions(options =>
             {
-                options.SerializerSettings.Converters.Add(new StringEnumConverter());
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             })
-            .SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
+            .SetCompatibilityVersion(CompatibilityVersion.Latest);
 
             services.AddSwagger(_authOptions);
 
@@ -131,17 +133,22 @@ namespace Player.Api
 
             ApplyPolicies(services);
 
-            services.AddAutoMapper();
+            services.AddAutoMapper(cfg => {
+                cfg.ForAllPropertyMaps(
+                    pm => pm.SourceType != null && Nullable.GetUnderlyingType(pm.SourceType) == pm.DestinationType,
+                    (pm, c) => c.MapFrom<object, object, object, object>(new IgnoreNullSourceValues(), pm.SourceMember.Name));
+            }, typeof(Startup));
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
             }
 
+            app.UseRouting();
             app.UseCors("default");
 
             //move any querystring jwt to Auth bearer header
@@ -174,16 +181,16 @@ namespace Player.Api
             });
 
             app.UseAuthentication();
+            app.UseAuthorization();
 
-            app.UseSignalR(routes =>
+            app.UseEndpoints(endpoints =>
                 {
-                    routes.MapHub<Hubs.ViewHub>("/hubs/view");
-                    routes.MapHub<Hubs.TeamHub>("/hubs/team");
-                    routes.MapHub<Hubs.UserHub>("/hubs/user");
+                    endpoints.MapControllers();
+                    endpoints.MapHub<Hubs.ViewHub>("/hubs/view");
+                    endpoints.MapHub<Hubs.TeamHub>("/hubs/team");
+                    endpoints.MapHub<Hubs.UserHub>("/hubs/user");
                 }
             );
-
-            app.UseMvc();
         }
 
 

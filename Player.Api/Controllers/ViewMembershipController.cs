@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.Services;
 using Player.Api.ViewModels;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using Swashbuckle.AspNetCore.Annotations;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -41,7 +41,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("view-memberships/{id}")]
         [ProducesResponseType(typeof(ViewMembership), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getViewMembership")]
+        [SwaggerOperation(OperationId = "getViewMembership")]
         public async Task<IActionResult> Get(Guid id)
         {
             var membership = await _viewMembershipService.GetAsync(id);
@@ -63,7 +63,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("users/{userId}/view-memberships")]
         [ProducesResponseType(typeof(IEnumerable<ViewMembership>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getViewMemberships")]
+        [SwaggerOperation(OperationId = "getViewMemberships")]
         public async Task<IActionResult> GetByUserId(Guid userId)
         {
             var list = await _viewMembershipService.GetByUserIdAsync(userId);

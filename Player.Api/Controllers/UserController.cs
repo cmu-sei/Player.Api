@@ -15,7 +15,7 @@ using Player.Api.Hubs;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.Services;
 using Player.Api.ViewModels;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using Swashbuckle.AspNetCore.Annotations;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -49,7 +49,7 @@ namespace Player.Api.Controllers
         /// </remarks>
         [HttpGet("users")]
         [ProducesResponseType(typeof(IEnumerable<User>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getUsers")]
+        [SwaggerOperation(OperationId = "getUsers")]
         public async Task<IActionResult> Get(CancellationToken ct)
         {
             var list = await _userService.GetAsync(ct);
@@ -68,7 +68,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpGet("users/{id}")]
         [ProducesResponseType(typeof(User), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getUser")]
+        [SwaggerOperation(OperationId = "getUser")]
         public async Task<IActionResult> Get(Guid id, CancellationToken ct)
         {
             var user = await _userService.GetAsync(id, ct);
@@ -92,7 +92,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("views/{id}/users")]
         [ProducesResponseType(typeof(IEnumerable<User>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getViewUsers")]
+        [SwaggerOperation(OperationId = "getViewUsers")]
         public async Task<IActionResult> GetByView(Guid id, CancellationToken ct)
         {
             var list = await _userService.GetByViewAsync(id, ct);
@@ -112,7 +112,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("teams/{id}/users")]
         [ProducesResponseType(typeof(IEnumerable<User>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getTeamUsers")]
+        [SwaggerOperation(OperationId = "getTeamUsers")]
         public async Task<IActionResult> GetByTeam(Guid id, CancellationToken ct)
         {
             var list = await _userService.GetByTeamAsync(id, ct);
@@ -133,7 +133,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpPost("teams/{teamId}/users/{userId}")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "addUserToTeam")]
+        [SwaggerOperation(OperationId = "addUserToTeam")]
         public async Task<IActionResult> AddUserToTeam(Guid teamId, Guid userId, CancellationToken ct)
         {
             await _userService.AddToTeamAsync(teamId, userId, ct);
@@ -154,7 +154,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpDelete("teams/{teamId}/users/{userId}")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "removeUserFromTeam")]
+        [SwaggerOperation(OperationId = "removeUserFromTeam")]
         public async Task<IActionResult> RemoveUserFromTeam(Guid teamId, Guid userId, CancellationToken ct)
         {
             await _userService.RemoveFromTeamAsync(teamId, userId, ct);
@@ -173,7 +173,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpPost("users")]
         [ProducesResponseType(typeof(User), (int)HttpStatusCode.Created)]
-        [SwaggerOperation(operationId: "createUser")]
+        [SwaggerOperation(OperationId = "createUser")]
         public async Task<IActionResult> Create([FromBody] User user, CancellationToken ct)
         {
             var createdUser = await _userService.CreateAsync(user, ct);
@@ -193,7 +193,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpPut("users/{id}")]
         [ProducesResponseType(typeof(User), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "updateUser")]
+        [SwaggerOperation(OperationId = "updateUser")]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] User user, CancellationToken ct)
         {
             var updatedUser = await _userService.UpdateAsync(id, user, ct);
@@ -212,7 +212,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpDelete("users/{id}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
-        [SwaggerOperation(operationId: "deleteUser")]
+        [SwaggerOperation(OperationId = "deleteUser")]
         public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
         {
             await _userService.DeleteAsync(id, ct);
@@ -232,7 +232,7 @@ namespace Player.Api.Controllers
         [HttpPost("views/{viewId}/users/{userId}/notifications")]
         [ProducesResponseType(typeof(string), (int)HttpStatusCode.OK)]
         [ProducesResponseType(typeof(string), (int)HttpStatusCode.Forbidden)]
-        [SwaggerOperation(operationId: "broadcastToUser")]
+        [SwaggerOperation(OperationId = "broadcastToUser")]
         public async Task<IActionResult> Broadcast([FromRoute] Guid viewId, Guid userId, [FromBody] Notification incomingData, CancellationToken ct)
         {
             if (!incomingData.IsValid())

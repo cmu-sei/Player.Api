@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.Services;
 using Player.Api.ViewModels;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using Swashbuckle.AspNetCore.Annotations;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -40,7 +40,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("Roles")]
         [ProducesResponseType(typeof(IEnumerable<Role>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getRoles")]
+        [SwaggerOperation(OperationId = "getRoles")]
         public async Task<IActionResult> Get()
         {
             var list = await _RoleService.GetAsync();
@@ -59,7 +59,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("Roles/{id}")]
         [ProducesResponseType(typeof(Role), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getRole")]
+        [SwaggerOperation(OperationId = "getRole")]
         public async Task<IActionResult> Get(Guid id)
         {
             var Role = await _RoleService.GetAsync(id);
@@ -82,7 +82,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("Roles/name/{name}")]
         [ProducesResponseType(typeof(Role), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getRoleByName")]
+        [SwaggerOperation(OperationId = "getRoleByName")]
         public async Task<IActionResult> Get(string name)
         {
             var role = await _RoleService.GetAsync(name);
@@ -101,7 +101,7 @@ namespace Player.Api.Controllers
         /// </remarks>
         [HttpPost("Roles")]
         [ProducesResponseType(typeof(Role), (int)HttpStatusCode.Created)]
-        [SwaggerOperation(operationId: "createRole")]
+        [SwaggerOperation(OperationId = "createRole")]
         public async Task<IActionResult> Create([FromBody] RoleForm form)
         {
             var createdRole = await _RoleService.CreateAsync(form);
@@ -121,7 +121,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpPut("Roles/{id}")]
         [ProducesResponseType(typeof(Role), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "updateRole")]
+        [SwaggerOperation(OperationId = "updateRole")]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] RoleForm form)
         {
             var updatedRole = await _RoleService.UpdateAsync(id, form);
@@ -139,7 +139,7 @@ namespace Player.Api.Controllers
         /// <param name="id">The id of the Role to delete</param>
         [HttpDelete("Roles/{id}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
-        [SwaggerOperation(operationId: "deleteRole")]
+        [SwaggerOperation(OperationId = "deleteRole")]
         public async Task<IActionResult> Delete(Guid id)
         {
             await _RoleService.DeleteAsync(id);

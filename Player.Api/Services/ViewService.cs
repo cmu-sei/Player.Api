@@ -102,7 +102,7 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewCreationRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var viewEntity = Mapper.Map<ViewEntity>(view);
+            var viewEntity = _mapper.Map<ViewEntity>(view);
 
             var viewAdminPermission = await _context.Permissions
                 .Where(p => p.Key == PlayerClaimTypes.ViewAdmin.ToString())
@@ -212,7 +212,7 @@ namespace Player.Api.Services
             if (viewToUpdate == null)
                 throw new EntityNotFoundException<View>();
 
-            Mapper.Map(view, viewToUpdate);
+            _mapper.Map(view, viewToUpdate);
 
             _context.Views.Update(viewToUpdate);
             await _context.SaveChangesAsync(ct);
