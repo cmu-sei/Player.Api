@@ -103,6 +103,13 @@ namespace Player.Api.Services
                 .DeferredAny()
                 .FutureValue();
 
+            if (!(await userExists.ValueAsync()))
+                throw new EntityNotFoundException<User>();
+
+            if (!(await viewExists.ValueAsync()))
+                throw new EntityNotFoundException<View>();
+
+            
             IQueryable<TeamEntity> teamQuery;
 
             if ((await _authorizationService.AuthorizeAsync(await _claimsService.GetClaimsPrincipal(userId, true), null, new ViewAdminRequirement(viewId))).Succeeded)
@@ -118,14 +125,9 @@ namespace Player.Api.Services
                 .Distinct();
             }
 
+            var teams = await teamQuery.ToListAsync();
 
-            if (!(await userExists.ValueAsync()))
-                throw new EntityNotFoundException<User>();
-
-            if (!(await viewExists.ValueAsync()))
-                throw new EntityNotFoundException<View>();
-
-            return _mapper.Map<IEnumerable<Team>>(await teamQuery.ToListAsync());
+            return _mapper.Map<IEnumerable<Team>>(teams);
         }
 
         public async Task<Team> GetAsync(Guid id, CancellationToken ct)
