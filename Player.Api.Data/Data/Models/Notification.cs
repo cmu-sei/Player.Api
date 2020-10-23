@@ -36,6 +36,7 @@ namespace Player.Api.Data.Data.Models
         public NotificationPriority Priority { get; set; }
     }
 
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum NotificationPriority
     {
         Normal = 0,
@@ -43,7 +44,8 @@ namespace Player.Api.Data.Data.Models
         High = 2,
         System = 3
     }
-
+    
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum NotificationType
     {
         View = 0,

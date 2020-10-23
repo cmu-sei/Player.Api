@@ -8,13 +8,11 @@ Carnegie Mellon(R) and CERT(R) are registered in the U.S. Patent and Trademark O
 DM20-0181
 */
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 
 namespace Player.Api.Infrastructure.Authorization
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum PlayerClaimTypes
     {
         SystemAdmin,

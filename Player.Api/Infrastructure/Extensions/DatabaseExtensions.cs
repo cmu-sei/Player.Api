@@ -131,30 +131,6 @@ namespace Player.Api.Extensions
             }
         }
 
-        public static IServiceCollection AddDbProvider(
-          this IServiceCollection services,
-          IConfiguration config
-      )
-        {
-            string dbProvider = DbProvider(config);
-            switch (dbProvider)
-            {
-                case "Sqlite":
-                    services.AddEntityFrameworkSqlite();
-                    break;
-
-                case "SqlServer":
-                    services.AddEntityFrameworkSqlServer();
-                    break;
-
-                case "PostgreSQL":
-                    services.AddEntityFrameworkNpgsql();
-                    break;
-
-            }
-            return services;
-        }
-
         private static string DbProvider(IConfiguration config)
         {
             return config.GetValue<string>("Database:Provider", "Sqlite").Trim();

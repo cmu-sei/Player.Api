@@ -61,7 +61,6 @@ namespace Player.Api
                 case "Sqlite":
                 case "SqlServer":
                 case "PostgreSQL":
-                    services.AddDbProvider(Configuration);
                     services.AddDbContextPool<PlayerContext>(builder => builder.UseConfiguredDatabase(Configuration));
                     break;
             }

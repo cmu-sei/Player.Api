@@ -44,6 +44,7 @@ namespace Player.Api.Data.Data.Models
         }
     }
 
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum ViewStatus
     {
         Active = 0,
