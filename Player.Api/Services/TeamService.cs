@@ -125,9 +125,9 @@ namespace Player.Api.Services
                 .Distinct();
             }
 
-            var teams = await teamQuery.ToListAsync();
-
-            return _mapper.Map<IEnumerable<Team>>(teams);
+            var teamsEntity = await teamQuery.ToListAsync();
+            var teamsDTO = _mapper.Map<IEnumerable<TeamDTO>>(teamsEntity);
+            return _mapper.Map<IEnumerable<Team>>(teamsDTO);
         }
 
         public async Task<Team> GetAsync(Guid id, CancellationToken ct)
