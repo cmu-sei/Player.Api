@@ -68,8 +68,8 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var items = await _context.Users.ToArrayAsync(ct);
-            return _mapper.Map<IEnumerable<ViewModels.User>>(items);
+            var items = await _context.Users.ProjectTo<ViewModels.User>(_mapper.ConfigurationProvider).ToArrayAsync(ct);
+            return items;
         }
 
         public async Task<IEnumerable<ViewModels.User>> GetByTeamAsync(Guid teamId, CancellationToken ct)
@@ -81,6 +81,7 @@ namespace Player.Api.Services
             var userQuery = _context.TeamMemberships
                 .Where(t => t.TeamId == teamId)
                 .Select(m => m.User)
+                .ProjectTo<User>(_mapper.ConfigurationProvider)
                 .Distinct();
             //.Future();
 
@@ -91,7 +92,8 @@ namespace Player.Api.Services
 
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new TeamAccessRequirement(team.ViewId, team.Id))).Succeeded)
                 throw new ForbiddenException();
-            return _mapper.Map<IEnumerable<ViewModels.User>>(await userQuery.ToListAsync());
+
+            return await userQuery.ToListAsync();
         }
 
         public async Task<IEnumerable<ViewModels.User>> GetByViewAsync(Guid viewId, CancellationToken ct)
@@ -111,8 +113,10 @@ namespace Player.Api.Services
             var users = _context.ViewMemberships
                 .Where(m => m.ViewId == viewId)
                 .Select(m => m.User)
-                .Distinct();
-            return _mapper.Map<IEnumerable<ViewModels.User>>(await users.ToListAsync());
+                .Distinct()
+                .ProjectTo<User>(_mapper.ConfigurationProvider);
+
+            return await users.ToListAsync();
         }
 
         public async Task<ViewModels.User> GetAsync(Guid id, CancellationToken ct)
@@ -120,8 +124,10 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new SameUserRequirement(id))).Succeeded)
                 throw new ForbiddenException();
 
-            var item = await _context.Users.SingleOrDefaultAsync(o => o.Id == id, ct);
-            return _mapper.Map<ViewModels.User>(item);
+            var item = await _context.Users
+                .ProjectTo<ViewModels.User>(_mapper.ConfigurationProvider)
+                .SingleOrDefaultAsync(o => o.Id == id, ct);                
+            return item;
         }
 
         public async Task<ViewModels.User> CreateAsync(ViewModels.User user, CancellationToken ct)
