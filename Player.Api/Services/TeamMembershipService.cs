@@ -56,14 +56,14 @@ namespace Player.Api.Services
 
         public async Task<TeamMembership> GetAsync(Guid id)
         {
-            var item = await _context.TeamMemberships.SingleOrDefaultAsync(o => o.Id == id);
+            var item = await _context.TeamMemberships
+                .ProjectTo<TeamMembership>(_mapper.ConfigurationProvider)
+                .SingleOrDefaultAsync(o => o.Id == id);
 
-            var teamMembership = _mapper.Map<TeamMembership>(item);
-
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new SameUserOrViewAdminRequirement(teamMembership.ViewId, teamMembership.UserId))).Succeeded)
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new SameUserOrViewAdminRequirement(item.ViewId, item.UserId))).Succeeded)
                 throw new ForbiddenException();
 
-            return teamMembership;
+            return item;
         }
 
         public async Task<IEnumerable<TeamMembership>> GetByViewIdForUserAsync(Guid viewId, Guid userId)
@@ -78,12 +78,13 @@ namespace Player.Api.Services
 
             var membershipQuery = _context.TeamMemberships
                 .Where(m => m.UserId == userId && m.ViewMembership.ViewId == viewId)
+                .ProjectTo<TeamMembership>(_mapper.ConfigurationProvider)
                 .Future();
 
             if (!(await userExists.ValueAsync()))
                 throw new EntityNotFoundException<User>();
 
-            return _mapper.Map<IEnumerable<TeamMembership>>(await membershipQuery.ToListAsync());
+            return await membershipQuery.ToListAsync();
         }
 
         public async Task<TeamMembership> UpdateAsync(Guid id, TeamMembershipForm form)

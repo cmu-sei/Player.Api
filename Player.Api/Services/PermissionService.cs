@@ -81,7 +81,7 @@ namespace Player.Api.Services
                 .ProjectTo<Permission>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(o => o.Id == id);
 
-                return item;
+            return item;
         }
 
         public async Task<Permission> CreateAsync(PermissionForm form)
