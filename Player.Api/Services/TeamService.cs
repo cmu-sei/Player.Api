@@ -63,7 +63,7 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var items = await _context.Teams.ToListAsync(ct);
+            var items = await _context.Teams.ProjectTo<TeamDTO>(_mapper.ConfigurationProvider).ToListAsync(ct);
             return _mapper.Map<IEnumerable<Team>>(items);
         }
 
@@ -78,7 +78,8 @@ namespace Player.Api.Services
                 .FutureValue();
 
             var teamsQuery = _context.Teams
-                .Where(e => e.ViewId == viewId);
+                .Where(e => e.ViewId == viewId)
+                .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
 
             if (!(await viewExists.ValueAsync()))
                 throw new EntityNotFoundException<View>();
@@ -103,36 +104,39 @@ namespace Player.Api.Services
                 .DeferredAny()
                 .FutureValue();
 
-            if (!(await userExists.ValueAsync()))
-                throw new EntityNotFoundException<User>();
-
-            if (!(await viewExists.ValueAsync()))
-                throw new EntityNotFoundException<View>();
-
-            
-            IQueryable<TeamEntity> teamQuery;
+            IQueryable<TeamDTO> teamQuery;
 
             if ((await _authorizationService.AuthorizeAsync(await _claimsService.GetClaimsPrincipal(userId, true), null, new ViewAdminRequirement(viewId))).Succeeded)
             {
                 teamQuery = _context.Teams
-                    .Where(t => t.ViewId == viewId);
+                    .Where(t => t.ViewId == viewId)
+                    .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
             }
             else
             {
                 teamQuery = _context.TeamMemberships
                 .Where(x => x.UserId == userId && x.Team.ViewId == viewId)
                 .Select(x => x.Team)
-                .Distinct();
+                .Distinct()
+                .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
             }
 
-            var teamsEntity = await teamQuery.ToListAsync();
-            var teamsDTO = _mapper.Map<IEnumerable<TeamDTO>>(teamsEntity);
-            return _mapper.Map<IEnumerable<Team>>(teamsDTO);
+            var teams = await teamQuery.ToListAsync();
+
+            if (!(await userExists.ValueAsync()))
+                throw new EntityNotFoundException<User>();
+
+            if (!(await viewExists.ValueAsync()))
+                throw new EntityNotFoundException<View>();
+
+            return _mapper.Map<IEnumerable<Team>>(teams);
         }
 
         public async Task<Team> GetAsync(Guid id, CancellationToken ct)
         {
-            var team = await _context.Teams.SingleOrDefaultAsync(o => o.Id == id, ct);
+            var team = await _context.Teams
+                .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider)
+                .SingleOrDefaultAsync(o => o.Id == id, ct);
 
             if (team != null)
             {

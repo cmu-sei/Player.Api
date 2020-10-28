@@ -81,8 +81,8 @@ namespace Player.Api.Services
             var userQuery = _context.TeamMemberships
                 .Where(t => t.TeamId == teamId)
                 .Select(m => m.User)
-                .ProjectTo<User>(_mapper.ConfigurationProvider)
-                .Distinct();
+                .Distinct()
+                .ProjectTo<User>(_mapper.ConfigurationProvider);
             //.Future();
 
             var team = (await teamQuery.ToListAsync()).FirstOrDefault();

@@ -164,9 +164,36 @@ namespace Player.Api.Services
         {
             List<Claim> claims = new List<Claim>();
 
-            var items = await _context.Users.Where(u => u.Id == userId).FirstOrDefaultAsync();
+            // var userDetails = await _context.Users
+            //     .Include(u => u.Permissions)
+            //     .ThenInclude(p => p.Permission)
+            //     .Include(u => u.Role)
+            //     .ThenInclude(r => r.Permissions)  
+            //     .ThenInclude(p => p.Permission)              
+            //     .Where(u => u.Id == userId)
+            //     .FirstOrDefaultAsync();
 
-            UserPermissions userPermissions = _mapper.Map<UserPermissions>(items);
+            // UserPermissions userPermissions = _mapper.Map<UserPermissions>(userDetails);
+
+            // var teamDetails = await _context.TeamMemberships
+            //     .Include(t => t.ViewMembership)
+            //     .Include(t => t.Role.Permissions)
+            //     .ThenInclude(p => p.Permission)   
+            //     .Include(t => t.Team.Permissions)
+            //     .ThenInclude(p => p.Permission)   
+            //     .Include(t => t.Team.Role.Permissions)
+            //     .ThenInclude(p => p.Permission)   
+            //     .Where(t => t.UserId == userId)
+            //     .ToListAsync();
+
+            // IEnumerable<TeamPermissions> teamPermissions = _mapper.Map<IEnumerable<TeamPermissions>>(teamDetails);
+
+            // userPermissions.TeamPermissions = teamPermissions.ToList();
+
+            UserPermissions userPermissions = await _context.Users
+                .Where(u => u.Id == userId)
+                .ProjectTo<UserPermissions>(_mapper.ConfigurationProvider)
+                .FirstOrDefaultAsync();
 
             if (userPermissions.Permissions.Where(x => x.Key == PlayerClaimTypes.SystemAdmin.ToString()).Any())
             {
