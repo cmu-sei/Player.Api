@@ -48,8 +48,8 @@ namespace Player.Api.Services
         private ClaimsPrincipal _currentClaimsPrincipal;
         private readonly IMapper _mapper;
 
-        public UserClaimsService(PlayerContext context, 
-                                    IMemoryCache cache, 
+        public UserClaimsService(PlayerContext context,
+                                    IMemoryCache cache,
                                     ClaimsTransformationOptions options,
                                     IMapper mapper)
         {
@@ -164,32 +164,10 @@ namespace Player.Api.Services
         {
             List<Claim> claims = new List<Claim>();
 
-            var userDetails = await _context.Users
-                .Include(u => u.Role)
-                .ThenInclude(r => r.Permissions)  
-                .ThenInclude(p => p.Permission)
-                .Include(u => u.Permissions)
-                .ThenInclude(p => p.Permission)
-                .Include(u => u.TeamMemberships)
-                .ThenInclude(t => t.Role)
-                .ThenInclude(r => r.Permissions)
-                .ThenInclude(p => p.Permission)
-                .Include(u => u.TeamMemberships)
-                .ThenInclude(t => t.Team)
-                .ThenInclude(t => t.Role)
-                .ThenInclude(r => r.Permissions)
-                .ThenInclude(p => p.Permission)
-                .Include(u => u.TeamMemberships)
-                .ThenInclude(t => t.ViewMembership)
+            UserPermissions userPermissions = await _context.Users
                 .Where(u => u.Id == userId)
+                .ProjectTo<UserPermissions>(_mapper.ConfigurationProvider)
                 .FirstOrDefaultAsync();
-
-            UserPermissions userPermissions = _mapper.Map<UserPermissions>(userDetails);
-
-            // UserPermissions userPermissions = await _context.Users
-            //     .Where(u => u.Id == userId)
-            //     .ProjectTo<UserPermissions>(_mapper.ConfigurationProvider)
-            //     .FirstOrDefaultAsync();
 
             if (userPermissions.Permissions.Where(x => x.Key == PlayerClaimTypes.SystemAdmin.ToString()).Any())
             {
