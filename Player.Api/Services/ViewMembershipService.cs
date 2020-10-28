@@ -55,12 +55,14 @@ namespace Player.Api.Services
 
         public async Task<ViewMembership> GetAsync(Guid id)
         {
-            var item = await _context.ViewMemberships.SingleOrDefaultAsync(o => o.Id == id);
+            var item = await _context.ViewMemberships
+                .ProjectTo<ViewMembership>(_mapper.ConfigurationProvider)
+                .SingleOrDefaultAsync(o => o.Id == id);
 
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new SameUserOrViewAdminRequirement(item.ViewId, item.UserId))).Succeeded)
                 throw new ForbiddenException();
 
-            return _mapper.Map<ViewMembership>(item);
+            return item;
         }
 
         public async Task<IEnumerable<ViewMembership>> GetByUserIdAsync(Guid userId)
@@ -75,12 +77,13 @@ namespace Player.Api.Services
 
             var membershipQuery = _context.ViewMemberships
                 .Where(m => m.UserId == userId)
+                .ProjectTo<ViewMembership>(_mapper.ConfigurationProvider)
                 .Future();
 
             if (!(await userExists.ValueAsync()))
                 throw new EntityNotFoundException<User>();
 
-            return _mapper.Map<IEnumerable<ViewMembership>>(await membershipQuery.ToListAsync());
+            return await membershipQuery.ToListAsync();
         }
     }
 }
