@@ -68,15 +68,20 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var items = await _context.Permissions.ToListAsync();
-            return _mapper.Map<IEnumerable<Permission>>(items);
+            var items = await _context.Permissions
+                .ProjectTo<ViewModels.Permission>(_mapper.ConfigurationProvider)
+                .ToListAsync();
+
+            return items;
         }
 
         public async Task<Permission> GetAsync(Guid id)
         {
-            var item = await _context.Permissions.SingleOrDefaultAsync(o => o.Id == id);
+            var item = await _context.Permissions
+                .ProjectTo<Permission>(_mapper.ConfigurationProvider)
+                .SingleOrDefaultAsync(o => o.Id == id);
 
-            return _mapper.Map<Permission>(item);
+                return item;
         }
 
         public async Task<Permission> CreateAsync(PermissionForm form)

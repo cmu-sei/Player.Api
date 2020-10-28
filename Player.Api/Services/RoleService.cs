@@ -62,29 +62,34 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var items = await _context.Roles.ToListAsync();
+            var items = await _context.Roles
+                .ProjectTo<Role>(_mapper.ConfigurationProvider)
+                .ToListAsync();
 
-            return _mapper.Map<IEnumerable<Role>>(items);
+            return items;
         }
 
         public async Task<Role> GetAsync(Guid id)
         {
-            var item = await _context.Roles.SingleOrDefaultAsync(o => o.Id == id);
+            var item = await _context.Roles
+                .ProjectTo<Role>(_mapper.ConfigurationProvider)
+                .SingleOrDefaultAsync(o => o.Id == id);
 
-            return _mapper.Map<Role>(item);
-
+            return item;
         }
 
         public async Task<Role> GetAsync(string name)
         {
-            var item = await _context.Roles.SingleOrDefaultAsync(o => o.Name == name);
+            var item = await _context.Roles
+                .ProjectTo<Role>(_mapper.ConfigurationProvider)
+                .SingleOrDefaultAsync(o => o.Name == name);
 
             if (item == null)
             {
                 throw new EntityNotFoundException<Role>();
             }
 
-            return _mapper.Map<Role>(item);
+            return item;
         }
 
         public async Task<Role> CreateAsync(RoleForm form)
@@ -93,7 +98,9 @@ namespace Player.Api.Services
                 throw new ForbiddenException();
 
             // Ensure role with this name does not already exist
-            var role = await _context.Roles.SingleOrDefaultAsync(o => o.Name == form.Name);
+            var role = await _context.Roles
+                .ProjectTo<Role>(_mapper.ConfigurationProvider)
+                .SingleOrDefaultAsync(o => o.Name == form.Name);
             
             if (role != null)
             {
