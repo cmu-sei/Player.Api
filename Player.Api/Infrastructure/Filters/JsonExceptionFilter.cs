@@ -30,7 +30,7 @@ namespace Player.Api.Infrastructure.Filters
 
         public void OnException(ExceptionContext context)
         {
-            var error = new ApiError();
+            var error = new ProblemDetails();
             error.Status = GetStatusCodeFromException(context.Exception);
 
             if (error.Status == (int)HttpStatusCode.InternalServerError)
