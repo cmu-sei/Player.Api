@@ -22,7 +22,7 @@ using Player.Api.ViewModels;
 using Microsoft.AspNetCore.SignalR;
 using Player.Api.Hubs;
 using Player.Api.Infrastructure.Authorization;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace Player.Api.Controllers
 {
@@ -52,7 +52,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("views")]
         [ProducesResponseType(typeof(IEnumerable<View>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getViews")]
+        [SwaggerOperation(OperationId = "getViews")]
         public async Task<IActionResult> Get(CancellationToken ct)
         {
             var list = await _viewService.GetAsync(ct);
@@ -70,7 +70,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("users/{id}/views")]
         [ProducesResponseType(typeof(IEnumerable<View>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getUserViews")]
+        [SwaggerOperation(OperationId = "getUserViews")]
         public async Task<IActionResult> GetByUserId(Guid id, CancellationToken ct)
         {
             var list = await _viewService.GetByUserIdAsync(id, ct);
@@ -85,7 +85,7 @@ namespace Player.Api.Controllers
         /// </remarks>
         [HttpGet("me/views")]
         [ProducesResponseType(typeof(IEnumerable<View>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getMyViews")]
+        [SwaggerOperation(OperationId = "getMyViews")]
         public async Task<IActionResult> GetMy(CancellationToken ct)
         {
             var list = await _viewService.GetByUserIdAsync(User.GetId(), ct);
@@ -105,7 +105,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("views/{id}")]
         [ProducesResponseType(typeof(View), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getView")]
+        [SwaggerOperation(OperationId = "getView")]
         public async Task<IActionResult> Get(Guid id, CancellationToken ct)
         {
             var view = await _viewService.GetAsync(id, ct);
@@ -128,7 +128,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpPost("views")]
         [ProducesResponseType(typeof(View), (int)HttpStatusCode.Created)]
-        [SwaggerOperation(operationId: "createView")]
+        [SwaggerOperation(OperationId = "createView")]
         public async Task<IActionResult> Create([FromBody] ViewForm view, CancellationToken ct)
         {
             var createdView = await _viewService.CreateAsync(view, ct);
@@ -148,7 +148,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpPut("views/{id}")]
         [ProducesResponseType(typeof(View), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "updateView")]
+        [SwaggerOperation(OperationId = "updateView")]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] View view, CancellationToken ct)
         {
             var updatedView = await _viewService.UpdateAsync(id, view, ct);
@@ -167,7 +167,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpDelete("views/{id}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
-        [SwaggerOperation(operationId: "deleteView")]
+        [SwaggerOperation(OperationId = "deleteView")]
         public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
         {
             await _viewService.DeleteAsync(id, ct);
@@ -182,7 +182,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpPost("views/{id}/clone")]
         [ProducesResponseType(typeof(View), (int)HttpStatusCode.Created)]
-        [SwaggerOperation(operationId: "cloneView")]
+        [SwaggerOperation(OperationId = "cloneView")]
         public async Task<IActionResult> Clone(Guid id, CancellationToken ct)
         {
             var createdView = await _viewService.CloneAsync(id, ct);
@@ -203,7 +203,7 @@ namespace Player.Api.Controllers
         [HttpPost("views/{id}/notifications")]
         [ProducesResponseType(typeof(string), (int)HttpStatusCode.OK)]
         [ProducesResponseType(typeof(string), (int)HttpStatusCode.Forbidden)]
-        [SwaggerOperation(operationId: "broadcastToView")]
+        [SwaggerOperation(OperationId = "broadcastToView")]
         public async Task<IActionResult> Broadcast([FromRoute] Guid id, [FromBody] Notification incomingData, CancellationToken ct)
         {
             if (!incomingData.IsValid())

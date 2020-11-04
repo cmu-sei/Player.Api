@@ -46,12 +46,17 @@ namespace Player.Api.Services
         private readonly ClaimsTransformationOptions _options;
         private IMemoryCache _cache;
         private ClaimsPrincipal _currentClaimsPrincipal;
+        private readonly IMapper _mapper;
 
-        public UserClaimsService(PlayerContext context, IMemoryCache cache, ClaimsTransformationOptions options)
+        public UserClaimsService(PlayerContext context,
+                                    IMemoryCache cache,
+                                    ClaimsTransformationOptions options,
+                                    IMapper mapper)
         {
             _context = context;
             _options = options;
             _cache = cache;
+            _mapper = mapper;
         }
 
         public async Task<ClaimsPrincipal> AddUserClaims(ClaimsPrincipal principal, bool update)
@@ -161,7 +166,7 @@ namespace Player.Api.Services
 
             UserPermissions userPermissions = await _context.Users
                 .Where(u => u.Id == userId)
-                .ProjectTo<UserPermissions>()
+                .ProjectTo<UserPermissions>(_mapper.ConfigurationProvider)
                 .FirstOrDefaultAsync();
 
             if (userPermissions.Permissions.Where(x => x.Key == PlayerClaimTypes.SystemAdmin.ToString()).Any())

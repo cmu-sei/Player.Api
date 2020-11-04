@@ -63,7 +63,7 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var items = await _context.Teams.ProjectTo<TeamDTO>().ToListAsync(ct);
+            var items = await _context.Teams.ProjectTo<TeamDTO>(_mapper.ConfigurationProvider).ToListAsync(ct);
             return _mapper.Map<IEnumerable<Team>>(items);
         }
 
@@ -79,8 +79,7 @@ namespace Player.Api.Services
 
             var teamsQuery = _context.Teams
                 .Where(e => e.ViewId == viewId)
-                .ProjectTo<TeamDTO>();
-            //.Future();
+                .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
 
             if (!(await viewExists.ValueAsync()))
                 throw new EntityNotFoundException<View>();
@@ -105,15 +104,13 @@ namespace Player.Api.Services
                 .DeferredAny()
                 .FutureValue();
 
-            //QueryFutureEnumerable<TeamDTO> teamQuery;
             IQueryable<TeamDTO> teamQuery;
 
             if ((await _authorizationService.AuthorizeAsync(await _claimsService.GetClaimsPrincipal(userId, true), null, new ViewAdminRequirement(viewId))).Succeeded)
             {
                 teamQuery = _context.Teams
                     .Where(t => t.ViewId == viewId)
-                    .ProjectTo<TeamDTO>();
-                //.Future();
+                    .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
             }
             else
             {
@@ -121,8 +118,7 @@ namespace Player.Api.Services
                 .Where(x => x.UserId == userId && x.Team.ViewId == viewId)
                 .Select(x => x.Team)
                 .Distinct()
-                .ProjectTo<TeamDTO>();
-                //.Future();
+                .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
             }
 
             var teams = await teamQuery.ToListAsync();
@@ -139,7 +135,7 @@ namespace Player.Api.Services
         public async Task<Team> GetAsync(Guid id, CancellationToken ct)
         {
             var team = await _context.Teams
-                .ProjectTo<TeamDTO>()
+                .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(o => o.Id == id, ct);
 
             if (team != null)

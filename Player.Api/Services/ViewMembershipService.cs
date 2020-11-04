@@ -40,18 +40,23 @@ namespace Player.Api.Services
         private readonly PlayerContext _context;
         private readonly IAuthorizationService _authorizationService;
         private readonly ClaimsPrincipal _user;
+        private readonly IMapper _mapper;
 
-        public ViewMembershipService(PlayerContext context, IAuthorizationService authorizationService, IPrincipal user)
+        public ViewMembershipService(PlayerContext context, 
+                                        IAuthorizationService authorizationService, 
+                                        IPrincipal user,
+                                        IMapper mapper)
         {
             _context = context;
             _authorizationService = authorizationService;
             _user = user as ClaimsPrincipal;
+            _mapper = mapper;
         }
 
         public async Task<ViewMembership> GetAsync(Guid id)
         {
             var item = await _context.ViewMemberships
-                .ProjectTo<ViewMembership>()
+                .ProjectTo<ViewMembership>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(o => o.Id == id);
 
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new SameUserOrViewAdminRequirement(item.ViewId, item.UserId))).Succeeded)
@@ -72,7 +77,7 @@ namespace Player.Api.Services
 
             var membershipQuery = _context.ViewMemberships
                 .Where(m => m.UserId == userId)
-                .ProjectTo<ViewMembership>()
+                .ProjectTo<ViewMembership>(_mapper.ConfigurationProvider)
                 .Future();
 
             if (!(await userExists.ValueAsync()))

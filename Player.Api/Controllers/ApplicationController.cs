@@ -19,7 +19,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace Player.Api.Controllers
 {
@@ -45,7 +45,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("application-templates")]
         [ProducesResponseType(typeof(IEnumerable<ApplicationTemplate>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getApplicationTemplates")]
+        [SwaggerOperation(OperationId = "getApplicationTemplates")]
         public async Task<IActionResult> GetTemplates(CancellationToken ct)
         {
             var list = await _applicationService.GetTemplatesAsync(ct);
@@ -65,7 +65,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("application-templates/{id}")]
         [ProducesResponseType(typeof(ApplicationTemplate), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getApplicationTemplate")]
+        [SwaggerOperation(OperationId = "getApplicationTemplate")]
         public async Task<IActionResult> GetTemplate(Guid id, CancellationToken ct)
         {
             var template = await _applicationService.GetTemplateAsync(id, ct);
@@ -88,7 +88,7 @@ namespace Player.Api.Controllers
         /// </remarks>
         [HttpPost("application-templates")]
         [ProducesResponseType(typeof(ApplicationTemplate), (int)HttpStatusCode.Created)]
-        [SwaggerOperation(operationId: "createApplicationTemplate")]
+        [SwaggerOperation(OperationId = "createApplicationTemplate")]
         public async Task<IActionResult> Create([FromBody] ApplicationTemplateForm form, CancellationToken ct)
         {
             var createdTemplate = await _applicationService.CreateTemplateAsync(form, ct);
@@ -109,7 +109,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpPut("application-templates/{id}")]
         [ProducesResponseType(typeof(ApplicationTemplate), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "updateApplicationTemplate")]
+        [SwaggerOperation(OperationId = "updateApplicationTemplate")]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] ApplicationTemplateForm form, CancellationToken ct)
         {
             var updatedTemplate = await _applicationService.UpdateTemplateAsync(id, form, ct);
@@ -128,7 +128,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpDelete("application-templates/{id}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
-        [SwaggerOperation(operationId: "deleteApplicationTemplate")]
+        [SwaggerOperation(OperationId = "deleteApplicationTemplate")]
         public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
         {
             await _applicationService.DeleteTemplateAsync(id, ct);
@@ -152,7 +152,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("views/{id}/applications")]
         [ProducesResponseType(typeof(IEnumerable<Application>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getViewApplications")]
+        [SwaggerOperation(OperationId = "getViewApplications")]
         public async Task<IActionResult> GetApplicationsByView(Guid id, CancellationToken ct)
         {
             var list = await _applicationService.GetApplicationsByViewAsync(id, ct);
@@ -172,7 +172,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("applications/{id}")]
         [ProducesResponseType(typeof(Application), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getApplication")]
+        [SwaggerOperation(OperationId = "getApplication")]
         public async Task<IActionResult> GetApplication(Guid id, CancellationToken ct)
         {
             var application = await _applicationService.GetApplicationAsync(id, ct);
@@ -196,7 +196,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpPost("views/{id}/applications")]
         [ProducesResponseType(typeof(Application), (int)HttpStatusCode.Created)]
-        [SwaggerOperation(operationId: "createApplication")]
+        [SwaggerOperation(OperationId = "createApplication")]
         public async Task<IActionResult> CreateApplication([FromRoute] Guid id, [FromBody] Application application, CancellationToken ct)
         {
             var createdApplication = await _applicationService.CreateApplicationAsync(id, application, ct);
@@ -213,7 +213,7 @@ namespace Player.Api.Controllers
         /// </remarks>
         [HttpPut("applications/{id}")]
         [ProducesResponseType(typeof(Application), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "updateApplication")]
+        [SwaggerOperation(OperationId = "updateApplication")]
         public async Task<IActionResult> UpdateApplication([FromRoute] Guid id, [FromBody] Application application, CancellationToken ct)
         {
             var updatedApplication = await _applicationService.UpdateApplicationAsync(id, application, ct);
@@ -232,7 +232,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpDelete("applications/{id}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
-        [SwaggerOperation(operationId: "deleteApplication")]
+        [SwaggerOperation(OperationId = "deleteApplication")]
         public async Task<IActionResult> DeleteApplication(Guid id, CancellationToken ct)
         {
             await _applicationService.DeleteApplicationAsync(id, ct);
@@ -256,7 +256,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("teams/{id}/application-instances")]
         [ProducesResponseType(typeof(IEnumerable<ApplicationInstance>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getTeamApplicationInstances")]
+        [SwaggerOperation(OperationId = "getTeamApplicationInstances")]
         public async Task<IActionResult> GetInstancesByTeam(Guid id, CancellationToken ct)
         {
             var list = await _applicationService.GetInstancesByTeamAsync(id, ct);
@@ -276,7 +276,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("application-instances/{id}")]
         [ProducesResponseType(typeof(ApplicationInstance), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getApplicationInstance")]
+        [SwaggerOperation(OperationId = "getApplicationInstance")]
         public async Task<IActionResult> GetInstance(Guid id, CancellationToken ct)
         {
             var instance = await _applicationService.GetInstanceAsync(id, ct);
@@ -300,7 +300,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpPost("teams/{id}/application-instances")]
         [ProducesResponseType(typeof(ApplicationInstance), (int)HttpStatusCode.Created)]
-        [SwaggerOperation(operationId: "createApplicationInstance")]
+        [SwaggerOperation(OperationId = "createApplicationInstance")]
         public async Task<IActionResult> CreateApplicationInstance([FromRoute] Guid id, [FromBody] ApplicationInstanceForm instance, CancellationToken ct)
         {
             var createdInstance = await _applicationService.CreateInstanceAsync(id, instance, ct);
@@ -320,7 +320,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpPut("application-instances/{id}")]
         [ProducesResponseType(typeof(ApplicationInstance), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "updateApplicationInstance")]
+        [SwaggerOperation(OperationId = "updateApplicationInstance")]
         public async Task<IActionResult> UpdateApplicationInstance([FromRoute] Guid id, [FromBody] ApplicationInstanceForm instance, CancellationToken ct)
         {
             var updatedInstance = await _applicationService.UpdateInstanceAsync(id, instance, ct);
@@ -339,7 +339,7 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpDelete("application-instances/{id}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
-        [SwaggerOperation(operationId: "deleteApplicationInstance")]
+        [SwaggerOperation(OperationId = "deleteApplicationInstance")]
         public async Task<IActionResult> DeleteApplicationInstance(Guid id, CancellationToken ct)
         {
             await _applicationService.DeleteInstanceAsync(id, ct);

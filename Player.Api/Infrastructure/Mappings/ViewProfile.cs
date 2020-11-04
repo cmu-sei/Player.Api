@@ -23,7 +23,7 @@ namespace Player.Api.Infrastructure.Mappings
         public ViewProfile()
         {
             CreateMap<ViewEntity, View>()
-                .ForMember(dest => dest.CanManage, opt => opt.ResolveUsing<ManageViewResolver>());
+                .ForMember(dest => dest.CanManage, opt => opt.MapFrom<ManageViewResolver>());
 
             CreateMap<View, ViewEntity>();
 

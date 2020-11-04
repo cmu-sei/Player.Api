@@ -41,18 +41,23 @@ namespace Player.Api.Services
         private readonly PlayerContext _context;
         private readonly IAuthorizationService _authorizationService;
         private readonly ClaimsPrincipal _user;
+        private readonly IMapper _mapper;
 
-        public TeamMembershipService(PlayerContext context, IAuthorizationService authorizationService, IPrincipal user)
+        public TeamMembershipService(PlayerContext context, 
+                                        IAuthorizationService authorizationService, 
+                                        IPrincipal user,
+                                        IMapper mapper)
         {
             _context = context;
             _authorizationService = authorizationService;
             _user = user as ClaimsPrincipal;
+            _mapper = mapper;
         }
 
         public async Task<TeamMembership> GetAsync(Guid id)
         {
             var item = await _context.TeamMemberships
-                .ProjectTo<TeamMembership>()
+                .ProjectTo<TeamMembership>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(o => o.Id == id);
 
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new SameUserOrViewAdminRequirement(item.ViewId, item.UserId))).Succeeded)
@@ -73,7 +78,7 @@ namespace Player.Api.Services
 
             var membershipQuery = _context.TeamMemberships
                 .Where(m => m.UserId == userId && m.ViewMembership.ViewId == viewId)
-                .ProjectTo<TeamMembership>()
+                .ProjectTo<TeamMembership>(_mapper.ConfigurationProvider)
                 .Future();
 
             if (!(await userExists.ValueAsync()))
@@ -94,7 +99,7 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(membershipToUpdate.ViewMembership.ViewId))).Succeeded)
                 throw new ForbiddenException();
 
-            Mapper.Map(form, membershipToUpdate);
+            _mapper.Map(form, membershipToUpdate);
 
             _context.TeamMemberships.Update(membershipToUpdate);
             await _context.SaveChangesAsync();

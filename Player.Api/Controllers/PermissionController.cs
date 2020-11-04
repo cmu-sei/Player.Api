@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.Services;
 using Player.Api.ViewModels;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using Swashbuckle.AspNetCore.Annotations;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -40,7 +40,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("permissions")]
         [ProducesResponseType(typeof(IEnumerable<Permission>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getPermissions")]
+        [SwaggerOperation(OperationId = "getPermissions")]
         public async Task<IActionResult> Get()
         {
             var list = await _permissionService.GetAsync();
@@ -59,7 +59,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("permissions/{id}")]
         [ProducesResponseType(typeof(Permission), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getPermission")]
+        [SwaggerOperation(OperationId = "getPermission")]
         public async Task<IActionResult> Get(Guid id)
         {
             var permission = await _permissionService.GetAsync(id);
@@ -82,7 +82,7 @@ namespace Player.Api.Controllers
         /// </remarks>
         [HttpPost("permissions")]
         [ProducesResponseType(typeof(Permission), (int)HttpStatusCode.Created)]
-        [SwaggerOperation(operationId: "createPermission")]
+        [SwaggerOperation(OperationId = "createPermission")]
         public async Task<IActionResult> Create([FromBody] PermissionForm form)
         {
             var createdPermission = await _permissionService.CreateAsync(form);
@@ -102,7 +102,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpPut("permissions/{id}")]
         [ProducesResponseType(typeof(Permission), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "updatePermission")]
+        [SwaggerOperation(OperationId = "updatePermission")]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] PermissionForm form)
         {
             var updatedPermission = await _permissionService.UpdateAsync(id, form);
@@ -120,7 +120,7 @@ namespace Player.Api.Controllers
         /// <param name="id">The id of the Permission to delete</param>
         [HttpDelete("permissions/{id}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
-        [SwaggerOperation(operationId: "deletePermission")]
+        [SwaggerOperation(OperationId = "deletePermission")]
         public async Task<IActionResult> Delete(Guid id)
         {
             await _permissionService.DeleteAsync(id);
@@ -139,7 +139,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("users/{userId}/views/{viewId}/permissions")]
         [ProducesResponseType(typeof(IEnumerable<Permission>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getUserViewPermissions")]
+        [SwaggerOperation(OperationId = "getUserViewPermissions")]
         public async Task<IActionResult> GetByViewId(Guid viewId, Guid userId)
         {
             var list = await _permissionService.GetByViewIdForUserAsync(viewId, userId);
@@ -158,7 +158,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpGet("users/{userId}/teams/{teamId}/permissions")]
         [ProducesResponseType(typeof(IEnumerable<Permission>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "getUserViewPermissionsByTeam")]
+        [SwaggerOperation(OperationId = "getUserViewPermissionsByTeam")]
         public async Task<IActionResult> GetByTeamId(Guid teamId, Guid userId)
         {
             var list = await _permissionService.GetByTeamIdForUserAsync(teamId, userId);
@@ -178,7 +178,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpPost("roles/{roleId}/permissions/{permissionId}")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "addPermissionToRole")]
+        [SwaggerOperation(OperationId = "addPermissionToRole")]
         public async Task<IActionResult> AddPermissionToRole(Guid roleId, Guid permissionId)
         {
             await _permissionService.AddToRoleAsync(roleId, permissionId);
@@ -198,7 +198,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpDelete("roles/{roleId}/permissions/{permissionId}")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "removePermissionFromRole")]
+        [SwaggerOperation(OperationId = "removePermissionFromRole")]
         public async Task<IActionResult> RemovePermissionFromRole(Guid roleId, Guid permissionId)
         {
             await _permissionService.RemoveFromRoleAsync(roleId, permissionId);
@@ -218,7 +218,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpPost("teams/{teamId}/permissions/{permissionId}")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "addPermissionToTeam")]
+        [SwaggerOperation(OperationId = "addPermissionToTeam")]
         public async Task<IActionResult> AddPermissionToTeam(Guid teamId, Guid permissionId)
         {
             await _permissionService.AddToTeamAsync(teamId, permissionId);
@@ -238,7 +238,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpDelete("teams/{teamId}/permissions/{permissionId}")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "removePermissionFromTeam")]
+        [SwaggerOperation(OperationId = "removePermissionFromTeam")]
         public async Task<IActionResult> RemovePermissionFromTeam(Guid teamId, Guid permissionId)
         {
             await _permissionService.RemoveFromTeamAsync(teamId, permissionId);
@@ -258,7 +258,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpPost("users/{userId}/permissions/{permissionId}")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "addPermissionToUser")]
+        [SwaggerOperation(OperationId = "addPermissionToUser")]
         public async Task<IActionResult> AddPermissionToUser(Guid userId, Guid permissionId)
         {
             await _permissionService.AddToUserAsync(userId, permissionId);
@@ -278,7 +278,7 @@ namespace Player.Api.Controllers
         /// <returns></returns>
         [HttpDelete("users/{userId}/permissions/{permissionId}")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
-        [SwaggerOperation(operationId: "removePermissionFromUser")]
+        [SwaggerOperation(OperationId = "removePermissionFromUser")]
         public async Task<IActionResult> RemovePermissionFromUser(Guid userId, Guid permissionId)
         {
             await _permissionService.RemoveFromUserAsync(userId, permissionId);

@@ -57,12 +57,17 @@ namespace Player.Api.Services
         private readonly PlayerContext _context;
         private readonly IAuthorizationService _authorizationService;
         private readonly ClaimsPrincipal _user;
+        private readonly IMapper _mapper;
 
-        public ApplicationService(PlayerContext context, IAuthorizationService authorizationService, IPrincipal user)
+        public ApplicationService(PlayerContext context,
+                                  IAuthorizationService authorizationService,
+                                  IPrincipal user,
+                                  IMapper mapper)
         {
             _context = context;
             _authorizationService = authorizationService;
             _user = user as ClaimsPrincipal;
+            _mapper = mapper;
         }
 
         #region Application Templates
@@ -73,7 +78,7 @@ namespace Player.Api.Services
                 throw new ForbiddenException();
 
             var items = await _context.ApplicationTemplates
-                .ProjectTo<ViewModels.ApplicationTemplate>()
+                .ProjectTo<ViewModels.ApplicationTemplate>(_mapper.ConfigurationProvider)
                 .ToListAsync(ct);
 
             return items;
@@ -85,7 +90,7 @@ namespace Player.Api.Services
                 throw new ForbiddenException();
 
             var item = await _context.ApplicationTemplates
-                .ProjectTo<ViewModels.ApplicationTemplate>()
+                .ProjectTo<ViewModels.ApplicationTemplate>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(o => o.Id == id, ct);
 
             return item;
@@ -96,12 +101,12 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var templateEntity = Mapper.Map<ApplicationTemplateEntity>(form);
+            var templateEntity = _mapper.Map<ApplicationTemplateEntity>(form);
 
             _context.ApplicationTemplates.Add(templateEntity);
             await _context.SaveChangesAsync(ct);
 
-            return Mapper.Map<ViewModels.ApplicationTemplate>(templateEntity);
+            return _mapper.Map<ViewModels.ApplicationTemplate>(templateEntity);
         }
 
         public async Task<ViewModels.ApplicationTemplate> UpdateTemplateAsync(Guid id, ViewModels.ApplicationTemplateForm form, CancellationToken ct)
@@ -114,7 +119,7 @@ namespace Player.Api.Services
             if (templateToUpdate == null)
                 throw new EntityNotFoundException<ApplicationTemplate>();
 
-            Mapper.Map(form, templateToUpdate);
+            _mapper.Map(form, templateToUpdate);
 
             _context.ApplicationTemplates.Update(templateToUpdate);
             await _context.SaveChangesAsync(ct);
@@ -155,13 +160,13 @@ namespace Player.Api.Services
             if (view == null)
                 throw new EntityNotFoundException<View>();
 
-            return Mapper.Map<IEnumerable<ViewModels.Application>>(view.Applications);
+            return _mapper.Map<IEnumerable<ViewModels.Application>>(view.Applications);
         }
 
         public async Task<ViewModels.Application> GetApplicationAsync(Guid id, CancellationToken ct)
         {
             var item = await _context.Applications
-                .ProjectTo<ViewModels.Application>()
+                .ProjectTo<ViewModels.Application>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(o => o.Id == id, ct);
 
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(item.ViewId))).Succeeded)
@@ -180,12 +185,12 @@ namespace Player.Api.Services
             if (!viewExists)
                 throw new EntityNotFoundException<View>();
 
-            var applicationEntity = Mapper.Map<ApplicationEntity>(application);
+            var applicationEntity = _mapper.Map<ApplicationEntity>(application);
 
             _context.Applications.Add(applicationEntity);
             await _context.SaveChangesAsync(ct);
 
-            application = Mapper.Map<ViewModels.Application>(applicationEntity);
+            application = _mapper.Map<ViewModels.Application>(applicationEntity);
 
             return application;
         }
@@ -200,12 +205,12 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(application.ViewId))).Succeeded)
                 throw new ForbiddenException();
 
-            Mapper.Map(application, applicationToUpdate);
+            _mapper.Map(application, applicationToUpdate);
 
             _context.Applications.Update(applicationToUpdate);
             await _context.SaveChangesAsync(ct);
 
-            return Mapper.Map(applicationToUpdate, application);
+            return _mapper.Map(applicationToUpdate, application);
         }
 
         public async Task<bool> DeleteApplicationAsync(Guid id, CancellationToken ct)
@@ -237,7 +242,7 @@ namespace Player.Api.Services
             var instanceQuery = _context.ApplicationInstances
                 .Where(i => i.TeamId == teamId)
                 .OrderBy(a => a.DisplayOrder)
-                .ProjectTo<ViewModels.ApplicationInstance>()
+                .ProjectTo<ViewModels.ApplicationInstance>(_mapper.ConfigurationProvider)
                 .Future();
 
             var team = (await teamQuery.ToListAsync()).SingleOrDefault();
@@ -254,7 +259,7 @@ namespace Player.Api.Services
         public async Task<ViewModels.ApplicationInstance> GetInstanceAsync(Guid id, CancellationToken ct)
         {
             var instance = await _context.ApplicationInstances
-                .ProjectTo<ViewModels.ApplicationInstance>()
+                .ProjectTo<ViewModels.ApplicationInstance>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(a => a.Id == id, ct);
 
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(instance.ViewId))).Succeeded)
@@ -273,13 +278,13 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(team.ViewId))).Succeeded)
                 throw new ForbiddenException();
 
-            var instanceEntity = Mapper.Map<ApplicationInstanceEntity>(form);
+            var instanceEntity = _mapper.Map<ApplicationInstanceEntity>(form);
 
             _context.ApplicationInstances.Add(instanceEntity);
             await _context.SaveChangesAsync(ct);
 
             var instance = await _context.ApplicationInstances
-                .ProjectTo<ViewModels.ApplicationInstance>()
+                .ProjectTo<ViewModels.ApplicationInstance>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(i => i.Id == instanceEntity.Id, ct);
 
             return instance;
@@ -297,13 +302,13 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(instanceToUpdate.Team.ViewId))).Succeeded)
                 throw new ForbiddenException();
 
-            Mapper.Map(form, instanceToUpdate);
+            _mapper.Map(form, instanceToUpdate);
 
             _context.ApplicationInstances.Update(instanceToUpdate);
             await _context.SaveChangesAsync(ct);
 
             var instance = await _context.ApplicationInstances
-                .ProjectTo<ViewModels.ApplicationInstance>()
+                .ProjectTo<ViewModels.ApplicationInstance>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(i => i.Id == instanceToUpdate.Id, ct);
 
             return instance;

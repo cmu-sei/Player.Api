@@ -50,10 +50,15 @@ namespace Player.Api.Services
         private readonly PlayerContext _context;
         private readonly IAuthorizationService _authorizationService;
         private readonly ClaimsPrincipal _user;
+        private readonly IMapper _mapper;
 
-        public PermissionService(PlayerContext context, IAuthorizationService authorizationService, IPrincipal user)
+        public PermissionService(PlayerContext context, 
+                                IAuthorizationService authorizationService, 
+                                IPrincipal user,
+                                IMapper mapper)
         {
             _context = context;
+            _mapper = mapper;
             _authorizationService = authorizationService;
             _user = user as ClaimsPrincipal;
         }
@@ -64,7 +69,7 @@ namespace Player.Api.Services
                 throw new ForbiddenException();
 
             var items = await _context.Permissions
-                .ProjectTo<ViewModels.Permission>()
+                .ProjectTo<ViewModels.Permission>(_mapper.ConfigurationProvider)
                 .ToListAsync();
 
             return items;
@@ -73,7 +78,7 @@ namespace Player.Api.Services
         public async Task<Permission> GetAsync(Guid id)
         {
             var item = await _context.Permissions
-                .ProjectTo<Permission>()
+                .ProjectTo<Permission>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(o => o.Id == id);
 
             return item;
@@ -84,12 +89,12 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var permissionEntity = Mapper.Map<PermissionEntity>(form);
+            var permissionEntity = _mapper.Map<PermissionEntity>(form);
 
             _context.Permissions.Add(permissionEntity);
             await _context.SaveChangesAsync();
 
-            return Mapper.Map<Permission>(permissionEntity);
+            return _mapper.Map<Permission>(permissionEntity);
         }
 
         public async Task<Permission> UpdateAsync(Guid id, PermissionForm form)
@@ -105,12 +110,12 @@ namespace Player.Api.Services
             if (permissionToUpdate.ReadOnly)
                 throw new ForbiddenException("Cannot update a Read-Only Permission");
 
-            Mapper.Map(form, permissionToUpdate);
+            _mapper.Map(form, permissionToUpdate);
 
             _context.Permissions.Update(permissionToUpdate);
             await _context.SaveChangesAsync();
 
-            return Mapper.Map<Permission>(permissionToUpdate);
+            return _mapper.Map<Permission>(permissionToUpdate);
         }
 
         public async Task<bool> DeleteAsync(Guid id)
@@ -230,7 +235,7 @@ namespace Player.Api.Services
                 }
             }
 
-            return Mapper.Map<IEnumerable<Permission>>(permissions);
+            return _mapper.Map<IEnumerable<Permission>>(permissions);
         }
 
         public async Task<bool> AddToRoleAsync(Guid roleId, Guid permissionId)

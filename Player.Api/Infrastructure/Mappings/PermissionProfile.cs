@@ -24,18 +24,21 @@ namespace Player.Api.Infrastructure.Mappings
             CreateMap<PermissionForm, PermissionEntity>();
 
             CreateMap<UserEntity, UserPermissions>()
-                .ForMember(dest => dest.Permissions, opt => opt.MapFrom(src =>
-                    src.Role.Permissions.Select(x => x.Permission).Concat(
-                    src.Permissions.Select(x => x.Permission))))
+                .ForMember(dest => dest.RolePermissions, opt => opt.MapFrom(src =>
+                    src.Role.Permissions.Select(x => x.Permission)))
+                .ForMember(dest => dest.AssignedPermissions, opt => opt.MapFrom(src =>
+                    src.Permissions.Select(x => x.Permission)))
                 .ForMember(dest => dest.TeamPermissions, opt => opt.MapFrom(src => src.TeamMemberships));
 
             CreateMap<TeamMembershipEntity, TeamPermissions>()
                 .ForMember(dest => dest.ViewId, opt => opt.MapFrom(src => src.ViewMembership.ViewId))
                 .ForMember(dest => dest.IsPrimary, opt => opt.MapFrom(src => src.ViewMembership.PrimaryTeamMembershipId == src.Id))
-                .ForMember(dest => dest.Permissions, opt => opt.MapFrom(src =>
-                    src.Role.Permissions.Select(x => x.Permission).Concat(
-                    src.Team.Role.Permissions.Select(x => x.Permission)).Concat(
-                    src.Team.Permissions.Select(x => x.Permission))));
+                .ForMember(dest => dest.RolePermissions, opt => opt.MapFrom(src =>
+                    src.Role.Permissions.Select(x => x.Permission)))
+                .ForMember(dest => dest.TeamRolePermissions, opt => opt.MapFrom(src =>
+                    src.Team.Role.Permissions.Select(x => x.Permission)))
+                .ForMember(dest => dest.TeamAssignedPermissions, opt => opt.MapFrom(src =>
+                    src.Team.Permissions.Select(x => x.Permission)));
         }
     }
 }

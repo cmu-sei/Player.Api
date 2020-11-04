@@ -15,21 +15,22 @@ using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
 using System;
 using System.Net;
+using Microsoft.Extensions.Hosting;
 
 namespace Player.Api.Infrastructure.Filters
 {
     public class JsonExceptionFilter : IExceptionFilter
     {
-        private readonly IHostingEnvironment _env;
+        private readonly IWebHostEnvironment _env;
 
-        public JsonExceptionFilter(IHostingEnvironment env)
+        public JsonExceptionFilter(IWebHostEnvironment env)
         {
             _env = env;
         }
 
         public void OnException(ExceptionContext context)
         {
-            var error = new ApiError();
+            var error = new ProblemDetails();
             error.Status = GetStatusCodeFromException(context.Exception);
 
             if (error.Status == (int)HttpStatusCode.InternalServerError)

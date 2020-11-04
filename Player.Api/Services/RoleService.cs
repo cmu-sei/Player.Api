@@ -44,12 +44,17 @@ namespace Player.Api.Services
         private readonly PlayerContext _context;
         private readonly IAuthorizationService _authorizationService;
         private readonly ClaimsPrincipal _user;
+        private readonly IMapper _mapper;
 
-        public RoleService(PlayerContext context, IAuthorizationService authorizationService, IPrincipal user)
+        public RoleService(PlayerContext context, 
+                            IAuthorizationService authorizationService, 
+                            IPrincipal user, 
+                            IMapper mapper)
         {
             _context = context;
             _authorizationService = authorizationService;
             _user = user as ClaimsPrincipal;
+            _mapper = mapper;
         }
 
         public async Task<IEnumerable<Role>> GetAsync()
@@ -58,7 +63,7 @@ namespace Player.Api.Services
                 throw new ForbiddenException();
 
             var items = await _context.Roles
-                .ProjectTo<Role>()
+                .ProjectTo<Role>(_mapper.ConfigurationProvider)
                 .ToListAsync();
 
             return items;
@@ -67,7 +72,7 @@ namespace Player.Api.Services
         public async Task<Role> GetAsync(Guid id)
         {
             var item = await _context.Roles
-                .ProjectTo<Role>()
+                .ProjectTo<Role>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(o => o.Id == id);
 
             return item;
@@ -76,7 +81,7 @@ namespace Player.Api.Services
         public async Task<Role> GetAsync(string name)
         {
             var item = await _context.Roles
-                .ProjectTo<Role>()
+                .ProjectTo<Role>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(o => o.Name == name);
 
             if (item == null)
@@ -94,19 +99,20 @@ namespace Player.Api.Services
 
             // Ensure role with this name does not already exist
             var role = await _context.Roles
-                .ProjectTo<Role>()
+                .ProjectTo<Role>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(o => o.Name == form.Name);
+            
             if (role != null)
             {
                 throw new ConflictException("A role with that name already exists.");
             }
 
-            var roleEntity = Mapper.Map<RoleEntity>(form);
+            var roleEntity = _mapper.Map<RoleEntity>(form);
 
             _context.Roles.Add(roleEntity);
             await _context.SaveChangesAsync();
 
-            return Mapper.Map<Role>(roleEntity);
+            return _mapper.Map<Role>(roleEntity);
         }
 
         public async Task<Role> UpdateAsync(Guid id, RoleForm form)
@@ -119,7 +125,7 @@ namespace Player.Api.Services
             if (roleToUpdate == null)
                 throw new EntityNotFoundException<Role>();
 
-            Mapper.Map(form, roleToUpdate);
+            _mapper.Map(form, roleToUpdate);
 
             _context.Roles.Update(roleToUpdate);
             await _context.SaveChangesAsync();

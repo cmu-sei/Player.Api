@@ -8,7 +8,6 @@ Carnegie Mellon(R) and CERT(R) are registered in the U.S. Patent and Trademark O
 DM20-0181
 */
 
-using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -130,30 +129,6 @@ namespace Player.Api.Extensions
 
                 context.SaveChanges();
             }
-        }
-
-        public static IServiceCollection AddDbProvider(
-          this IServiceCollection services,
-          IConfiguration config
-      )
-        {
-            string dbProvider = DbProvider(config);
-            switch (dbProvider)
-            {
-                case "Sqlite":
-                    services.AddEntityFrameworkSqlite();
-                    break;
-
-                case "SqlServer":
-                    services.AddEntityFrameworkSqlServer();
-                    break;
-
-                case "PostgreSQL":
-                    services.AddEntityFrameworkNpgsql();
-                    break;
-
-            }
-            return services;
         }
 
         private static string DbProvider(IConfiguration config)

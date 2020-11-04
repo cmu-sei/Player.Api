@@ -8,38 +8,15 @@ Carnegie Mellon(R) and CERT(R) are registered in the U.S. Patent and Trademark O
 DM20-0181
 */
 
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using System.Text.Json.Serialization;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using AutoMapper;
 
-namespace Player.Api.Data.Data.Models
+namespace Player.Api.Infrastructure.Mappings
 {
-    public class PermissionEntity
+    class IgnoreNullSourceValues : IMemberValueResolver<object, object, object, object>
     {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public Guid Id { get; set; }
-
-        public string Key { get; set; }
-
-        public string Value { get; set; }
-
-        public string Description { get; set; }
-
-        public bool ReadOnly { get; set; }
-
-        //public string[] Tags { get; set; }
-    }
-
-    public class PermissionConfiguration : IEntityTypeConfiguration<PermissionEntity>
-    {
-        public void Configure(EntityTypeBuilder<PermissionEntity> builder)
+        public object Resolve(object source, object destination, object sourceMember, object destinationMember, ResolutionContext context)
         {
-            builder.HasIndex(x => new { x.Key, x.Value }).IsUnique();
+            return sourceMember ?? destinationMember;
         }
     }
 }
