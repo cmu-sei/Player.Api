@@ -64,7 +64,7 @@ namespace Player.Api.Services
             // Save file model to DB
             // Return the model that was saved to DB
 
-            var name = SanitizeFileName(file.Name);
+            var name = SanitizeFileName(file.FileName);
             var size = file.Length;
 
             if (size > _fileUploadOptions.maxSize)
