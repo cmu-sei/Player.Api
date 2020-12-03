@@ -12,10 +12,17 @@ using System;
 
 namespace Player.Api.ViewModels
 {
-    public class File
+    public class FileModel
     {
         public string Name { get; set; }
         public Guid viewId { get; set; }
-        public string path { get; set; }
+        public string Path { get; set; }
+
+        public FileModel(string name, Guid viewId, string path)
+        {
+            this.Name = name;
+            this.viewId = viewId;
+            this.Path = path;
+        }
     }
 }

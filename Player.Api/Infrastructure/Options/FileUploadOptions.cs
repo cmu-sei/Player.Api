@@ -13,6 +13,6 @@ namespace Player.Api.Options
     public class FileUploadOptions
     {
         public string basePath { get; set; }
-        public string maxSize { get; set; }
+        public long maxSize { get; set; }
     }
 }

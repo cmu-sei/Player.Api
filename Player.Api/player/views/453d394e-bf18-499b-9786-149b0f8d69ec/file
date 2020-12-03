@@ -1,0 +1,16 @@
+Add files upload step to edit view screen
+
+need upload endpoint
+
+need way to get link to file OR add files application that shows list of files
+both?
+
+When link is clicked, API checks permissions on file
+
+Look at FileController.cs in VM API for file upload example
+
+Need DB table for files - file name, view, teams, path/pointer to actual file
+
+Files get sent to some volume in docker, actual path is abstracted as player/files or whatever
+
+would be nice if URLs ended in filename

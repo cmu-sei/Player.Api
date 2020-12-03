@@ -18,7 +18,9 @@ using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
+using Player.Api.Options;
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -31,21 +33,27 @@ namespace Player.Api.Services
 {
     public interface IFileService
     {
-        Task<File> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct);
+        Task<FileModel> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct);
     }
 
     public class FileService : IFileService
     {
         private readonly IAuthorizationService _authorizationService;
         private readonly ClaimsPrincipal _user;
+        private readonly FileUploadOptions _fileUploadOptions;
+        private readonly PlayerContext _context;
+        private readonly IMapper _mapper;
 
-        public FileService(IPrincipal user, IAuthorizationService authService)
+        public FileService(IPrincipal user, IAuthorizationService authService, FileUploadOptions fileOptions, PlayerContext context, IMapper mapper)
         {
             _user = user as ClaimsPrincipal;
             _authorizationService = authService;
+            _fileUploadOptions = fileOptions;
+            _context = context;
+            _mapper = mapper;
         }
 
-        public async Task<File> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct)
+        public async Task<FileModel> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct)
         {
             // Sanitize file name
             // Validate file size
@@ -55,7 +63,45 @@ namespace Player.Api.Services
             // Write file to disk
             // Save file model to DB
             // Return the model that was saved to DB
-            return null;
+
+            var name = SanitizeFileName(file.Name);
+            var size = file.Length;
+
+            if (size > _fileUploadOptions.maxSize)
+            {
+                throw new InvalidOperationException($"File size exceeds the {_fileUploadOptions.maxSize} limit");
+            }
+
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(viewId))).Succeeded)
+                throw new ForbiddenException();
+            
+            var folderPath = Path.Combine(_fileUploadOptions.basePath, viewId.ToString());
+            var filepath = Path.Combine(folderPath, name);
+
+            Directory.CreateDirectory(folderPath);
+
+            using (var stream = File.Create(filepath))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var model = new FileModel(name, viewId, filepath);
+            var entity = _mapper.Map<FileEntity>(model);
+
+            _context.Files.Add(entity);
+            await _context.SaveChangesAsync(ct);
+
+            return model;
+        }
+
+        private string SanitizeFileName(string name)
+        {
+            var ret = "";
+            var disallowed = Path.GetInvalidFileNameChars();
+            foreach (var c in name)
+                if (!disallowed.Contains(c))
+                    ret += c;
+            return ret;
         }
     }
 }

@@ -9,23 +9,34 @@ DM20-0181
 */
 
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Net;
 using System.Threading.Tasks;
+using System.Threading;
 using Player.Api.Services;
 
 namespace Player.Api.Controllers
 {
     public class FileController : BaseController
     {
+        private readonly IFileService _fileService;
+
+        public FileController(IFileService fileService)
+        {
+            _fileService = fileService;
+        }
+
         /// <summary> Upload a file to a view </summary>
         /// <param name="viewId">The id of the view</param>
         /// <param name="ct"></param>
+        /// <param name="file"></param>
         [HttpPost("views/{viewId}/files")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
-        public async Task<IActionResult> Upload(Guid viewId)
+        public async Task<IActionResult> Upload(Guid viewId, CancellationToken ct, IFormFile file)
         {
-            return Ok();
+            var result = await _fileService.UploadAsync(file, viewId, ct);
+            return Ok(result);
         }
     }
 }

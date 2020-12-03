@@ -15,12 +15,12 @@ using System.Linq;
 
 namespace Player.Api.Infrastructure.Mappings
 {
-    public class FileProfile : Automapper.Profile
+    public class FileProfile : AutoMapper.Profile
     {
         public FileProfile()
         {
-            CreateMap<File, FileEntity>();
-            CreateMap<FileEntity, File>();
+            CreateMap<FileModel, FileEntity>();
+            CreateMap<FileEntity, FileModel>();
         }
     }
 }
