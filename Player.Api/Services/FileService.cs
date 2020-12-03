@@ -33,6 +33,7 @@ namespace Player.Api.Services
     {
         Task<FileModel> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct);
         Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct);
+        Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct);
     }
 
     public class FileService : IFileService
@@ -91,6 +92,18 @@ namespace Player.Api.Services
             
             var files = await _context.Files.ToListAsync();
 
+            return _mapper.Map<IEnumerable<FileModel>>(files);
+        }
+
+        public async Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct)
+        {
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(viewId))).Succeeded)
+                throw new ForbiddenException();
+            
+            var files = await _context.Files
+                .Where(f => f.viewId == viewId)
+                .ToListAsync();
+            
             return _mapper.Map<IEnumerable<FileModel>>(files);
         }
 
