@@ -8,13 +8,16 @@ Carnegie Mellon(R) and CERT(R) are registered in the U.S. Patent and Trademark O
 DM20-0181
 */
 
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Http;
 using System;
 using System.Net;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 using Player.Api.Services;
+using Player.Api.ViewModels;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace Player.Api.Controllers
 {
@@ -33,10 +36,22 @@ namespace Player.Api.Controllers
         /// <param name="file"></param>
         [HttpPost("views/{viewId}/files")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "uploadFile")]
         public async Task<IActionResult> Upload(Guid viewId, CancellationToken ct, IFormFile file)
         {
             var result = await _fileService.UploadAsync(file, viewId, ct);
             return Ok(result);
+        }
+
+        /// <summary> Get all files in the system </summary>
+        /// <param name="ct"></param>
+        [HttpGet("views/files")]
+        [ProducesResponseType(typeof(IEnumerable<FileModel>), (int) HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "getAllFiles")]
+        public async Task<IActionResult> Get(CancellationToken ct)
+        {
+            var files = await _fileService.GetAsync(ct);
+            return Ok(files);
         }
     }
 }

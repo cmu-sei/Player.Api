@@ -9,7 +9,6 @@ DM20-0181
 */
 
 using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -27,13 +26,13 @@ using System.Security.Claims;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
-using Z.EntityFramework.Plus;
 
 namespace Player.Api.Services
 {
     public interface IFileService
     {
         Task<FileModel> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct);
+        Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct);
     }
 
     public class FileService : IFileService
@@ -55,15 +54,6 @@ namespace Player.Api.Services
 
         public async Task<FileModel> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct)
         {
-            // Sanitize file name
-            // Validate file size
-            // Ensure user has manage permissions on this view
-            // Set filepath = basepath + viewId + sanitized name
-            // create directory for this view (Directory.CreateDirectory)
-            // Write file to disk
-            // Save file model to DB
-            // Return the model that was saved to DB
-
             var name = SanitizeFileName(file.FileName);
             var size = file.Length;
 
@@ -92,6 +82,16 @@ namespace Player.Api.Services
             await _context.SaveChangesAsync(ct);
 
             return model;
+        }
+
+        public async Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct)
+        {
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+                throw new ForbiddenException();
+            
+            var files = await _context.Files.ToListAsync();
+
+            return _mapper.Map<IEnumerable<FileModel>>(files);
         }
 
         private string SanitizeFileName(string name)
