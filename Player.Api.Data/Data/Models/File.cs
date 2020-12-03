@@ -8,24 +8,19 @@ Carnegie Mellon(R) and CERT(R) are registered in the U.S. Patent and Trademark O
 DM20-0181
 */
 
-using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Net;
-using System.Threading.Tasks;
-using Player.Api.Services;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Player.Api.Controllers
+namespace Player.Api.Data.Data.Models
 {
-    public class FileController : BaseController
+    public class FileEntity
     {
-        /// <summary> Upload a file to a view </summary>
-        /// <param name="viewId">The id of the view</param>
-        /// <param name="ct"></param>
-        [HttpPost("views/{viewId}/files")]
-        [ProducesResponseType((int)HttpStatusCode.OK)]
-        public async Task<IActionResult> Upload(Guid viewId)
-        {
-            return Ok();
-        }
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public Guid Id { get; set; }
+        public string Name { get; set; }
+        public Guid viewId { get; set; }
+        public string path { get; set; }
     }
 }
