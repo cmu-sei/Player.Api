@@ -34,6 +34,7 @@ namespace Player.Api.Services
         Task<FileModel> UploadAsync(FileForm form, CancellationToken ct);
         Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct);
         Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct);
+        Task<IEnumerable<FileModel>> GetByTeamAsync(Guid teamId, CancellationToken ct);
         Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct);
         Task<FileModel> UpdateAsync(Guid fileId, FileUpdateForm form, CancellationToken ct);
         Task<bool> DeleteAsync (Guid fileId, CancellationToken ct);
@@ -96,6 +97,20 @@ namespace Player.Api.Services
             var files = await _context.Files
                 .Where(f => f.ViewId == viewId)
                 .ToListAsync();
+            
+            return _mapper.Map<IEnumerable<FileModel>>(files);
+        }
+
+        public async Task<IEnumerable<FileModel>> GetByTeamAsync(Guid teamId, CancellationToken ct)
+        {
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new TeamMemberRequirement(teamId))).Succeeded
+                && !(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+                throw new ForbiddenException();
+            
+            var files = _context.Files
+                .AsEnumerable()
+                .Where(f => f.TeamIds.Contains(teamId))
+                .ToList();
             
             return _mapper.Map<IEnumerable<FileModel>>(files);
         }

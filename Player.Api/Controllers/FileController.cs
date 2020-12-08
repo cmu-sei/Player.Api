@@ -33,7 +33,7 @@ namespace Player.Api.Controllers
         /// <summary> Upload a file </summary>
         /// <param name="form"> The settings for the file </param> 
         /// <param name="ct"></param>
-        [HttpPost("views/files")]
+        [HttpPost("files")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "uploadFile")]
         public async Task<IActionResult> Upload([FromForm] FileForm form, CancellationToken ct)
@@ -44,7 +44,7 @@ namespace Player.Api.Controllers
 
         /// <summary> Get all files in the system </summary>
         /// <param name="ct"></param>
-        [HttpGet("views/files")]
+        [HttpGet("files")]
         [ProducesResponseType(typeof(IEnumerable<FileModel>), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "getAllFiles")]
         public async Task<IActionResult> Get(CancellationToken ct)
@@ -65,10 +65,22 @@ namespace Player.Api.Controllers
             return Ok(files);
         }
 
+        /// <summary> Get all files in a team </summary>
+        /// <param name="teamId"> The id of the team </param>
+        /// <param name="ct"></param>
+        [HttpGet("teams/{teamId}/files")]
+        [ProducesResponseType(typeof(FileModel), (int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "getTeamFiles")]
+        public async Task<IActionResult> GetTeamFiles(Guid teamId, CancellationToken ct)
+        {
+            var file = await _fileService.GetByTeamAsync(teamId, ct);
+            return Ok(file);
+        }
+
         /// <summary> Get a specific file by id </summary>
         /// <param name="fileId"> The id of the file </param>
         /// <param name="ct"></param>
-        [HttpGet("views/files/{fileId}")]
+        [HttpGet("/files/{fileId}")]
         [ProducesResponseType(typeof(FileModel), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "getById")]
         public async Task<IActionResult> GetById(Guid fileId, CancellationToken ct)
@@ -83,7 +95,7 @@ namespace Player.Api.Controllers
         /// <param name="fileId"> The id of the file </param>
         /// <param name="form"> The settings for the file </param> 
         /// <param name="ct"></param>
-        [HttpPut("views/files/{fileId}")]
+        [HttpPut("/files/{fileId}")]
         [ProducesResponseType(typeof(FileModel), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "updateFile")]
         public async Task<IActionResult> Update(Guid fileId, [FromForm] FileUpdateForm form, CancellationToken ct)
@@ -95,7 +107,7 @@ namespace Player.Api.Controllers
         /// <summary> Delete a file </summary>
         /// <param name="fileId"> The id of the file </param>
         /// <param name="ct"></param>
-        [HttpDelete("views/files/{fileId}")]
+        [HttpDelete("/files/{fileId}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
         [SwaggerOperation(OperationId = "deleteFile")]
         public async Task<IActionResult> Delete(Guid fileId, CancellationToken ct)
