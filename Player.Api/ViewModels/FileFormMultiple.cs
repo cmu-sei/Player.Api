@@ -8,20 +8,16 @@ Carnegie Mellon(R) and CERT(R) are registered in the U.S. Patent and Trademark O
 DM20-0181
 */
 
-using Player.Api.Data.Data.Models;
-using Player.Api.Infrastructure.Authorization;
-using Player.Api.ViewModels;
-using System.Linq;
+using System;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
 
-namespace Player.Api.Infrastructure.Mappings
+namespace Player.Api.ViewModels
 {
-    public class FileProfile : AutoMapper.Profile
+    public class FileFormMultiple
     {
-        public FileProfile()
-        {
-            CreateMap<FileForm, FileEntity>();
-            CreateMap<FileEntity, FileModel>();
-            CreateMap<FileFormMultiple, FileEntity>();
-        }
+        public Guid viewId { get; set; }
+        public List<Guid> teamIds { get; set; }
+        public List<IFormFile> ToUpload { get; set; }
     }
 }

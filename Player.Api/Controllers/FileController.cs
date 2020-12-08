@@ -31,7 +31,7 @@ namespace Player.Api.Controllers
         }
 
         /// <summary> Upload a file </summary>
-        /// <param name="form"> The settings for the file </param> 
+        /// <param name="form"> The file to upload and its settings </param> 
         /// <param name="ct"></param>
         [HttpPost("files")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
@@ -41,6 +41,18 @@ namespace Player.Api.Controllers
             var result = await _fileService.UploadAsync(form, ct);
             return CreatedAtAction(nameof(this.Get), new { id = result.id }, result);
         }
+
+        /// <summary> Upload multiple files </summary>
+        /// <param name="form"> The files to upload and their settings </param>
+        /// <param name="ct"></param>
+        [HttpPost("files/multiple")]
+        [ProducesResponseType((int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "uploadMultipleFiles")]
+        public async Task<IActionResult> UploadMultiple([FromForm] FileFormMultiple form, CancellationToken ct)
+        {
+            var result = await _fileService.UploadMultipleAsync(form, ct);
+            return CreatedAtAction(nameof(this.Get), result);
+        } 
 
         /// <summary> Get all files in the system </summary>
         /// <param name="ct"></param>

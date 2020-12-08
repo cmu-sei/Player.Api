@@ -32,6 +32,7 @@ namespace Player.Api.Services
     public interface IFileService
     {
         Task<FileModel> UploadAsync(FileForm form, CancellationToken ct);
+        Task<IEnumerable<FileModel>> UploadMultipleAsync(FileFormMultiple form, CancellationToken ct);
         Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct);
         Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct);
         Task<IEnumerable<FileModel>> GetByTeamAsync(Guid teamId, CancellationToken ct);
@@ -77,6 +78,35 @@ namespace Player.Api.Services
             await _context.SaveChangesAsync(ct);
 
             return _mapper.Map<FileModel>(entity);
+        }
+
+        public async Task<IEnumerable<FileModel>> UploadMultipleAsync(FileFormMultiple form, CancellationToken ct)
+        {
+            if (form.teamIds == null)
+                throw new ForbiddenException("File must be assigned to at least one team");
+            
+            List<FileModel> models = new List<FileModel>();
+            foreach(var fp in form.ToUpload)
+            {
+                if (!ValidateFileExtension(fp.FileName))
+                    throw new ForbiddenException("Invalid file extension");
+
+                var name = SanitizeFileName(fp.FileName);
+                var filePath = await uploadFile(fp, form.viewId, name);
+
+                var entity = _mapper.Map<FileEntity>(form);
+                entity.Name = name;
+                entity.Path = filePath;
+                // ID is set here so we can return a list of the uploaded files without calling save changes more than once
+                entity.Id = Guid.NewGuid();
+                _context.Files.Add(entity);
+
+                models.Add(_mapper.Map<FileModel>(entity));
+            }
+
+            await _context.SaveChangesAsync(ct);
+            return models;
+
         }
 
         public async Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct)
