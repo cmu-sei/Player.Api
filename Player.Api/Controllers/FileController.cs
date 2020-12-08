@@ -40,7 +40,7 @@ namespace Player.Api.Controllers
         public async Task<IActionResult> Upload(Guid viewId, CancellationToken ct, IFormFile file)
         {
             var result = await _fileService.UploadAsync(file, viewId, ct);
-            return Ok(result);
+            return CreatedAtAction(nameof(this.Get), new { id = result.id }, result);
         }
 
         /// <summary> Get all files in the system </summary>
@@ -66,6 +66,5 @@ namespace Player.Api.Controllers
             return Ok(files);
         }
 
-        
     }
 }
