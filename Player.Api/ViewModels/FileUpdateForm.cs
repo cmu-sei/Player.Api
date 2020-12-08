@@ -10,19 +10,13 @@ DM20-0181
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.AspNetCore.Http;
 
-namespace Player.Api.Data.Data.Models
+namespace Player.Api.ViewModels
 {
-    public class FileEntity
+    public class FileUpdateForm
     {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public Guid Id { get; set; }
-        public string Name { get; set; }
-        public Guid ViewId { get; set; }
         public List<Guid> TeamIds { get; set; }
-        public string Path { get; set; }
+        public IFormFile ToUpload { get; set; }
     }
 }

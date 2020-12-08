@@ -9,6 +9,7 @@ DM20-0181
 */
 
 using System;
+using System.Collections.Generic;
 
 namespace Player.Api.ViewModels
 {
@@ -17,6 +18,7 @@ namespace Player.Api.ViewModels
         public Guid id { get; set; }
         public string Name { get; set; }
         public Guid viewId { get; set; }
+        public List<Guid> teamIds { get; set; }
         public string Path { get; set; }
     }
 }

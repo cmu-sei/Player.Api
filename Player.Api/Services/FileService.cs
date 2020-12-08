@@ -31,11 +31,11 @@ namespace Player.Api.Services
 {
     public interface IFileService
     {
-        Task<FileModel> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct);
+        Task<FileModel> UploadAsync(FileForm form, CancellationToken ct);
         Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct);
         Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct);
         Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct);
-        Task<FileModel> UpdateAsync(Guid fileId, IFormFile file, CancellationToken ct);
+        Task<FileModel> UpdateAsync(Guid fileId, FileUpdateForm form, CancellationToken ct);
         Task<bool> DeleteAsync (Guid fileId, CancellationToken ct);
     }
 
@@ -56,16 +56,21 @@ namespace Player.Api.Services
             _mapper = mapper;
         }
 
-        public async Task<FileModel> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct)
+        public async Task<FileModel> UploadAsync(FileForm form, CancellationToken ct)
         {
-            if (!ValidateFileExtension(file.FileName))
+            // Is there a better exception to throw here?
+            if (form.teamIds == null)
+                throw new ForbiddenException("File must be assigned to at least one team");
+
+            if (!ValidateFileExtension(form.ToUpload.FileName))
                 throw new ForbiddenException("Invalid file extension");
 
-            var name = SanitizeFileName(file.FileName);
-            var filePath = await uploadFile(file, viewId, name);
+            var name = SanitizeFileName(form.ToUpload.FileName);
+            var filePath = await uploadFile(form.ToUpload, form.viewId, name);
 
-            var form = new FileForm(name, viewId, filePath);
             var entity = _mapper.Map<FileEntity>(form);
+            entity.Name = name;
+            entity.Path = filePath;
 
             _context.Files.Add(entity);
             await _context.SaveChangesAsync(ct);
@@ -101,13 +106,24 @@ namespace Player.Api.Services
                 .Where(f => f.Id == fileId)
                 .SingleOrDefaultAsync(ct);
             
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewMemberRequirement(file.ViewId))).Succeeded)
+            // The user can see this file if they are in at least one of the teams it is assigned to
+            var canAccess = false;
+            foreach (var teamId in file.TeamIds)
+            {
+                if ((await _authorizationService.AuthorizeAsync(_user, null, new TeamMemberRequirement(teamId))).Succeeded)
+                {
+                    canAccess = true;
+                    break;
+                }
+            }
+            // If user is not on any times, they can't access the file unless they are an admin    
+            if (!canAccess && !(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
             
             return _mapper.Map<FileModel>(file);
         }
 
-        public async Task<FileModel> UpdateAsync(Guid fileId, IFormFile file, CancellationToken ct)
+        public async Task<FileModel> UpdateAsync(Guid fileId, FileUpdateForm form, CancellationToken ct)
         {
             var entity = await _context.Files
                 .Where(f => f.Id == fileId)
@@ -116,19 +132,30 @@ namespace Player.Api.Services
             if (entity == null)
                 throw new EntityNotFoundException<FileModel>();
             
-            if (!ValidateFileExtension(file.FileName))
-                throw new ForbiddenException("Invalid file extension");
-
-            var name = SanitizeFileName(file.FileName);
-            var filePath = await uploadFile(file, entity.ViewId, name);
-
-            // File is now on disk, check if old file should be deleted (only has the one pointer)
-            if (await lastPointer(entity.Path, ct))
-                File.Delete(entity.Path);
+            // This authorization check assumes all teams for the file are in the same view
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(entity.ViewId))).Succeeded)
+                throw new ForbiddenException();
             
-            // Move pointer to new file
-            entity.Path = filePath;
-            entity.Name = name;
+            // File pointed to is being changed
+            if (form.ToUpload != null)
+            {
+                if (!ValidateFileExtension(form.ToUpload.FileName))
+                    throw new ForbiddenException("Invalid file extension");
+
+                var name = SanitizeFileName(form.ToUpload.FileName);
+                var filePath = await uploadFile(form.ToUpload, entity.ViewId, name);
+
+                // File is now on disk, check if old file should be deleted (only has the one pointer)
+                if (await lastPointer(entity.Path, ct))
+                    File.Delete(entity.Path);
+                
+                // Move pointer to new file
+                entity.Path = filePath;
+                entity.Name = name;
+            }
+            // Teams are being changed
+            if (form.TeamIds != null)
+                entity.TeamIds = form.TeamIds;
 
             _context.Update(entity);
             await _context.SaveChangesAsync(ct);

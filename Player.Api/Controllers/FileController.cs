@@ -30,16 +30,15 @@ namespace Player.Api.Controllers
             _fileService = fileService;
         }
 
-        /// <summary> Upload a file to a view </summary>
-        /// <param name="viewId">The id of the view</param>
+        /// <summary> Upload a file </summary>
+        /// <param name="form"> The settings for the file </param> 
         /// <param name="ct"></param>
-        /// <param name="file"></param>
-        [HttpPost("views/{viewId}/files")]
+        [HttpPost("views/files")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "uploadFile")]
-        public async Task<IActionResult> Upload(Guid viewId, CancellationToken ct, IFormFile file)
+        public async Task<IActionResult> Upload([FromForm] FileForm form, CancellationToken ct)
         {
-            var result = await _fileService.UploadAsync(file, viewId, ct);
+            var result = await _fileService.UploadAsync(form, ct);
             return CreatedAtAction(nameof(this.Get), new { id = result.id }, result);
         }
 
@@ -78,18 +77,18 @@ namespace Player.Api.Controllers
             return Ok(file);
         }
 
-        /// <summary> Replace a file </summary>
-        /// <remarks> Takes the ID of a file entry and a file to upload.
+        /// <summary> Update a file </summary>
+        /// <remarks> Takes a form with fields for team IDs and a new file. File can be assigned to different teams and/or replaced.
         /// The file entry will be changed to point at the newly uploaded file. </remarks>
         /// <param name="fileId"> The id of the file </param>
+        /// <param name="form"> The settings for the file </param> 
         /// <param name="ct"></param>
-        /// <param name="file"></param>
         [HttpPut("views/files/{fileId}")]
         [ProducesResponseType(typeof(FileModel), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "updateFile")]
-        public async Task<IActionResult> Update(Guid fileId, CancellationToken ct, IFormFile file)
+        public async Task<IActionResult> Update(Guid fileId, [FromForm] FileUpdateForm form, CancellationToken ct)
         {
-            var updated = await _fileService.UpdateAsync(fileId, file, ct);
+            var updated = await _fileService.UpdateAsync(fileId, form, ct);
             return Ok(updated);
         }
 

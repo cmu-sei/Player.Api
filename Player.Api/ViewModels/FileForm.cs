@@ -9,20 +9,15 @@ DM20-0181
 */
 
 using System;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
 
 namespace Player.Api.ViewModels
 {
     public class FileForm
     {
-        public string Name { get; set; }
         public Guid viewId { get; set; }
-        public string Path { get; set; }
-
-        public FileForm(string name, Guid viewId, string path)
-        {
-            this.Name = name;
-            this.viewId = viewId;
-            this.Path = path;
-        }
+        public List<Guid> teamIds { get; set; }
+        public IFormFile ToUpload { get; set; }
     }
 }
