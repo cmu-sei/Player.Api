@@ -14,15 +14,9 @@ namespace Player.Api.ViewModels
 {
     public class FileModel
     {
+        public Guid id { get; set; }
         public string Name { get; set; }
         public Guid viewId { get; set; }
         public string Path { get; set; }
-
-        public FileModel(string name, Guid viewId, string path)
-        {
-            this.Name = name;
-            this.viewId = viewId;
-            this.Path = path;
-        }
     }
 }

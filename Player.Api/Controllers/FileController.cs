@@ -54,7 +54,7 @@ namespace Player.Api.Controllers
             return Ok(files);
         }
 
-        // <summary> Get all files in a view </summary>
+        /// <summary> Get all files in a view </summary>
         /// <param name="viewId">The id of the view</param>
         /// <param name="ct"></param>
         [HttpGet("views/{viewId}/files")]
@@ -65,5 +65,7 @@ namespace Player.Api.Controllers
             var files = await _fileService.GetByViewAsync(viewId, ct);
             return Ok(files);
         }
+
+        
     }
 }

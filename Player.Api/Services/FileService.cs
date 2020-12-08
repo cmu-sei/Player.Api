@@ -55,6 +55,7 @@ namespace Player.Api.Services
 
         public async Task<FileModel> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct)
         {
+            // TODO: Make sure file type is acceptable
             var name = SanitizeFileName(file.FileName);
             var size = file.Length;
 
@@ -76,13 +77,13 @@ namespace Player.Api.Services
                 await file.CopyToAsync(stream);
             }
 
-            var model = new FileModel(name, viewId, filepath);
-            var entity = _mapper.Map<FileEntity>(model);
+            var form = new FileForm(name, viewId, filepath);
+            var entity = _mapper.Map<FileEntity>(form);
 
             _context.Files.Add(entity);
             await _context.SaveChangesAsync(ct);
 
-            return model;
+            return _mapper.Map<FileModel>(entity);
         }
 
         public async Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct)

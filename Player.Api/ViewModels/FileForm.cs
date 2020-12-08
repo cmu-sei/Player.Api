@@ -8,19 +8,21 @@ Carnegie Mellon(R) and CERT(R) are registered in the U.S. Patent and Trademark O
 DM20-0181
 */
 
-using Player.Api.Data.Data.Models;
-using Player.Api.Infrastructure.Authorization;
-using Player.Api.ViewModels;
-using System.Linq;
+using System;
 
-namespace Player.Api.Infrastructure.Mappings
+namespace Player.Api.ViewModels
 {
-    public class FileProfile : AutoMapper.Profile
+    public class FileForm
     {
-        public FileProfile()
+        public string Name { get; set; }
+        public Guid viewId { get; set; }
+        public string Path { get; set; }
+
+        public FileForm(string name, Guid viewId, string path)
         {
-            CreateMap<FileForm, FileEntity>();
-            CreateMap<FileEntity, FileModel>();
+            this.Name = name;
+            this.viewId = viewId;
+            this.Path = path;
         }
     }
 }
