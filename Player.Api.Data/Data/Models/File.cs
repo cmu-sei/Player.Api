@@ -20,7 +20,7 @@ namespace Player.Api.Data.Data.Models
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public Guid Id { get; set; }
         public string Name { get; set; }
-        public Guid viewId { get; set; }
-        public string path { get; set; }
+        public Guid ViewId { get; set; }
+        public string Path { get; set; }
     }
 }

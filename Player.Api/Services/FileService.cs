@@ -35,6 +35,7 @@ namespace Player.Api.Services
         Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct);
         Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct);
         Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct);
+        Task<bool> DeleteAsync (Guid fileId, CancellationToken ct);
     }
 
     public class FileService : IFileService
@@ -103,7 +104,7 @@ namespace Player.Api.Services
                 throw new ForbiddenException();
             
             var files = await _context.Files
-                .Where(f => f.viewId == viewId)
+                .Where(f => f.ViewId == viewId)
                 .ToListAsync();
             
             return _mapper.Map<IEnumerable<FileModel>>(files);
@@ -113,12 +114,39 @@ namespace Player.Api.Services
         {            
             var file = await _context.Files
                 .Where(f => f.Id == fileId)
-                .SingleOrDefaultAsync();
+                .SingleOrDefaultAsync(ct);
             
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewMemberRequirement(file.viewId))).Succeeded)
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewMemberRequirement(file.ViewId))).Succeeded)
                 throw new ForbiddenException();
             
             return _mapper.Map<FileModel>(file);
+        }
+
+        public async Task<bool> DeleteAsync(Guid fileId, CancellationToken ct)
+        {
+            var toDelete = await _context.Files
+                .Where(f => f.Id == fileId)
+                .SingleOrDefaultAsync(ct);
+            
+            if (toDelete == null)
+                throw new EntityNotFoundException<FileModel>();
+            
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(toDelete.ViewId))).Succeeded)
+                throw new ForbiddenException();
+            
+            // If this is the last pointer to the file, the file should be deleted. Else, just delete the pointer
+            var pointerCount = await _context.Files
+                .Where(f => f.Path == toDelete.Path)
+                .CountAsync(ct);
+            
+            // Must delete file on disk as well
+            if (pointerCount <= 1)
+            {
+                File.Delete(toDelete.Path);
+            }
+            _context.Files.Remove(toDelete);
+            await _context.SaveChangesAsync(ct);
+            return true;
         }
 
         private string SanitizeFileName(string name)

@@ -71,11 +71,23 @@ namespace Player.Api.Controllers
         /// <param name="ct"></param>
         [HttpGet("views/files/{fileId}")]
         [ProducesResponseType(typeof(FileModel), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(OperationId = "getViewFiles")]
+        [SwaggerOperation(OperationId = "getById")]
         public async Task<IActionResult> GetById(Guid fileId, CancellationToken ct)
         {
             var file = await _fileService.GetByIdAsync(fileId, ct);
             return Ok(file);
+        }
+
+        /// <summary> Delete a file </summary>
+        /// <param name="fileId"> The id of the file </param>
+        /// <param name="ct"></param>
+        [HttpDelete("views/files/{fileId}")]
+        [ProducesResponseType((int)HttpStatusCode.NoContent)]
+        [SwaggerOperation(OperationId = "deleteFile")]
+        public async Task<IActionResult> Delete(Guid fileId, CancellationToken ct)
+        {
+            await _fileService.DeleteAsync(fileId, ct);
+            return NoContent();
         }
     }
 }
