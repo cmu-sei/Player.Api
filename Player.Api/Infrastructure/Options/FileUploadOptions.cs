@@ -14,5 +14,6 @@ namespace Player.Api.Options
     {
         public string basePath { get; set; }
         public long maxSize { get; set; }
+        public string[] allowedExtensions { get; set; }
     }
 }

@@ -58,6 +58,9 @@ namespace Player.Api.Services
 
         public async Task<FileModel> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct)
         {
+            if (!ValidateFileExtension(file.FileName))
+                throw new ForbiddenException("Invalid file extension");
+
             var name = SanitizeFileName(file.FileName);
             var filePath = await uploadFile(file, viewId, name);
 
@@ -109,6 +112,12 @@ namespace Player.Api.Services
             var entity = await _context.Files
                 .Where(f => f.Id == fileId)
                 .SingleOrDefaultAsync(ct);
+            
+            if (entity == null)
+                throw new EntityNotFoundException<FileModel>();
+            
+            if (!ValidateFileExtension(file.FileName))
+                throw new ForbiddenException("Invalid file extension");
 
             var name = SanitizeFileName(file.FileName);
             var filePath = await uploadFile(file, entity.ViewId, name);
@@ -149,13 +158,28 @@ namespace Player.Api.Services
 
         private string SanitizeFileName(string name)
         {
-            // TODO: Make sure file type is acceptable
             var ret = "";
             var disallowed = Path.GetInvalidFileNameChars();
             foreach (var c in name)
                 if (!disallowed.Contains(c))
                     ret += c;
             return ret;
+        }
+
+        // Ensure that the file has a valid extension
+        private bool ValidateFileExtension(string name)
+        {
+            var valid = false;
+            foreach (var ext in _fileUploadOptions.allowedExtensions)
+            {
+                if (name.EndsWith(ext))
+                {
+                    valid = true;
+                    break;
+                }
+            }
+
+            return valid;
         }
 
         private async Task<bool> lastPointer(string path, CancellationToken ct)
