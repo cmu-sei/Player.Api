@@ -110,14 +110,13 @@ namespace Player.Api.Services
         }
 
         public async Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct)
-        {
-            // Using this permission because this endpoint would allow a user to get any file in any view
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
-                throw new ForbiddenException();
-            
+        {            
             var file = await _context.Files
                 .Where(f => f.Id == fileId)
                 .SingleOrDefaultAsync();
+            
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewMemberRequirement(file.viewId))).Succeeded)
+                throw new ForbiddenException();
             
             return _mapper.Map<FileModel>(file);
         }
