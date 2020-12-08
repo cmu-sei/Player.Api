@@ -66,5 +66,16 @@ namespace Player.Api.Controllers
             return Ok(files);
         }
 
+        /// <summary> Get a specific file by id </summary>
+        /// <param name="fileId"> The id of the file </param>
+        /// <param name="ct"></param>
+        [HttpGet("views/files/{fileId}")]
+        [ProducesResponseType(typeof(FileModel), (int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "getViewFiles")]
+        public async Task<IActionResult> GetById(Guid fileId, CancellationToken ct)
+        {
+            var file = await _fileService.GetByIdAsync(fileId, ct);
+            return Ok(file);
+        }
     }
 }

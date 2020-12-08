@@ -34,6 +34,7 @@ namespace Player.Api.Services
         Task<FileModel> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct);
         Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct);
         Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct);
+        Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct);
     }
 
     public class FileService : IFileService
@@ -106,6 +107,19 @@ namespace Player.Api.Services
                 .ToListAsync();
             
             return _mapper.Map<IEnumerable<FileModel>>(files);
+        }
+
+        public async Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct)
+        {
+            // Using this permission because this endpoint would allow a user to get any file in any view
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+                throw new ForbiddenException();
+            
+            var file = await _context.Files
+                .Where(f => f.Id == fileId)
+                .SingleOrDefaultAsync();
+            
+            return _mapper.Map<FileModel>(file);
         }
 
         private string SanitizeFileName(string name)
