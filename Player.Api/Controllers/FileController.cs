@@ -78,6 +78,21 @@ namespace Player.Api.Controllers
             return Ok(file);
         }
 
+        /// <summary> Replace a file </summary>
+        /// <remarks> Takes the ID of a file entry and a file to upload.
+        /// The file entry will be changed to point at the newly uploaded file. </remarks>
+        /// <param name="fileId"> The id of the file </param>
+        /// <param name="ct"></param>
+        /// <param name="file"></param>
+        [HttpPut("views/files/{fileId}")]
+        [ProducesResponseType(typeof(FileModel), (int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "updateFile")]
+        public async Task<IActionResult> Update(Guid fileId, CancellationToken ct, IFormFile file)
+        {
+            var updated = await _fileService.UpdateAsync(fileId, file, ct);
+            return Ok(updated);
+        }
+
         /// <summary> Delete a file </summary>
         /// <param name="fileId"> The id of the file </param>
         /// <param name="ct"></param>

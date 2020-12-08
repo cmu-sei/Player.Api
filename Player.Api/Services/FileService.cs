@@ -35,6 +35,7 @@ namespace Player.Api.Services
         Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct);
         Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct);
         Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct);
+        Task<FileModel> UpdateAsync(Guid fileId, IFormFile file, CancellationToken ct);
         Task<bool> DeleteAsync (Guid fileId, CancellationToken ct);
     }
 
@@ -57,29 +58,10 @@ namespace Player.Api.Services
 
         public async Task<FileModel> UploadAsync(IFormFile file, Guid viewId, CancellationToken ct)
         {
-            // TODO: Make sure file type is acceptable
             var name = SanitizeFileName(file.FileName);
-            var size = file.Length;
+            var filePath = await uploadFile(file, viewId, name);
 
-            if (size > _fileUploadOptions.maxSize)
-            {
-                throw new InvalidOperationException($"File size exceeds the {_fileUploadOptions.maxSize} limit");
-            }
-
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(viewId))).Succeeded)
-                throw new ForbiddenException();
-            
-            var folderPath = Path.Combine(_fileUploadOptions.basePath, viewId.ToString());
-            var filepath = Path.Combine(folderPath, name);
-
-            Directory.CreateDirectory(folderPath);
-
-            using (var stream = File.Create(filepath))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            var form = new FileForm(name, viewId, filepath);
+            var form = new FileForm(name, viewId, filePath);
             var entity = _mapper.Map<FileEntity>(form);
 
             _context.Files.Add(entity);
@@ -122,6 +104,28 @@ namespace Player.Api.Services
             return _mapper.Map<FileModel>(file);
         }
 
+        public async Task<FileModel> UpdateAsync(Guid fileId, IFormFile file, CancellationToken ct)
+        {
+            var entity = await _context.Files
+                .Where(f => f.Id == fileId)
+                .SingleOrDefaultAsync(ct);
+
+            var name = SanitizeFileName(file.FileName);
+            var filePath = await uploadFile(file, entity.ViewId, name);
+
+            // File is now on disk, check if old file should be deleted (only has the one pointer)
+            if (await lastPointer(entity.Path, ct))
+                File.Delete(entity.Path);
+            
+            // Move pointer to new file
+            entity.Path = filePath;
+            entity.Name = name;
+
+            _context.Update(entity);
+            await _context.SaveChangesAsync(ct);
+            return _mapper.Map<FileModel>(entity);
+        }
+
         public async Task<bool> DeleteAsync(Guid fileId, CancellationToken ct)
         {
             var toDelete = await _context.Files
@@ -135,15 +139,9 @@ namespace Player.Api.Services
                 throw new ForbiddenException();
             
             // If this is the last pointer to the file, the file should be deleted. Else, just delete the pointer
-            var pointerCount = await _context.Files
-                .Where(f => f.Path == toDelete.Path)
-                .CountAsync(ct);
-            
-            // Must delete file on disk as well
-            if (pointerCount <= 1)
-            {
+            if (await lastPointer(toDelete.Path, ct))
                 File.Delete(toDelete.Path);
-            }
+
             _context.Files.Remove(toDelete);
             await _context.SaveChangesAsync(ct);
             return true;
@@ -151,12 +149,43 @@ namespace Player.Api.Services
 
         private string SanitizeFileName(string name)
         {
+            // TODO: Make sure file type is acceptable
             var ret = "";
             var disallowed = Path.GetInvalidFileNameChars();
             foreach (var c in name)
                 if (!disallowed.Contains(c))
                     ret += c;
             return ret;
+        }
+
+        private async Task<bool> lastPointer(string path, CancellationToken ct)
+        {
+            var pointerCount = await _context.Files
+                .Where(f => f.Path == path)
+                .CountAsync(ct);
+            
+            return pointerCount == 1;
+        }
+
+        private async Task<string> uploadFile(IFormFile file, Guid viewId, string name)
+        {
+            var size = file.Length;
+
+            if (size > _fileUploadOptions.maxSize)
+                throw new InvalidOperationException($"File size exceeds the {_fileUploadOptions.maxSize} limit");
+
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(viewId))).Succeeded)
+                throw new ForbiddenException();
+            
+            var folderPath = Path.Combine(_fileUploadOptions.basePath, viewId.ToString());
+            var filepath = Path.Combine(folderPath, name);
+
+            Directory.CreateDirectory(folderPath);
+
+            using (var stream = File.Create(filepath))
+                await file.CopyToAsync(stream);
+
+            return filepath;
         }
     }
 }
