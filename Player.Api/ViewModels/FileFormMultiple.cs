@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Player.Api.ViewModels
 {
-    public class FileFormMultiple
+    public class FileForm
     {
         public Guid viewId { get; set; }
         public List<Guid> teamIds { get; set; }

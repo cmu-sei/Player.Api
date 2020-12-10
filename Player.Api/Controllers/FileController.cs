@@ -14,7 +14,6 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Http;
 using Player.Api.Services;
 using Player.Api.ViewModels;
 using Swashbuckle.AspNetCore.Annotations;
@@ -30,27 +29,15 @@ namespace Player.Api.Controllers
             _fileService = fileService;
         }
 
-        /// <summary> Upload a file </summary>
-        /// <param name="form"> The file to upload and its settings </param> 
+        /// <summary> Upload file(s) </summary>
+        /// <param name="form"> The files to upload and their settings </param>
         /// <param name="ct"></param>
         [HttpPost("files")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
-        [SwaggerOperation(OperationId = "uploadFile")]
-        public async Task<IActionResult> Upload([FromForm] FileForm form, CancellationToken ct)
+        [SwaggerOperation(OperationId = "uploadMultipleFiles")]
+        public async Task<IActionResult> UploadMultiple([FromForm] FileForm form, CancellationToken ct)
         {
             var result = await _fileService.UploadAsync(form, ct);
-            return CreatedAtAction(nameof(this.Get), new { id = result.id }, result);
-        }
-
-        /// <summary> Upload multiple files </summary>
-        /// <param name="form"> The files to upload and their settings </param>
-        /// <param name="ct"></param>
-        [HttpPost("files/multiple")]
-        [ProducesResponseType((int)HttpStatusCode.OK)]
-        [SwaggerOperation(OperationId = "uploadMultipleFiles")]
-        public async Task<IActionResult> UploadMultiple([FromForm] FileFormMultiple form, CancellationToken ct)
-        {
-            var result = await _fileService.UploadMultipleAsync(form, ct);
             return CreatedAtAction(nameof(this.Get), result);
         } 
 

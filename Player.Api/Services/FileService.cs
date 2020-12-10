@@ -31,8 +31,7 @@ namespace Player.Api.Services
 {
     public interface IFileService
     {
-        Task<FileModel> UploadAsync(FileForm form, CancellationToken ct);
-        Task<IEnumerable<FileModel>> UploadMultipleAsync(FileFormMultiple form, CancellationToken ct);
+        Task<IEnumerable<FileModel>> UploadAsync(FileForm form, CancellationToken ct);
         Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct);
         Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct);
         Task<IEnumerable<FileModel>> GetByTeamAsync(Guid teamId, CancellationToken ct);
@@ -58,29 +57,7 @@ namespace Player.Api.Services
             _mapper = mapper;
         }
 
-        public async Task<FileModel> UploadAsync(FileForm form, CancellationToken ct)
-        {
-            // Is there a better exception to throw here?
-            if (form.teamIds == null)
-                throw new ForbiddenException("File must be assigned to at least one team");
-
-            if (!ValidateFileExtension(form.ToUpload.FileName))
-                throw new ForbiddenException("Invalid file extension");
-
-            var name = SanitizeFileName(form.ToUpload.FileName);
-            var filePath = await uploadFile(form.ToUpload, form.viewId, name);
-
-            var entity = _mapper.Map<FileEntity>(form);
-            entity.Name = name;
-            entity.Path = filePath;
-
-            _context.Files.Add(entity);
-            await _context.SaveChangesAsync(ct);
-
-            return _mapper.Map<FileModel>(entity);
-        }
-
-        public async Task<IEnumerable<FileModel>> UploadMultipleAsync(FileFormMultiple form, CancellationToken ct)
+        public async Task<IEnumerable<FileModel>> UploadAsync(FileForm form, CancellationToken ct)
         {
             if (form.teamIds == null)
                 throw new ForbiddenException("File must be assigned to at least one team");

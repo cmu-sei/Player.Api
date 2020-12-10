@@ -21,7 +21,6 @@ namespace Player.Api.Infrastructure.Mappings
         {
             CreateMap<FileForm, FileEntity>();
             CreateMap<FileEntity, FileModel>();
-            CreateMap<FileFormMultiple, FileEntity>();
         }
     }
 }
