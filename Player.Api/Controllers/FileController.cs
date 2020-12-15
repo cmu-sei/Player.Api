@@ -57,7 +57,7 @@ namespace Player.Api.Controllers
         /// <param name="viewId">The id of the view</param>
         /// <param name="ct"></param>
         [HttpGet("views/{viewId}/files")]
-        [ProducesResponseType(typeof(FileModel), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(IEnumerable<FileModel>), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "getViewFiles")]
         public async Task<IActionResult> GetViewFiles(Guid viewId, CancellationToken ct)
         {
@@ -69,7 +69,7 @@ namespace Player.Api.Controllers
         /// <param name="teamId"> The id of the team </param>
         /// <param name="ct"></param>
         [HttpGet("teams/{teamId}/files")]
-        [ProducesResponseType(typeof(FileModel), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(IEnumerable<FileModel>), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "getTeamFiles")]
         public async Task<IActionResult> GetTeamFiles(Guid teamId, CancellationToken ct)
         {
