@@ -30,6 +30,7 @@ namespace Player.Api.Controllers
         }
 
         /// <summary> Upload file(s) </summary>
+        /// <remarks> File objects will be returned in the same order as their respective files within the form. </remarks>
         /// <param name="form"> The files to upload and their settings </param>
         /// <param name="ct"></param>
         [HttpPost("files")]

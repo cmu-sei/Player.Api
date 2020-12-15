@@ -68,8 +68,10 @@ namespace Player.Api.Services
                 if (!ValidateFileExtension(fp.FileName))
                     throw new ForbiddenException("Invalid file extension");
 
+                // Sanitization is probably unnecessary since this name is only stored in db 
                 var name = SanitizeFileName(fp.FileName);
-                var filePath = await uploadFile(fp, form.viewId, name);
+
+                var filePath = await uploadFile(fp, form.viewId, GetNameToStore(name));
 
                 var entity = _mapper.Map<FileEntity>(form);
                 entity.Name = name;
@@ -138,7 +140,7 @@ namespace Player.Api.Services
                     break;
                 }
             }
-            // If user is not on any times, they can't access the file unless they are an admin    
+            // If user is not on any teams, they can't access the file unless they are an admin    
             if (!canAccess && !(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
             
@@ -165,7 +167,8 @@ namespace Player.Api.Services
                     throw new ForbiddenException("Invalid file extension");
 
                 var name = SanitizeFileName(form.ToUpload.FileName);
-                var filePath = await uploadFile(form.ToUpload, entity.ViewId, name);
+
+                var filePath = await uploadFile(form.ToUpload, entity.ViewId, GetNameToStore(name));
 
                 // File is now on disk, check if old file should be deleted (only has the one pointer)
                 if (await lastPointer(entity.Path, ct))
@@ -259,6 +262,14 @@ namespace Player.Api.Services
                 await file.CopyToAsync(stream);
 
             return filepath;
+        }
+
+        private string GetNameToStore(string originalName)
+        {
+            var toStore = Guid.NewGuid().ToString();
+            var ext = originalName.Split('.')[1];
+            toStore += '.' + ext;
+            return toStore;
         }
     }
 }

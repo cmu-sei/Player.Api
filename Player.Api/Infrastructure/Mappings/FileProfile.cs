@@ -9,9 +9,7 @@ DM20-0181
 */
 
 using Player.Api.Data.Data.Models;
-using Player.Api.Infrastructure.Authorization;
 using Player.Api.ViewModels;
-using System.Linq;
 
 namespace Player.Api.Infrastructure.Mappings
 {
