@@ -53,7 +53,7 @@ namespace Player.Api.Controllers
             return Ok(files);
         }
 
-        /// <summary> Get all files in a view </summary>
+        /// <summary> Get all files in a view accessable to the calling user </summary>
         /// <param name="viewId">The id of the view</param>
         /// <param name="ct"></param>
         [HttpGet("views/{viewId}/files")]

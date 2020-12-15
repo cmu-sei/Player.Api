@@ -12,6 +12,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Player.Api.Extensions;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
@@ -47,14 +48,16 @@ namespace Player.Api.Services
         private readonly FileUploadOptions _fileUploadOptions;
         private readonly PlayerContext _context;
         private readonly IMapper _mapper;
+        private readonly ITeamService _teamService;
 
-        public FileService(IPrincipal user, IAuthorizationService authService, FileUploadOptions fileOptions, PlayerContext context, IMapper mapper)
+        public FileService(IPrincipal user, IAuthorizationService authService, FileUploadOptions fileOptions, PlayerContext context, IMapper mapper, ITeamService teamService)
         {
             _user = user as ClaimsPrincipal;
             _authorizationService = authService;
             _fileUploadOptions = fileOptions;
             _context = context;
             _mapper = mapper;
+            _teamService = teamService;
         }
 
         public async Task<IEnumerable<FileModel>> UploadAsync(FileForm form, CancellationToken ct)
@@ -100,14 +103,20 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct)
         {
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(viewId))).Succeeded)
-                throw new ForbiddenException();
-            
-            var files = await _context.Files
-                .Where(f => f.ViewId == viewId)
-                .ToListAsync();
-            
-            return _mapper.Map<IEnumerable<FileModel>>(files);
+            var userId = _user.GetId();
+            var teams = await _teamService.GetByViewIdForUserAsync(viewId, userId, ct);
+            teams = teams.Where(t => t.IsMember);
+            var accessable = new List<FileModel>();
+            foreach (var team in teams)
+            {
+                var files = _context.Files
+                    .AsEnumerable()
+                    .Where(f => f.TeamIds.Contains(team.Id))
+                    .ToList();
+
+                accessable.AddRange(_mapper.Map<IEnumerable<FileModel>>(files));
+            }
+            return _mapper.Map<IEnumerable<FileModel>>(accessable);
         }
 
         public async Task<IEnumerable<FileModel>> GetByTeamAsync(Guid teamId, CancellationToken ct)
