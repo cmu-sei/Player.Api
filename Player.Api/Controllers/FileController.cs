@@ -89,6 +89,20 @@ namespace Player.Api.Controllers
             return Ok(file);
         }
 
+        /// <summary> Download a file by id </summary>
+        /// <remarks> This endpoint downloads the actual file, files/{fileId} returns the DB entry for a file </remarks>
+        /// <param name="fileId"> The id of the file </param>
+        /// <param name="ct"></param>
+        [HttpGet("/files/download/{fileId}")]
+        [ProducesResponseType(typeof(FileResult), (int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "download")]
+        public async Task<IActionResult> Download(Guid fileId, CancellationToken ct)
+        {
+            (var stream, var fileName) = await _fileService.DownloadAsync(fileId, ct);
+            // If this is wrapped in an Ok, it throws an exception
+            return File(stream, "application/octet-stream", fileName);
+        }
+
         /// <summary> Update a file </summary>
         /// <remarks> Takes a form with fields for team IDs and a new file. File can be assigned to different teams and/or replaced.
         /// The file entry will be changed to point at the newly uploaded file. </remarks>

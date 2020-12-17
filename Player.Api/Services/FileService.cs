@@ -37,6 +37,7 @@ namespace Player.Api.Services
         Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct);
         Task<IEnumerable<FileModel>> GetByTeamAsync(Guid teamId, CancellationToken ct);
         Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct);
+        Task<Tuple<FileStream, string>> DownloadAsync(Guid fileId, CancellationToken ct);
         Task<FileModel> UpdateAsync(Guid fileId, FileUpdateForm form, CancellationToken ct);
         Task<bool> DeleteAsync (Guid fileId, CancellationToken ct);
     }
@@ -139,21 +140,26 @@ namespace Player.Api.Services
                 .Where(f => f.Id == fileId)
                 .SingleOrDefaultAsync(ct);
             
-            // The user can see this file if they are in at least one of the teams it is assigned to
-            var canAccess = false;
-            foreach (var teamId in file.TeamIds)
-            {
-                if ((await _authorizationService.AuthorizeAsync(_user, null, new TeamMemberRequirement(teamId))).Succeeded)
-                {
-                    canAccess = true;
-                    break;
-                }
-            }
-            // If user is not on any teams, they can't access the file unless they are an admin    
-            if (!canAccess && !(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
-                throw new ForbiddenException();
+            if (file == null)
+                throw new EntityNotFoundException<FileModel>(); 
+            
+            EnsureAccessFile(file);
             
             return _mapper.Map<FileModel>(file);
+        }
+
+        public async Task<Tuple<FileStream, string>> DownloadAsync(Guid fileId, CancellationToken ct)
+        {
+            var file = await _context.Files
+                .Where(f => f.Id == fileId)
+                .SingleOrDefaultAsync(ct);
+
+            if (file == null)
+                throw new EntityNotFoundException<FileModel>();
+            
+            EnsureAccessFile(file);
+
+            return Tuple.Create(File.OpenRead(file.Path), file.Name);            
         }
 
         public async Task<FileModel> UpdateAsync(Guid fileId, FileUpdateForm form, CancellationToken ct)
@@ -279,6 +285,23 @@ namespace Player.Api.Services
             var ext = originalName.Split('.')[1];
             toStore += '.' + ext;
             return toStore;
+        }
+
+        private async void EnsureAccessFile(FileEntity file)
+        {
+            // The user can see this file if they are in at least one of the teams it is assigned to
+            var canAccess = false;
+            foreach (var teamId in file.TeamIds)
+            {
+                if ((await _authorizationService.AuthorizeAsync(_user, null, new TeamMemberRequirement(teamId))).Succeeded)
+                {
+                    canAccess = true;
+                    break;
+                }
+            }
+            // If user is not on any teams, they can't access the file unless they are an admin    
+            if (!canAccess && !(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+                throw new ForbiddenException();
         }
     }
 }
