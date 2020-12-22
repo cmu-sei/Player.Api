@@ -193,9 +193,12 @@ namespace Player.Api.Services
                 entity.Path = filePath;
                 entity.Name = name;
             }
-            // Teams are being changed
-            if (form.TeamIds != null)
+            // Teams are being changed and/or file is being renamed
+            else
+            {
                 entity.TeamIds = form.TeamIds;
+                entity.Name = form.Name;
+            }
 
             _context.Update(entity);
             await _context.SaveChangesAsync(ct);

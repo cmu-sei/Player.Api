@@ -16,6 +16,7 @@ namespace Player.Api.ViewModels
 {
     public class FileUpdateForm
     {
+        public string Name { get; set; }
         public List<Guid> TeamIds { get; set; }
         public IFormFile ToUpload { get; set; }
     }
