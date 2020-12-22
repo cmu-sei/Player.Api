@@ -99,7 +99,21 @@ namespace Player.Api.Controllers
         public async Task<IActionResult> Download(Guid fileId, CancellationToken ct)
         {
             (var stream, var fileName) = await _fileService.DownloadAsync(fileId, ct);
-            // If this is wrapped in an Ok, it throws an exception
+
+            if (IsPdf(fileName))
+            {
+                Response.Headers.Add("Content-Disposition", "inline");
+                return File(stream, "application/pdf", fileName);
+            }
+                
+            else if (IsImage(fileName))
+            {
+                Response.Headers.Add("Content-Disposition", "inline");
+                var ext = fileName.Split(".")[1];
+                return File(stream, "image/" + ext, fileName);
+            }
+
+            // If this is wrapped in an Ok, it throws an exception            
             return File(stream, "application/octet-stream", fileName);
         }
 
@@ -128,6 +142,18 @@ namespace Player.Api.Controllers
         {
             await _fileService.DeleteAsync(fileId, ct);
             return NoContent();
+        }
+
+        private bool IsPdf(string file)
+        {
+            return file.EndsWith(".pdf");
+        }
+
+        // Will need to update this method if we want to support more image types.
+        private bool IsImage(string file)
+        {
+            return file.EndsWith(".jpg") || file.EndsWith(".jpeg") || file.EndsWith(".png") || file.EndsWith(".bmp") || 
+                file.EndsWith(".heic") || file.EndsWith(".gif"); 
         }
     }
 }
