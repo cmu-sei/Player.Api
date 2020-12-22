@@ -45,14 +45,16 @@ namespace Player.Api.Services
         private readonly ClaimsPrincipal _user;
         private readonly IMapper _mapper;
         private IUserClaimsService _claimsService;
+        private readonly IFileService _fileService;
 
-        public ViewService(PlayerContext context, IAuthorizationService authorizationService, IPrincipal user, IMapper mapper, IUserClaimsService claimsService)
+        public ViewService(PlayerContext context, IAuthorizationService authorizationService, IPrincipal user, IMapper mapper, IUserClaimsService claimsService, IFileService fileService)
         {
             _context = context;
             _authorizationService = authorizationService;
             _user = user as ClaimsPrincipal;
             _mapper = mapper;
             _claimsService = claimsService;
+            _fileService = fileService;
         }
 
         public async Task<IEnumerable<ViewModels.View>> GetAsync(CancellationToken ct)
@@ -229,6 +231,13 @@ namespace Player.Api.Services
 
             if (viewToDelete == null)
                 throw new EntityNotFoundException<View>();
+
+            // Delete files within this view
+            var files = await _fileService.GetByViewAsync(id, ct);
+            foreach (var fp in files)
+            {
+                await _fileService.DeleteAsync(fp.id, ct);
+            }
 
             _context.Views.Remove(viewToDelete);
             await _context.SaveChangesAsync(ct);
