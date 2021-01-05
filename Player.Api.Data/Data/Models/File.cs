@@ -28,7 +28,7 @@ namespace Player.Api.Data.Data.Models
         public FileEntity Clone()
         {
             var entity = this.MemberwiseClone() as FileEntity;
-            entity.TeamIds = new List<Guid>();
+            // entity.TeamIds = new List<Guid>();
             entity.Id = Guid.NewGuid();
             return entity;
         }

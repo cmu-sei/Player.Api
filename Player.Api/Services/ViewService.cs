@@ -213,6 +213,14 @@ namespace Player.Api.Services
             foreach (var file in newView.Files)
             {
                 file.ViewId = newView.Id;
+                List<Guid> newTeamIds = new List<Guid>();
+                foreach (var team in file.TeamIds)
+                {
+                    var teamName = view.Teams.FirstOrDefault(t => t.Id == team).Name;
+                    var newId = newView.Teams.FirstOrDefault(t => t.Name == teamName).Id;
+                    newTeamIds.Add(newId);
+                }
+                file.TeamIds = newTeamIds;
             }
             await _context.SaveChangesAsync(ct);
             return _mapper.Map<View>(newView);

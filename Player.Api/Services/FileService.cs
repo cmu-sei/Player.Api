@@ -112,8 +112,8 @@ namespace Player.Api.Services
         {
             var userId = _user.GetId();
             var teams = await _teamService.GetByViewIdForUserAsync(viewId, userId, ct);
-            teams = teams.Where(t => t.IsMember);
             var accessable = new List<FileModel>();
+            
             foreach (var team in teams)
             {
                 var files = _context.Files
