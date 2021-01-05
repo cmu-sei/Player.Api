@@ -24,5 +24,13 @@ namespace Player.Api.Data.Data.Models
         public Guid ViewId { get; set; }
         public List<Guid> TeamIds { get; set; }
         public string Path { get; set; }
+    
+        public FileEntity Clone()
+        {
+            var entity = this.MemberwiseClone() as FileEntity;
+            entity.TeamIds = new List<Guid>();
+            entity.Id = Guid.NewGuid();
+            return entity;
+        }
     }
 }

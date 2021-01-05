@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Player.Api.Data.Data;
@@ -10,9 +11,10 @@ using Player.Api.Data.Data;
 namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(PlayerContext))]
-    partial class PlayerContextModelSnapshot : ModelSnapshot
+    [Migration("20201229141350_ViewFiles")]
+    partial class ViewFiles
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -135,6 +137,10 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         .HasColumnName("id")
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
+
+                    b.Property<List<Guid>>("Clones")
+                        .HasColumnName("clones")
+                        .HasColumnType("uuid[]");
 
                     b.Property<string>("Name")
                         .HasColumnName("name")
@@ -458,10 +464,6 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         .HasColumnName("id")
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<List<Guid>>("Clones")
-                        .HasColumnName("clones")
-                        .HasColumnType("uuid[]");
 
                     b.Property<string>("Description")
                         .HasColumnName("description")

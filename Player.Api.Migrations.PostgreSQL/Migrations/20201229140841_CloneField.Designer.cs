@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Player.Api.Data.Data;
@@ -10,9 +11,10 @@ using Player.Api.Data.Data;
 namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(PlayerContext))]
-    partial class PlayerContextModelSnapshot : ModelSnapshot
+    [Migration("20201229140841_CloneField")]
+    partial class CloneField
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -136,6 +138,10 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
+                    b.Property<List<Guid>>("Clones")
+                        .HasColumnName("clones")
+                        .HasColumnType("uuid[]");
+
                     b.Property<string>("Name")
                         .HasColumnName("name")
                         .HasColumnType("text");
@@ -148,17 +154,11 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         .HasColumnName("team_ids")
                         .HasColumnType("uuid[]");
 
-                    b.Property<Guid?>("ViewEntityId")
-                        .HasColumnName("view_entity_id")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("ViewId")
                         .HasColumnName("view_id")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ViewEntityId");
 
                     b.ToTable("files");
                 });
@@ -459,10 +459,6 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("uuid_generate_v4()");
 
-                    b.Property<List<Guid>>("Clones")
-                        .HasColumnName("clones")
-                        .HasColumnType("uuid[]");
-
                     b.Property<string>("Description")
                         .HasColumnName("description")
                         .HasColumnType("text");
@@ -538,13 +534,6 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         .HasForeignKey("TeamId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("Player.Api.Data.Data.Models.FileEntity", b =>
-                {
-                    b.HasOne("Player.Api.Data.Data.Models.ViewEntity", null)
-                        .WithMany("Files")
-                        .HasForeignKey("ViewEntityId");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.RolePermissionEntity", b =>

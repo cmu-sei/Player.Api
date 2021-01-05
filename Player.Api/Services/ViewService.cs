@@ -158,6 +158,7 @@ namespace Player.Api.Services
                     .ThenInclude(o => o.Permissions)
                 .Include(o => o.Applications)
                     .ThenInclude(o => o.Template)
+                .Include(o => o.Files)
                 .SingleOrDefaultAsync(o => o.Id == idToBeCloned, ct);
 
             var newView = view.Clone();
@@ -198,9 +199,22 @@ namespace Player.Api.Services
                 newView.Teams.Add(newTeam);
             }
 
+            // Copy files - note that the files themselves are not being copied, just the pointers
+            foreach (var file in view.Files)
+            {
+                var cloned = file.Clone();
+                newView.Files.Add(cloned);
+            }
+
             _context.Add(newView);
             await _context.SaveChangesAsync(ct);
 
+            // Need a second SaveChanges bc we don't know new id until saved
+            foreach (var file in newView.Files)
+            {
+                file.ViewId = newView.Id;
+            }
+            await _context.SaveChangesAsync(ct);
             return _mapper.Map<View>(newView);
         }
 

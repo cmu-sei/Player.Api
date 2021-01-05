@@ -66,13 +66,16 @@ namespace Player.Api.Services
             if (form.teamIds == null)
                 throw new ForbiddenException("File must be assigned to at least one team");
             
+            var viewEntity = await _context.Views
+                .Where(v => v.Id == form.viewId)
+                .SingleOrDefaultAsync(ct);
+            
             List<FileModel> models = new List<FileModel>();
             foreach(var fp in form.ToUpload)
             {
                 if (!ValidateFileExtension(fp.FileName))
                     throw new ForbiddenException("Invalid file extension");
 
-                // Sanitization is probably unnecessary since this name is only stored in db 
                 var name = SanitizeFileName(fp.FileName);
 
                 var filePath = await uploadFile(fp, form.viewId, GetNameToStore(name));
@@ -85,11 +88,14 @@ namespace Player.Api.Services
                 _context.Files.Add(entity);
 
                 models.Add(_mapper.Map<FileModel>(entity));
+
+                // Add file to list in view 
+                viewEntity.Files.Add(entity);
             }
 
             await _context.SaveChangesAsync(ct);
+            var afterSave = await _context.Views.Where(v => v.Id == form.viewId).SingleOrDefaultAsync(ct);
             return models;
-
         }
 
         public async Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct)

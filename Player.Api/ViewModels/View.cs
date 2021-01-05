@@ -10,6 +10,7 @@ DM20-0181
 
 using Player.Api.Data.Data.Models;
 using System;
+using System.Collections.Generic;
 
 namespace Player.Api.ViewModels
 {
@@ -24,5 +25,7 @@ namespace Player.Api.ViewModels
         public ViewStatus Status { get; set; }
 
         public bool CanManage { get; set; }
+        
+        public List<Guid> Clones { get; set; }
     }
 }
