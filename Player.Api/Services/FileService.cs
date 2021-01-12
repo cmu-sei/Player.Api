@@ -116,12 +116,7 @@ namespace Player.Api.Services
             
             foreach (var team in teams)
             {
-                var files = _context.Files
-                    .AsEnumerable()
-                    .Where(f => f.TeamIds.Contains(team.Id))
-                    .ToList();
-
-                accessable.AddRange(_mapper.Map<IEnumerable<FileModel>>(files));
+                accessable.AddRange(_mapper.Map<IEnumerable<FileModel>>(await GetByTeamAsync(team.Id, ct)));
             }
             return _mapper.Map<IEnumerable<FileModel>>(accessable);
         }
