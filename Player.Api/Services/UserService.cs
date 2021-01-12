@@ -43,9 +43,9 @@ namespace Player.Api.Services
         private readonly IAuthorizationService _authorizationService;
         private readonly IUserClaimsService _userClaimsService;
 
-        public UserService(PlayerContext context, 
-                            IPrincipal user, 
-                            IAuthorizationService authorizationService, 
+        public UserService(PlayerContext context,
+                            IPrincipal user,
+                            IAuthorizationService authorizationService,
                             IUserClaimsService userClaimsService,
                             IMapper mapper)
         {
@@ -114,12 +114,12 @@ namespace Player.Api.Services
 
         public async Task<ViewModels.User> GetAsync(Guid id, CancellationToken ct)
         {
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new SameUserRequirement(id))).Succeeded)
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new UserAccessRequirement(id))).Succeeded)
                 throw new ForbiddenException();
 
             var item = await _context.Users
                 .ProjectTo<ViewModels.User>(_mapper.ConfigurationProvider)
-                .SingleOrDefaultAsync(o => o.Id == id, ct);                
+                .SingleOrDefaultAsync(o => o.Id == id, ct);
             return item;
         }
 

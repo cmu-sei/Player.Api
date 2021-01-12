@@ -125,7 +125,8 @@ namespace Player.Api
 
             ApplyPolicies(services);
 
-            services.AddAutoMapper(cfg => {
+            services.AddAutoMapper(cfg =>
+            {
                 cfg.ForAllPropertyMaps(
                     pm => pm.SourceType != null && Nullable.GetUnderlyingType(pm.SourceType) == pm.DestinationType,
                     (pm, c) => c.MapFrom<object, object, object, object>(new IgnoreNullSourceValues(), pm.SourceMember.Name));
@@ -203,6 +204,7 @@ namespace Player.Api
             services.AddSingleton<IAuthorizationHandler, TeamMemberHandler>();
             services.AddSingleton<IAuthorizationHandler, PrimaryTeamHandler>();
             services.AddSingleton<IAuthorizationHandler, ManageViewHandler>();
+            services.AddScoped<IAuthorizationHandler, UserAccessHandler>();
         }
     }
 }
