@@ -20,6 +20,7 @@ using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
 using Player.Api.Options;
 using System;
+using System.Text;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
@@ -94,7 +95,6 @@ namespace Player.Api.Services
             }
 
             await _context.SaveChangesAsync(ct);
-            var afterSave = await _context.Views.Where(v => v.Id == form.viewId).SingleOrDefaultAsync(ct);
             return models;
         }
 
@@ -234,12 +234,12 @@ namespace Player.Api.Services
 
         private string SanitizeFileName(string name)
         {
-            var ret = "";
+            var ret = new StringBuilder("");
             var disallowed = Path.GetInvalidFileNameChars();
             foreach (var c in name)
                 if (!disallowed.Contains(c))
-                    ret += c;
-            return ret;
+                    ret.Append(c);
+            return ret.ToString();
         }
 
         // Ensure that the file has a valid extension
