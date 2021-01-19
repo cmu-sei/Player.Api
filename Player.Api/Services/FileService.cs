@@ -62,15 +62,11 @@ namespace Player.Api.Services
             
             var viewEntity = await _context.Views
                 .Where(v => v.Id == form.viewId)
-                .Include(v => v.Teams)
                 .SingleOrDefaultAsync(ct);
             
             // Ensure all teams are in the same view
-            foreach (var teamId in form.teamIds)
-            {
-                if (!viewEntity.Teams.Any(t => t.Id == teamId))
-                    throw new ForbiddenException("All teams must be in the same view.");
-            }
+            if (!await TeamsInSameView(viewEntity.Id, form.teamIds, ct))
+                throw new ForbiddenException("Teams must be in same view.");
 
             // Ensyre user can manage this view
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewEntity.Id))).Succeeded)
@@ -177,7 +173,11 @@ namespace Player.Api.Services
             if (entity == null)
                 throw new EntityNotFoundException<FileModel>();
             
-            // This authorization check assumes all teams for the file are in the same view
+            if (! await TeamsInSameView(entity.ViewId, form.TeamIds, ct))
+                throw new ForbiddenException("Teams must be in same view");
+            
+            // This authorization check assumes all teams for the file are in the same view, but we have verified
+            // that that is the case with the above check.
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(entity.ViewId))).Succeeded)
                 throw new ForbiddenException();
                 
@@ -304,6 +304,23 @@ namespace Player.Api.Services
             // If user is not on any teams, they can't access the file unless they are a view admin    
             if (!canAccess && !(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(file.ViewId))).Succeeded)
                 throw new ForbiddenException();
+        }
+
+        private async Task<bool> TeamsInSameView(Guid viewId, List<Guid> teamIds, CancellationToken ct)
+        {
+            var viewEntity = await _context.Views
+                .Where(v => v.Id == viewId)
+                .Include(v => v.Teams)
+                .SingleOrDefaultAsync(ct);
+            
+            // Ensure all teams are in the same view
+            foreach (var teamId in teamIds)
+            {
+                if (!viewEntity.Teams.Any(t => t.Id == teamId))
+                    return false;
+            }
+
+            return true;
         }
     }
 }
