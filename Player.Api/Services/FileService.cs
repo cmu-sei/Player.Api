@@ -64,6 +64,17 @@ namespace Player.Api.Services
                 .Where(v => v.Id == form.viewId)
                 .SingleOrDefaultAsync(ct);
             
+            // Ensure all teams are in the same view
+            foreach (var teamId in form.teamIds)
+            {
+                if (!viewEntity.Teams.Any(t => t.Id == teamId))
+                    throw new ForbiddenException("All teams must be in the same view.");
+            }
+
+            // Ensyre user can manage this view
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewEntity.Id))).Succeeded)
+                throw new ForbiddenException("Insuffcient Permissions");
+            
             List<FileModel> models = new List<FileModel>();
             foreach(var fp in form.ToUpload)
             {
@@ -168,6 +179,7 @@ namespace Player.Api.Services
             // This authorization check assumes all teams for the file are in the same view
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(entity.ViewId))).Succeeded)
                 throw new ForbiddenException();
+                
             
             // File pointed to is being changed
             if (form.ToUpload != null)
@@ -279,7 +291,7 @@ namespace Player.Api.Services
         private string GetNameToStore(string originalName)
         {
             var toStore = Guid.NewGuid().ToString();
-            var ext = originalName.Split('.')[1];
+            var ext = Path.GetExtension(originalName);
             toStore += '.' + ext;
             return toStore;
         }
@@ -296,8 +308,8 @@ namespace Player.Api.Services
                     break;
                 }
             }
-            // If user is not on any teams, they can't access the file unless they are an admin    
-            if (!canAccess && !(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+            // If user is not on any teams, they can't access the file unless they are a view admin    
+            if (!canAccess && !(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(file.ViewId))).Succeeded)
                 throw new ForbiddenException();
         }
     }

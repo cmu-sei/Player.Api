@@ -2,6 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
+using System.IO;
 using System.Net;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -102,7 +103,7 @@ namespace Player.Api.Controllers
             else if (IsImage(fileName))
             {
                 Response.Headers.Add("Content-Disposition", "inline");
-                var ext = fileName.Split(".")[1];
+                var ext = Path.GetExtension(fileName);
                 return File(stream, "image/" + ext, fileName);
             }
 
