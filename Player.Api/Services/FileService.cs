@@ -62,6 +62,7 @@ namespace Player.Api.Services
             
             var viewEntity = await _context.Views
                 .Where(v => v.Id == form.viewId)
+                .Include(v => v.Teams)
                 .SingleOrDefaultAsync(ct);
             
             // Ensure all teams are in the same view
@@ -299,15 +300,7 @@ namespace Player.Api.Services
         private async void EnsureAccessFile(FileEntity file)
         {
             // The user can see this file if they are in at least one of the teams it is assigned to
-            var canAccess = false;
-            foreach (var teamId in file.TeamIds)
-            {
-                if ((await _authorizationService.AuthorizeAsync(_user, null, new TeamMemberRequirement(teamId))).Succeeded)
-                {
-                    canAccess = true;
-                    break;
-                }
-            }
+            var canAccess = (await _authorizationService.AuthorizeAsync(_user, null, new TeamsMemberRequirement(file.TeamIds))).Succeeded;
             // If user is not on any teams, they can't access the file unless they are a view admin    
             if (!canAccess && !(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(file.ViewId))).Succeeded)
                 throw new ForbiddenException();
