@@ -140,6 +140,7 @@ namespace Player.Api.Services
         {            
             var file = await _context.Files
                 .Where(f => f.Id == fileId)
+                .Include(f => f.View)
                 .SingleOrDefaultAsync(ct);
             
             if (file == null)
@@ -154,6 +155,7 @@ namespace Player.Api.Services
         {
             var file = await _context.Files
                 .Where(f => f.Id == fileId)
+                .Include(f => f.View)
                 .SingleOrDefaultAsync(ct);
 
             if (file == null)
@@ -168,17 +170,18 @@ namespace Player.Api.Services
         {
             var entity = await _context.Files
                 .Where(f => f.Id == fileId)
+                .Include(f => f.View)
                 .SingleOrDefaultAsync(ct);
             
             if (entity == null)
                 throw new EntityNotFoundException<FileModel>();
             
-            if (! await TeamsInSameView(entity.ViewId, form.TeamIds, ct))
+            if (! await TeamsInSameView(entity.View.Id, form.TeamIds, ct))
                 throw new ForbiddenException("Teams must be in same view");
             
             // This authorization check assumes all teams for the file are in the same view, but we have verified
             // that that is the case with the above check.
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(entity.ViewId))).Succeeded)
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(entity.View.Id))).Succeeded)
                 throw new ForbiddenException();
                 
             
@@ -190,7 +193,7 @@ namespace Player.Api.Services
 
                 var name = SanitizeFileName(form.ToUpload.FileName);
 
-                var filePath = await uploadFile(form.ToUpload, entity.ViewId, GetNameToStore(name));
+                var filePath = await uploadFile(form.ToUpload, entity.View.Id, GetNameToStore(name));
 
                 // File is now on disk, check if old file should be deleted (only has the one pointer)
                 if (await lastPointer(entity.Path, ct))
@@ -216,12 +219,13 @@ namespace Player.Api.Services
         {
             var toDelete = await _context.Files
                 .Where(f => f.Id == fileId)
+                .Include(f => f.View)
                 .SingleOrDefaultAsync(ct);
             
             if (toDelete == null)
                 throw new EntityNotFoundException<FileModel>();
             
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(toDelete.ViewId))).Succeeded)
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(toDelete.View.Id))).Succeeded)
                 throw new ForbiddenException();
             
             // If this is the last pointer to the file, the file should be deleted. Else, just delete the pointer
@@ -302,7 +306,7 @@ namespace Player.Api.Services
             // The user can see this file if they are in at least one of the teams it is assigned to
             var canAccess = (await _authorizationService.AuthorizeAsync(_user, null, new TeamsMemberRequirement(file.TeamIds))).Succeeded;
             // If user is not on any teams, they can't access the file unless they are a view admin    
-            if (!canAccess && !(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(file.ViewId))).Succeeded)
+            if (!canAccess && !(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(file.View.Id))).Succeeded)
                 throw new ForbiddenException();
         }
 

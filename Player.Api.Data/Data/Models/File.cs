@@ -14,7 +14,7 @@ namespace Player.Api.Data.Data.Models
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public Guid Id { get; set; }
         public string Name { get; set; }
-        public Guid ViewId { get; set; }
+        public virtual ViewEntity View { get; set; }
         public List<Guid> TeamIds { get; set; }
         public string Path { get; set; }
     

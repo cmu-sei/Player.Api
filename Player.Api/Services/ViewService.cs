@@ -196,21 +196,22 @@ namespace Player.Api.Services
             foreach (var file in view.Files)
             {
                 var cloned = file.Clone();
+                cloned.View = newView;
                 newView.Files.Add(cloned);
             }
 
             _context.Add(newView);
             await _context.SaveChangesAsync(ct);
 
-            // Need a second SaveChanges bc we don't know new id until saved
+            // SaveChanges is called twice because we need the new IDs for each time.
+            // Should figure out a better way to do it.
             foreach (var file in newView.Files)
             {
-                file.ViewId = newView.Id;
                 List<Guid> newTeamIds = new List<Guid>();
                 foreach (var team in file.TeamIds)
                 {
                     var teamName = view.Teams.FirstOrDefault(t => t.Id == team).Name;
-                    var newId = newView.Teams.FirstOrDefault(t => t.Name == teamName).Id;
+                    var newId = file.View.Teams.FirstOrDefault(t => t.Name == teamName).Id;
                     newTeamIds.Add(newId);
                 }
                 file.TeamIds = newTeamIds;
