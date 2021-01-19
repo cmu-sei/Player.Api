@@ -103,7 +103,8 @@ namespace Player.Api.Controllers
             else if (IsImage(fileName))
             {
                 Response.Headers.Add("Content-Disposition", "inline");
-                var ext = Path.GetExtension(fileName);
+                // We need the extension without the . character
+                var ext = Path.GetExtension(fileName).Substring(1);
                 return File(stream, "image/" + ext, fileName);
             }
 
