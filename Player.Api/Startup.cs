@@ -66,7 +66,10 @@ namespace Player.Api
                     .AddScoped(config => config.GetService<IOptionsMonitor<ClaimsTransformationOptions>>().CurrentValue)
 
                 .Configure<SeedDataOptions>(Configuration.GetSection("SeedData"))
-                    .AddScoped(config => config.GetService<IOptionsMonitor<SeedDataOptions>>().CurrentValue);
+                    .AddScoped(config => config.GetService<IOptionsMonitor<SeedDataOptions>>().CurrentValue)
+                
+                .Configure<FileUploadOptions>(Configuration.GetSection("FileUpload"))
+                    .AddScoped(config => config.GetService<IOptionsMonitor<FileUploadOptions>>().CurrentValue);
 
             services.AddCors(options => options.UseConfiguredCors(Configuration.GetSection("CorsPolicy")));
 
@@ -116,6 +119,7 @@ namespace Player.Api
             services.AddScoped<IRoleService, RoleService>();
             services.AddScoped<IViewMembershipService, ViewMembershipService>();
             services.AddScoped<ITeamMembershipService, TeamMembershipService>();
+            services.AddScoped<IFileService, FileService>();
 
             services.AddScoped<IClaimsTransformation, AuthorizationClaimsTransformer>();
             services.AddScoped<IUserClaimsService, UserClaimsService>();

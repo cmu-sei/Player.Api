@@ -20,10 +20,10 @@ namespace Player.Api.Data.Data.Models
         public string Description { get; set; }
 
         public ViewStatus Status { get; set; }
-
         public virtual ICollection<TeamEntity> Teams { get; set; } = new List<TeamEntity>();
         public virtual ICollection<ApplicationEntity> Applications { get; set; } = new List<ApplicationEntity>();
         public virtual ICollection<ViewMembershipEntity> Memberships { get; set; } = new List<ViewMembershipEntity>();
+        public virtual ICollection<FileEntity> Files { get; set; } = new List<FileEntity>();
 
         public ViewEntity Clone()
         {
@@ -32,6 +32,7 @@ namespace Player.Api.Data.Data.Models
             entity.Teams = new List<TeamEntity>();
             entity.Applications = new List<ApplicationEntity>();
             entity.Memberships = new List<ViewMembershipEntity>();
+            entity.Files = new List<FileEntity>();
 
             return entity;
         }

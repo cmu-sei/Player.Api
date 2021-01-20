@@ -38,14 +38,16 @@ namespace Player.Api.Services
         private readonly ClaimsPrincipal _user;
         private readonly IMapper _mapper;
         private IUserClaimsService _claimsService;
+        private readonly IFileService _fileService;
 
-        public ViewService(PlayerContext context, IAuthorizationService authorizationService, IPrincipal user, IMapper mapper, IUserClaimsService claimsService)
+        public ViewService(PlayerContext context, IAuthorizationService authorizationService, IPrincipal user, IMapper mapper, IUserClaimsService claimsService, IFileService fileService)
         {
             _context = context;
             _authorizationService = authorizationService;
             _user = user as ClaimsPrincipal;
             _mapper = mapper;
             _claimsService = claimsService;
+            _fileService = fileService;
         }
 
         public async Task<IEnumerable<ViewModels.View>> GetAsync(CancellationToken ct)
@@ -149,6 +151,7 @@ namespace Player.Api.Services
                     .ThenInclude(o => o.Permissions)
                 .Include(o => o.Applications)
                     .ThenInclude(o => o.Template)
+                .Include(o => o.Files)
                 .SingleOrDefaultAsync(o => o.Id == idToBeCloned, ct);
 
             var newView = view.Clone();
@@ -189,9 +192,31 @@ namespace Player.Api.Services
                 newView.Teams.Add(newTeam);
             }
 
+            // Copy files - note that the files themselves are not being copied, just the pointers
+            foreach (var file in view.Files)
+            {
+                var cloned = file.Clone();
+                cloned.View = newView;
+                newView.Files.Add(cloned);
+            }
+
             _context.Add(newView);
             await _context.SaveChangesAsync(ct);
 
+            // SaveChanges is called twice because we need the new IDs for each time.
+            // Should figure out a better way to do it.
+            foreach (var file in newView.Files)
+            {
+                List<Guid> newTeamIds = new List<Guid>();
+                foreach (var team in file.TeamIds)
+                {
+                    var teamName = view.Teams.FirstOrDefault(t => t.Id == team).Name;
+                    var newId = file.View.Teams.FirstOrDefault(t => t.Name == teamName).Id;
+                    newTeamIds.Add(newId);
+                }
+                file.TeamIds = newTeamIds;
+            }
+            await _context.SaveChangesAsync(ct);
             return _mapper.Map<View>(newView);
         }
 
@@ -222,6 +247,13 @@ namespace Player.Api.Services
 
             if (viewToDelete == null)
                 throw new EntityNotFoundException<View>();
+
+            // Delete files within this view
+            var files = await _fileService.GetByViewAsync(id, ct);
+            foreach (var fp in files)
+            {
+                await _fileService.DeleteAsync(fp.id, ct);
+            }
 
             _context.Views.Remove(viewToDelete);
             await _context.SaveChangesAsync(ct);

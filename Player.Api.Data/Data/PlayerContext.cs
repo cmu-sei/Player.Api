@@ -32,6 +32,7 @@ namespace Player.Api.Data.Data
         public DbSet<RolePermissionEntity> RolePermissions { get; set; }
         public DbSet<TeamPermissionEntity> TeamPermissions { get; set; }
         public DbSet<UserPermissionEntity> UserPermissions { get; set; }
+        public DbSet<FileEntity> Files { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
