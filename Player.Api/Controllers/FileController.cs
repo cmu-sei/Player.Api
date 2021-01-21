@@ -74,7 +74,7 @@ namespace Player.Api.Controllers
         /// <summary> Get a specific file by id </summary>
         /// <param name="fileId"> The id of the file </param>
         /// <param name="ct"></param>
-        [HttpGet("/files/{fileId}")]
+        [HttpGet("files/{fileId}")]
         [ProducesResponseType(typeof(FileModel), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "getById")]
         public async Task<IActionResult> GetById(Guid fileId, CancellationToken ct)
@@ -87,7 +87,7 @@ namespace Player.Api.Controllers
         /// <remarks> This endpoint downloads the actual file, files/{fileId} returns the DB entry for a file </remarks>
         /// <param name="fileId"> The id of the file </param>
         /// <param name="ct"></param>
-        [HttpGet("/files/download/{fileId}")]
+        [HttpGet("files/download/{fileId}")]
         [ProducesResponseType(typeof(FileResult), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "download")]
         public async Task<IActionResult> Download(Guid fileId, CancellationToken ct)
@@ -118,7 +118,7 @@ namespace Player.Api.Controllers
         /// <param name="fileId"> The id of the file </param>
         /// <param name="form"> The settings for the file </param> 
         /// <param name="ct"></param>
-        [HttpPut("/files/{fileId}")]
+        [HttpPut("files/{fileId}")]
         [ProducesResponseType(typeof(FileModel), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "updateFile")]
         public async Task<IActionResult> Update(Guid fileId, [FromForm] FileUpdateForm form, CancellationToken ct)
@@ -130,7 +130,7 @@ namespace Player.Api.Controllers
         /// <summary> Delete a file </summary>
         /// <param name="fileId"> The id of the file </param>
         /// <param name="ct"></param>
-        [HttpDelete("/files/{fileId}")]
+        [HttpDelete("files/{fileId}")]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]
         [SwaggerOperation(OperationId = "deleteFile")]
         public async Task<IActionResult> Delete(Guid fileId, CancellationToken ct)
