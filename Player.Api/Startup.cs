@@ -35,11 +35,13 @@ namespace Player.Api
     {
         public Options.AuthorizationOptions _authOptions = new Options.AuthorizationOptions();
         public IConfiguration Configuration { get; }
+        private string _pathbase;
 
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
             Configuration.GetSection("Authorization").Bind(_authOptions);
+            _pathbase = Configuration["PathBase"];
         }
 
         // This method gets called by the runtime. Use this method to add services to the container.
@@ -67,7 +69,7 @@ namespace Player.Api
 
                 .Configure<SeedDataOptions>(Configuration.GetSection("SeedData"))
                     .AddScoped(config => config.GetService<IOptionsMonitor<SeedDataOptions>>().CurrentValue)
-                
+
                 .Configure<FileUploadOptions>(Configuration.GetSection("FileUpload"))
                     .AddScoped(config => config.GetService<IOptionsMonitor<FileUploadOptions>>().CurrentValue);
 
@@ -144,6 +146,8 @@ namespace Player.Api
             {
                 app.UseDeveloperExceptionPage();
             }
+
+            app.UsePathBase(_pathbase);
 
             app.UseRouting();
             app.UseCors("default");
