@@ -104,7 +104,9 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
             
-            var files = await _context.Files.ToListAsync();
+            var files = await _context.Files
+                .Include(f => f.View)
+                .ToListAsync();
 
             return _mapper.Map<IEnumerable<FileModel>>(files);
         }
@@ -129,6 +131,7 @@ namespace Player.Api.Services
                 throw new ForbiddenException();
             
             var files = _context.Files
+                .Include(f => f.View)
                 .AsEnumerable()
                 .Where(f => f.TeamIds.Contains(teamId))
                 .ToList();
