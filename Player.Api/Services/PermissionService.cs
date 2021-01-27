@@ -12,6 +12,7 @@ using AutoMapper.QueryableExtensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data;
+using Player.Api.Data.Data.Extensions;
 using Player.Api.Data.Data.Models;
 using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
@@ -45,8 +46,8 @@ namespace Player.Api.Services
         private readonly ClaimsPrincipal _user;
         private readonly IMapper _mapper;
 
-        public PermissionService(PlayerContext context, 
-                                IAuthorizationService authorizationService, 
+        public PermissionService(PlayerContext context,
+                                IAuthorizationService authorizationService,
                                 IPrincipal user,
                                 IMapper mapper)
         {
@@ -135,11 +136,9 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new SameUserOrViewAdminRequirement(viewId, userId))).Succeeded)
                 throw new ForbiddenException();
 
-            var userQuery = _context.Users
-                .Include(u => u.Role.Permissions)
-                .Where(u => u.Id == userId);
-
-            UserEntity user = (await userQuery.ToListAsync()).FirstOrDefault();
+            var user = await _context.Users
+                .IncludePermissions()
+                .SingleOrDefaultAsync(u => u.Id == userId);
 
             if (user == null)
                 throw new EntityNotFoundException<User>();
@@ -150,16 +149,18 @@ namespace Player.Api.Services
         public async Task<IEnumerable<Permission>> GetByTeamIdForUserAsync(Guid teamId, Guid userId)
         {
             var userQuery = _context.Users
-                .Include(u => u.Role.Permissions)
+                .IncludePermissions()
                 .Where(u => u.Id == userId)
                 .Future();
+
+            var perms = await _context.Permissions.ToListAsync();
 
             var teamQuery = _context.Teams
                 .Where(t => t.Id == teamId)
                 .Future();
 
-            UserEntity user = (await userQuery.ToListAsync()).FirstOrDefault();
-            TeamEntity team = (await teamQuery.ToListAsync()).FirstOrDefault();
+            UserEntity user = (await userQuery.ToArrayAsync()).FirstOrDefault();
+            TeamEntity team = (await teamQuery.ToArrayAsync()).FirstOrDefault();
 
             if (user == null)
                 throw new EntityNotFoundException<User>();
@@ -177,22 +178,20 @@ namespace Player.Api.Services
         {
             var viewMembershipQuery = _context.ViewMemberships
                 .Include(x => x.PrimaryTeamMembership)
-                .ThenInclude(m => m.Role)
-                .ThenInclude(r => r.Permissions)
-                .ThenInclude(p => p.Permission)
+                    .ThenInclude(m => m.Role)
+                        .ThenInclude(r => r.Permissions)
+                            .ThenInclude(p => p.Permission)
                 .Include(x => x.PrimaryTeamMembership)
-                .ThenInclude(m => m.Team)
-                .ThenInclude(t => t.Role)
-                .ThenInclude(r => r.Permissions)
-                .ThenInclude(p => p.Permission)
+                    .ThenInclude(m => m.Team)
+                        .ThenInclude(t => t.Role)
+                            .ThenInclude(r => r.Permissions)
+                                .ThenInclude(p => p.Permission)
                 .Include(x => x.PrimaryTeamMembership)
-                .ThenInclude(m => m.Team.Permissions)
-                .ThenInclude(p => p.Permission)
+                    .ThenInclude(m => m.Team.Permissions)
+                        .ThenInclude(p => p.Permission)
                 .Where(x => x.ViewId == viewId && x.UserId == user.Id);
-            //.Future() // TODO: Doesn't load all includes - bug in library?
 
-            ViewMembershipEntity membership = (await viewMembershipQuery.ToListAsync()).FirstOrDefault();
-
+            ViewMembershipEntity membership = await viewMembershipQuery.FirstOrDefaultAsync();
             List<PermissionEntity> permissions = new List<PermissionEntity>();
 
             if (membership != null)
@@ -222,9 +221,17 @@ namespace Player.Api.Services
             }
             else
             {
+                permissions.AddRange(user.Permissions.Select(x => x.Permission));
+
                 if (user.Role != null)
                 {
-                    permissions.AddRange(user.Role.Permissions.Select(x => x.Permission));
+                    foreach (var permission in user.Role.Permissions.Select(x => x.Permission))
+                    {
+                        if (permission != null && !permissions.Any(x => x.Id == permission.Id))
+                        {
+                            permissions.Add(permission);
+                        }
+                    }
                 }
             }
 
