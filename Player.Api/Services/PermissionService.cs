@@ -153,8 +153,6 @@ namespace Player.Api.Services
                 .Where(u => u.Id == userId)
                 .Future();
 
-            var perms = await _context.Permissions.ToListAsync();
-
             var teamQuery = _context.Teams
                 .Where(t => t.Id == teamId)
                 .Future();
