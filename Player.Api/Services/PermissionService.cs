@@ -157,8 +157,8 @@ namespace Player.Api.Services
                 .Where(t => t.Id == teamId)
                 .Future();
 
-            UserEntity user = (await userQuery.ToArrayAsync()).FirstOrDefault();
-            TeamEntity team = (await teamQuery.ToArrayAsync()).FirstOrDefault();
+            UserEntity user = (await userQuery.ToListAsync()).FirstOrDefault();
+            TeamEntity team = (await teamQuery.ToListAsync()).FirstOrDefault();
 
             if (user == null)
                 throw new EntityNotFoundException<User>();
