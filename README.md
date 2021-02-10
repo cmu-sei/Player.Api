@@ -1,6 +1,6 @@
 ## Docker
 
-this application has been updated to the official Microsoft docker sdk image `mcr.microsoft.com/dotnet/core/sdk`
+This application has been updated to the official Microsoft docker sdk image: `mcr.microsoft.com/dotnet/core/sdk`.
 
 ### sample `docker-compose.yml`
 
@@ -71,4 +71,4 @@ configs:
 
 ### SSL Considerations
 
-The official microsoft docker image is based on Debian. SSL CA trusts and their entry scripts need to be updated to use `update-ca-certificates` please see [update-trusts.sh](entry.d/update-trusts.sh)
+The official microsoft docker image is based on Debian. SSL CA trusts and their entry scripts need to be updated to use `update-ca-certificates` please see [update-trusts.sh](entry.d/update-trusts.sh).
