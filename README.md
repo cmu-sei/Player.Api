@@ -1,3 +1,5 @@
+# Player.Api Readme
+
 ## Docker
 
 This application has been updated to the official Microsoft docker sdk image: `mcr.microsoft.com/dotnet/core/sdk`.
@@ -72,3 +74,17 @@ configs:
 ### SSL Considerations
 
 The official microsoft docker image is based on Debian. SSL CA trusts and their entry scripts need to be updated to use `update-ca-certificates` please see [update-trusts.sh](entry.d/update-trusts.sh).
+
+## Reporting bugs and requesting features
+
+Think you found a bug? Please report all Crucible bugs - including bugs for the individual Crucible apps - in the [cmu-sei/crucible issue tracker](https://github.com/cmu-sei/crucible/issues). 
+
+Include as much detail as possible including steps to reproduce, specific app involved, and any error messages you may have received.
+
+Have a good idea for a new feature? Submit all new feature requests through the [cmu-sei/crucible issue tracker](https://github.com/cmu-sei/crucible/issues). 
+
+Include the reasons why you're requesting the new feature and how it might benefit other Crucible users.
+
+## License
+
+Copyright 2021 Carnegie Mellon University. See the [LICENSE.md](./LICENSE.md) files for details.
