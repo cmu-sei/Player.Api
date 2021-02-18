@@ -15,8 +15,38 @@ namespace Player.Api.Data.Data
         public static void Run(PlayerContext context)
         {
             // Permissions
-            var systemAdminPermission = context.Permissions.Where(x => x.Key == "SystemAdmin").FirstOrDefault();
-            var viewAdminPermission = context.Permissions.Where(x => x.Key == "ViewAdmin").FirstOrDefault();
+            PermissionEntity systemAdminPermission;
+            if (!context.Permissions.Where(x => x.Key == "SystemAdmin").Any()) 
+            {
+                systemAdminPermission = new PermissionEntity { 
+                    Id = Guid.NewGuid(), 
+                    Key = "SystemAdmin", 
+                    Description = "Can do anything",
+                    ReadOnly = true,
+                    Value = "True" 
+                };
+                context.Permissions.Add(systemAdminPermission);
+            }
+            else 
+            {
+                systemAdminPermission = context.Permissions.Where(x => x.Key == "SystemAdmin").FirstOrDefault();
+            }
+            PermissionEntity viewAdminPermission;
+            if (!context.Permissions.Where(x => x.Key == "ViewAdmin").Any()) 
+            {
+                viewAdminPermission = new PermissionEntity { 
+                    Id = Guid.NewGuid(), 
+                    Key = "ViewAdmin", 
+                    Description = "Can edit an View, Add/Remove Teams/Members, etc",
+                    ReadOnly = true,
+                    Value = "True" 
+                };
+                context.Permissions.Add(viewAdminPermission);
+            }
+            else 
+            {
+                viewAdminPermission = context.Permissions.Where(x => x.Key == "ViewAdmin").FirstOrDefault();
+            }
             var ostAdminPermission = new PermissionEntity { Id = Guid.NewGuid(), Key = "OsTicketAdmin", Description = "Admin in OsTicket" };
             var ostAgentPermission = new PermissionEntity { Id = Guid.NewGuid(), Key = "OsTicketAgent", Description = "Agent in OsTicket" };
             var viewAllVmsPermission = new PermissionEntity { Id = Guid.NewGuid(), Key = "ViewAllMachines", Description = "View all Virtual Machines" };
