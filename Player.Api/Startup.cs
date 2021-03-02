@@ -28,6 +28,8 @@ using Player.Api.Infrastructure.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Player.Api.Infrastructure.Extensions;
 using Player.Api.Infrastructure.Mappings;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Player.Api
 {
@@ -35,6 +37,7 @@ namespace Player.Api
     {
         public Options.AuthorizationOptions _authOptions = new Options.AuthorizationOptions();
         public IConfiguration Configuration { get; }
+        private const string _routePrefix = "api";
         private string _pathbase;
 
         public Startup(IConfiguration configuration)
@@ -59,6 +62,20 @@ namespace Player.Api
                     services.AddDbContextPool<PlayerContext>(builder => builder.UseConfiguredDatabase(Configuration));
                     break;
             }
+            var connectionString = Configuration.GetConnectionString(DatabaseExtensions.DbProvider(Configuration));
+            switch (provider)
+            {
+                case "Sqlite":
+                    services.AddHealthChecks().AddSqlite(connectionString, tags: new[] { "ready", "live" });
+                    break;
+                case "SqlServer":
+                    services.AddHealthChecks().AddSqlServer(connectionString, tags: new[] { "ready", "live" });
+                    break;
+                case "PostgreSQL":
+                    services.AddHealthChecks().AddNpgSql(connectionString, tags: new[] { "ready", "live" });
+                    break;
+            }
+
 
             services.AddOptions()
                 .Configure<DatabaseOptions>(Configuration.GetSection("Database"))
@@ -174,7 +191,7 @@ namespace Player.Api
             app.UseSwagger();
             app.UseSwaggerUI(c =>
             {
-                c.RoutePrefix = "api";
+                c.RoutePrefix = _routePrefix;
                 c.SwaggerEndpoint("/swagger/v1/swagger.json", "Player v1");
                 c.OAuthClientId(_authOptions.ClientId);
                 c.OAuthClientSecret(_authOptions.ClientSecret);
@@ -187,6 +204,15 @@ namespace Player.Api
             app.UseEndpoints(endpoints =>
                 {
                     endpoints.MapControllers();
+                    endpoints.MapHealthChecks($"/{_routePrefix}/health/ready", new HealthCheckOptions()
+                    {
+                        Predicate = (check) => check.Tags.Contains("ready"),
+                    });
+
+                    endpoints.MapHealthChecks($"/{_routePrefix}/health/live", new HealthCheckOptions()
+                    {
+                        Predicate = (check) => check.Tags.Contains("live"),
+                    });
                     endpoints.MapHub<Hubs.ViewHub>("/hubs/view");
                     endpoints.MapHub<Hubs.TeamHub>("/hubs/team");
                     endpoints.MapHub<Hubs.UserHub>("/hubs/user");

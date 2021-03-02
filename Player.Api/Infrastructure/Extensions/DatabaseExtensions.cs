@@ -124,7 +124,7 @@ namespace Player.Api.Extensions
             }
         }
 
-        private static string DbProvider(IConfiguration config)
+        public static string DbProvider(IConfiguration config)
         {
             return config.GetValue<string>("Database:Provider", "Sqlite").Trim();
         }
