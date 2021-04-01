@@ -15,6 +15,5 @@ namespace Player.Api.ViewModels
         public ViewStatus Status { get; set; }
         public bool CanManage { get; set; }
         public Guid ParentViewId { get; set; }
-        public virtual ViewEntity ParentView { get; set; }
     }
 }
