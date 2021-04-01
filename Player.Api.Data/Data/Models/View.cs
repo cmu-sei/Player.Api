@@ -14,11 +14,10 @@ namespace Player.Api.Data.Data.Models
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public Guid Id { get; set; }
-
+        public Guid? ViewId { get; set; }
+        public virtual ViewEntity View { get; set; }
         public string Name { get; set; }
-
         public string Description { get; set; }
-
         public ViewStatus Status { get; set; }
         public virtual ICollection<TeamEntity> Teams { get; set; } = new List<TeamEntity>();
         public virtual ICollection<ApplicationEntity> Applications { get; set; } = new List<ApplicationEntity>();
@@ -33,6 +32,8 @@ namespace Player.Api.Data.Data.Models
             entity.Applications = new List<ApplicationEntity>();
             entity.Memberships = new List<ViewMembershipEntity>();
             entity.Files = new List<FileEntity>();
+            entity.ViewId = this.Id;
+            entity.View = this;
 
             return entity;
         }

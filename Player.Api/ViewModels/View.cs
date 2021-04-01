@@ -10,15 +10,11 @@ namespace Player.Api.ViewModels
     public class View
     {
         public Guid Id { get; set; }
-
         public string Name { get; set; }
-
         public string Description { get; set; }
-
         public ViewStatus Status { get; set; }
-
         public bool CanManage { get; set; }
-        
-        public List<Guid> Clones { get; set; }
+        public Guid ParentViewId { get; set; }
+        public virtual ViewEntity ParentView { get; set; }
     }
 }

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Player.Api.Data.Data;
@@ -10,9 +11,10 @@ using Player.Api.Data.Data;
 namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(PlayerContext))]
-    partial class PlayerContextModelSnapshot : ModelSnapshot
+    [Migration("20210330180802_ParentView")]
+    partial class ParentView
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -463,17 +465,17 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         .HasColumnName("name")
                         .HasColumnType("text");
 
+                    b.Property<Guid>("ParentViewId")
+                        .HasColumnName("parent_view_id")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Status")
                         .HasColumnName("status")
                         .HasColumnType("integer");
 
-                    b.Property<Guid?>("ViewId")
-                        .HasColumnName("view_id")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("ViewId");
+                    b.HasIndex("ParentViewId");
 
                     b.ToTable("views");
                 });
@@ -639,9 +641,11 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.ViewEntity", b =>
                 {
-                    b.HasOne("Player.Api.Data.Data.Models.ViewEntity", "View")
+                    b.HasOne("Player.Api.Data.Data.Models.ViewEntity", "ParentView")
                         .WithMany()
-                        .HasForeignKey("ViewId");
+                        .HasForeignKey("ParentViewId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.ViewMembershipEntity", b =>

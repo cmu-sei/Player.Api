@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Player.Api.Data.Data;
@@ -10,9 +11,10 @@ using Player.Api.Data.Data;
 namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(PlayerContext))]
-    partial class PlayerContextModelSnapshot : ModelSnapshot
+    [Migration("20210330181315_ParentView2")]
+    partial class ParentView2
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -467,7 +469,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         .HasColumnName("status")
                         .HasColumnType("integer");
 
-                    b.Property<Guid?>("ViewId")
+                    b.Property<Guid>("ViewId")
                         .HasColumnName("view_id")
                         .HasColumnType("uuid");
 
@@ -641,7 +643,9 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                 {
                     b.HasOne("Player.Api.Data.Data.Models.ViewEntity", "View")
                         .WithMany()
-                        .HasForeignKey("ViewId");
+                        .HasForeignKey("ViewId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.ViewMembershipEntity", b =>
