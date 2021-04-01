@@ -24,7 +24,6 @@ namespace Player.Api.Data.Data.Models
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public Guid Id { get; set; }
-
         public Guid ViewId { get; set; }
         public virtual ViewEntity View { get; set; }
 

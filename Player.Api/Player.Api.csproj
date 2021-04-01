@@ -33,6 +33,8 @@
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="6.0.1-rc2.3"/>
     <PackageReference Include="AspNetCore.HealthChecks.SqlServer" Version="6.0.1-rc2.7"/>
     <PackageReference Include="AspNetCore.HealthChecks.Sqlite" Version="6.0.1-rc2.2"/>
+    <PackageReference Include="MediatR" Version="8.0.1" />
+    <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
