@@ -42,7 +42,7 @@ jobs:
         run: |
           cd ${{ steps.package_name.outputs.name }}
           npm install autorest@3.0.6247
-          ./node_modules/.bin/autorest .
+          ./node_modules/.bin/autorest . --verbose
 
       - name: Create NuGet Package
         run: |
