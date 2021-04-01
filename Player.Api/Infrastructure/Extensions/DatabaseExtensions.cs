@@ -14,6 +14,9 @@ using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using System.Collections.Generic;
+using Player.Api.ViewModels.Webhooks;
+using Player.Api.Data.Data.Models.Webhooks;
+using AutoMapper;
 
 namespace Player.Api.Extensions
 {
@@ -30,6 +33,7 @@ namespace Player.Api.Extensions
                     var databaseOptions = services.GetService<DatabaseOptions>();
                     var ctx = services.GetRequiredService<PlayerContext>();
                     var seedDataOptions = services.GetService<SeedDataOptions>();
+                    var mapper = services.GetRequiredService<IMapper>();
 
                     if (ctx != null)
                     {
@@ -45,7 +49,7 @@ namespace Player.Api.Extensions
                         if (databaseOptions.DevModeRecreate)
                         {
                             ctx.Database.EnsureCreated();
-                            ProcessSeedDataOptions(seedDataOptions, ctx);
+                            ProcessSeedDataOptions(seedDataOptions, ctx, mapper);
 
                             if (!ctx.Views.Any())
                             {
@@ -56,7 +60,7 @@ namespace Player.Api.Extensions
                         }
                         else
                         {
-                            ProcessSeedDataOptions(seedDataOptions, ctx);
+                            ProcessSeedDataOptions(seedDataOptions, ctx, mapper);
                             ProcessSystemAdminOptions(seedDataOptions.SystemAdminIds, ctx);
                         }
                     }
@@ -106,7 +110,7 @@ namespace Player.Api.Extensions
             }
         }
 
-        private static void ProcessSeedDataOptions(SeedDataOptions options, PlayerContext context)
+        private static void ProcessSeedDataOptions(SeedDataOptions options, PlayerContext context, IMapper mapper)
         {
             if (options.Permissions.Any())
             {
@@ -117,6 +121,22 @@ namespace Player.Api.Extensions
                     if (!dbPermissions.Where(x => x.Key == permission.Key && x.Value == permission.Value).Any())
                     {
                         context.Permissions.Add(permission);
+                    }
+                }
+
+                context.SaveChanges();
+            }
+
+            if (options.Subscriptions.Any())
+            {
+                var dbSubscriptions = context.Webhooks.ToList();
+
+                foreach (WebhookSubscription subscription in options.Subscriptions)
+                {
+                    if (!dbSubscriptions.Where(x => x.Name == subscription.Name).Any())
+                    {
+                        var dbSubscription = mapper.Map<WebhookSubscriptionEntity>(subscription);
+                        context.Webhooks.Add(dbSubscription);
                     }
                 }
 
