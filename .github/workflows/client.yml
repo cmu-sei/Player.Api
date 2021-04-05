@@ -48,7 +48,7 @@ jobs:
           cd ${{ steps.package_name.outputs.name }}
           dotnet pack -c Release /p:version=${{ github.event.inputs.clientVersion }}  \
           /p:authors="Carnegie Mellon University/Software Engineering Institute"      \
-          /p:description="AutoRest generated client for Crucible's ${{ steps.package_name.outputs.dll_name }}"   \
+          /p:description="NSwag generated client for Crucible's ${{ steps.package_name.outputs.dll_name }}"   \
           --include-source
 
           cd bin/Release
