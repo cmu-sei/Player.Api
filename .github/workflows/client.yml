@@ -37,11 +37,11 @@ jobs:
           cd ${{ steps.package_name.outputs.directory }}
           dotnet swagger tofile --output ../${{ steps.package_name.outputs.name }}/swagger.json bin/Release/*/${{ steps.package_name.outputs.dll_name }}.dll v1
 
-      - name: Run AutoRest
+      - name: Run NSwag
         run: |
           cd ${{ steps.package_name.outputs.name }}
-          npm install autorest@3.0.6247
-          ./node_modules/.bin/autorest .
+          npm install nswag@13.10.8
+          ./node_modules/.bin/nswag run /runtime:NetCore31
 
       - name: Create NuGet Package
         run: |
