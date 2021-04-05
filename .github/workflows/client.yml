@@ -28,8 +28,8 @@ jobs:
 
       - name: Build Package
         run: |
-          dotnet tool restore
           cd ${{ steps.package_name.outputs.directory }}
+          dotnet tool restore
           dotnet build -c Release /p:version=${{ github.event.inputs.clientVersion }}
 
       - name: Run Swagger
