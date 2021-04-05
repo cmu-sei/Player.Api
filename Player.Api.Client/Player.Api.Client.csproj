@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <OutputType>library</OutputType>
+    <IsPackable>true</IsPackable>
     <Nullable>annotations</Nullable>
   </PropertyGroup>
 
