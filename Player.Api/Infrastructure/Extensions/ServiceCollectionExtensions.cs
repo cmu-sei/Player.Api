@@ -59,11 +59,10 @@ namespace Player.Api.Infrastructure.Extensions
                     }
                 });
                 c.IncludeXmlComments(commentsFile);
-                c.DescribeAllEnumsAsStrings();
                 c.EnableAnnotations();
                 c.OperationFilter<DefaultResponseOperationFilter>();
                 c.MapType<Optional<Guid?>>(() => new OpenApiSchema { Type = "string", Format = "uuid" });
-                c.MapType<JsonElement?>(() => new OpenApiSchema { Type = "object" , Nullable = true});
+                c.MapType<JsonElement?>(() => new OpenApiSchema { Type = "object", Nullable = true });
             });
         }
     }
