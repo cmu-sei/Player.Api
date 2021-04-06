@@ -4,6 +4,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
 using Player.Api.Data.Data.Models;
+using Player.Api.Data.Data.Models.Webhooks;
 using Player.Api.Data.Data.Extensions;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.Internal;
 
@@ -33,6 +34,8 @@ namespace Player.Api.Data.Data
         public DbSet<TeamPermissionEntity> TeamPermissions { get; set; }
         public DbSet<UserPermissionEntity> UserPermissions { get; set; }
         public DbSet<FileEntity> Files { get; set; }
+        public DbSet<WebhookSubscriptionEntity> Webhooks { get; set; }
+        public DbSet<WebhookSubscriptionEventTypeEntity> WebhookSubscriptionEventTypes { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

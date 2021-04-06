@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Player.Api.Data.Data;
@@ -10,9 +11,10 @@ using Player.Api.Data.Data;
 namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(PlayerContext))]
-    partial class PlayerContextModelSnapshot : ModelSnapshot
+    [Migration("20210406161514_Webhooks")]
+    partial class Webhooks
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -560,7 +562,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                     b.HasIndex("SubscriptionId", "EventType")
                         .IsUnique();
 
-                    b.ToTable("webhook_subscription_event_types");
+                    b.ToTable("webhook_subscription_event_type_entity");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.ApplicationEntity", b =>

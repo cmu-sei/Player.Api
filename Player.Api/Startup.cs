@@ -139,6 +139,7 @@ namespace Player.Api
             services.AddScoped<IViewMembershipService, ViewMembershipService>();
             services.AddScoped<ITeamMembershipService, TeamMembershipService>();
             services.AddScoped<IFileService, FileService>();
+            services.AddScoped<IWebhookService, WebhookService>();
 
             services.AddScoped<IClaimsTransformation, AuthorizationClaimsTransformer>();
             services.AddScoped<IUserClaimsService, UserClaimsService>();

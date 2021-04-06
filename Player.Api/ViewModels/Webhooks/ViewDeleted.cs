@@ -1,6 +1,6 @@
 using System;
 
-namespace Player.Api.Data.Data.Models.Webhooks
+namespace Player.Api.ViewModels.Webhooks
 {
     public class ViewDeleted : WebhookEvent
     {
