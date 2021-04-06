@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using Player.Api.Services;
 using Player.Api.ViewModels.Webhooks;
 using Swashbuckle.AspNetCore.Annotations;
+using System;
 
 namespace Player.Api.Controllers
 {
@@ -42,10 +43,24 @@ namespace Player.Api.Controllers
         [HttpPost("webhooks/subscribe")]
         [ProducesResponseType((int) HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "subscribe")]
-        public async Task<IActionResult> Subscribe ([FromBody] WebhookSubscription form, CancellationToken ct)
+        public async Task<IActionResult> Subscribe([FromBody] WebhookSubscription form, CancellationToken ct)
         {
             await _webhookService.Subscribe(form, ct);
             return Ok();
+        }
+
+        /// <summary>
+        /// Deletes the subscription with the given id
+        /// </summary>
+        /// <param name="id">The Id of the subscription to delete</param>
+        /// <param name="ct"></param>
+        [HttpDelete("webhooks/{id}")]
+        [ProducesResponseType((int) HttpStatusCode.NoContent)]
+        [SwaggerOperation(OperationId = "delete")]
+        public async Task<IActionResult> Delete([FromRoute] Guid id, CancellationToken ct)
+        {
+            await _webhookService.DeleteAsync(id, ct);
+            return NoContent();
         }
     }
 }

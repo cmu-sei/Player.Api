@@ -13,6 +13,8 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using AutoMapper.QueryableExtensions;
+using System.Linq;
+using System;
 
 namespace Player.Api.Services
 {
@@ -20,6 +22,7 @@ namespace Player.Api.Services
     {
         Task<WebhookSubscription> Subscribe(WebhookSubscription form, CancellationToken ct);
         Task<IEnumerable<WebhookSubscription>> GetAll(CancellationToken ct);
+        Task DeleteAsync(Guid id, CancellationToken ct);
     }
 
     public class WebhookService : IWebhookService
@@ -54,6 +57,16 @@ namespace Player.Api.Services
             return await _context.Webhooks
                 .ProjectTo<WebhookSubscription>(_mapper.ConfigurationProvider)
                 .ToListAsync();
+        }
+
+        public async Task DeleteAsync(Guid id, CancellationToken ct)
+        {
+            var toDelete = await _context.Webhooks
+                .Where(w => w.Id == id)
+                .SingleOrDefaultAsync();
+            
+            _context.Remove(toDelete);
+            await _context.SaveChangesAsync();
         }
     }
 }
