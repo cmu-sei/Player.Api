@@ -30,6 +30,8 @@ using Player.Api.Infrastructure.Extensions;
 using Player.Api.Infrastructure.Mappings;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using MediatR;
+using Player.Api.Infrastructure.DbInterceptors;
 
 namespace Player.Api
 {
@@ -54,12 +56,16 @@ namespace Player.Api
             switch (provider)
             {
                 case "InMemory":
-                    services.AddDbContextPool<PlayerContext>(opt => opt.UseInMemoryDatabase("api"));
+                    services.AddDbContextPool<PlayerContext>((serviceProvider, opt ) => opt
+                        .AddInterceptors(serviceProvider.GetRequiredService<EventTransactionInterceptor>())
+                        .UseInMemoryDatabase("api"));
                     break;
                 case "Sqlite":
                 case "SqlServer":
                 case "PostgreSQL":
-                    services.AddDbContextPool<PlayerContext>(builder => builder.UseConfiguredDatabase(Configuration));
+                    services.AddDbContextPool<PlayerContext>((serviceProvider, builder) => builder
+                        .AddInterceptors(serviceProvider.GetRequiredService<EventTransactionInterceptor>())
+                        .UseConfiguredDatabase(Configuration));
                     break;
             }
             var connectionString = Configuration.GetConnectionString(DatabaseExtensions.DbProvider(Configuration));
@@ -128,6 +134,8 @@ namespace Player.Api
             });
 
             services.AddMemoryCache();
+            services.AddMediatR(typeof(Startup).GetType().Assembly);
+            services.AddTransient<EventTransactionInterceptor>();
 
             services.AddScoped<IViewService, ViewService>();
             services.AddScoped<IApplicationService, ApplicationService>();
