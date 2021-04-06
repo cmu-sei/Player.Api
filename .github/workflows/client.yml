@@ -28,7 +28,8 @@ jobs:
 
       - name: Build Package
         run: |
-          dotnet tool install -g --version 5.6.3 Swashbuckle.AspNetCore.Cli
+          dotnet new tool-manifest
+          dotnet tool install --version 5.6.3 Swashbuckle.AspNetCore.Cli
           cd ${{ steps.package_name.outputs.directory }}
           dotnet build -c Release /p:version=${{ github.event.inputs.clientVersion }}
 
@@ -41,7 +42,7 @@ jobs:
         run: |
           cd ${{ steps.package_name.outputs.name }}
           npm install autorest@3.0.6247
-          ./node_modules/.bin/autorest .
+          ./node_modules/.bin/autorest . --verbose
 
       - name: Create NuGet Package
         run: |
