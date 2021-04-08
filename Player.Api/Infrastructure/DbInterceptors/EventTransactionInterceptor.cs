@@ -122,8 +122,7 @@ namespace Player.Api.Infrastructure.DbInterceptors
 
                 foreach (var evt in events)
                 {
-                    _logger.LogWarning(evt.ToString());
-                    // await mediator.Publish(evt);
+                    await mediator.Publish(evt);
                 }
             }
         }

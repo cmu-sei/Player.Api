@@ -32,6 +32,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using MediatR;
 using Player.Api.Infrastructure.DbInterceptors;
+using Player.Api.Infrastructure.BackgroundServices;
 
 namespace Player.Api
 {
@@ -134,7 +135,7 @@ namespace Player.Api
             });
 
             services.AddMemoryCache();
-            services.AddMediatR(typeof(Startup).GetType().Assembly);
+            services.AddMediatR(typeof(Startup));
             services.AddTransient<EventTransactionInterceptor>();
 
             services.AddScoped<IViewService, ViewService>();
@@ -154,6 +155,10 @@ namespace Player.Api
 
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
             services.AddScoped<IPrincipal>(p => p.GetService<IHttpContextAccessor>().HttpContext.User);
+
+            services.AddSingleton<BackgroundWebhookService>();
+            services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
+            services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
 
             ApplyPolicies(services);
 

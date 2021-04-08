@@ -36,6 +36,7 @@ namespace Player.Api.Data.Data
         public DbSet<FileEntity> Files { get; set; }
         public DbSet<WebhookSubscriptionEntity> Webhooks { get; set; }
         public DbSet<WebhookSubscriptionEventTypeEntity> WebhookSubscriptionEventTypes { get; set; }
+        public DbSet<PendingEventEntity> PendingEvents { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
