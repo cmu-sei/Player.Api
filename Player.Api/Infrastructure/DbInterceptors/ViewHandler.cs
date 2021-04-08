@@ -34,14 +34,6 @@ namespace Player.Api.Infrastructure.DbInterceptors
             ILogger<ViewHandlerBase> logger,
             IBackgroundWebhookService backgroundService) : base(context, logger, backgroundService) {}
 
-        // TODO Handler should add event info to db (the table of pending events)
-        // and also to the event queue for a background process to handle (need to figure out how to make a process run in background)
-
-        // Create background service
-        // define action block in background service
-        // register hosted service in startup as a singleton
-        // inject service to this handler
-        // service should have method to push to queue
         public async Task Handle(EntityCreated<ViewEntity> notification, CancellationToken ct)
         {
             // Add pending event to db
@@ -54,6 +46,7 @@ namespace Player.Api.Infrastructure.DbInterceptors
             await _context.SaveChangesAsync(ct);
 
             // Add event to event queue
+            _logger.LogWarning("Calling AddEvent");
             _backgroundService.AddEvent(eventEntity.Id);
         }
     }

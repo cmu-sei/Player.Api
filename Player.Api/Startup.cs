@@ -159,7 +159,7 @@ namespace Player.Api
             services.AddSingleton<BackgroundWebhookService>();
             services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
             services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
-
+            
             ApplyPolicies(services);
 
             services.AddAutoMapper(cfg =>
