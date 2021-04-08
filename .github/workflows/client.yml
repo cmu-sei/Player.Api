@@ -28,8 +28,8 @@ jobs:
 
       - name: Build Package
         run: |
-          dotnet tool install -g --version 5.6.3 Swashbuckle.AspNetCore.Cli
           cd ${{ steps.package_name.outputs.directory }}
+          dotnet tool restore
           dotnet build -c Release /p:version=${{ github.event.inputs.clientVersion }}
 
       - name: Run Swagger
@@ -37,18 +37,18 @@ jobs:
           cd ${{ steps.package_name.outputs.directory }}
           dotnet swagger tofile --output ../${{ steps.package_name.outputs.name }}/swagger.json bin/Release/*/${{ steps.package_name.outputs.dll_name }}.dll v1
 
-      - name: Run AutoRest
+      - name: Run NSwag
         run: |
           cd ${{ steps.package_name.outputs.name }}
-          npm install autorest@3.0.6247
-          ./node_modules/.bin/autorest .
+          npm install nswag@13.10.8
+          ./node_modules/.bin/nswag run /runtime:NetCore31
 
       - name: Create NuGet Package
         run: |
           cd ${{ steps.package_name.outputs.name }}
           dotnet pack -c Release /p:version=${{ github.event.inputs.clientVersion }}  \
           /p:authors="Carnegie Mellon University/Software Engineering Institute"      \
-          /p:description="AutoRest generated client for Crucible's ${{ steps.package_name.outputs.dll_name }}"   \
+          /p:description="NSwag generated client for Crucible's ${{ steps.package_name.outputs.dll_name }}"   \
           --include-source
 
           cd bin/Release
