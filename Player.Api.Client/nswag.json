@@ -1,0 +1,22 @@
+{
+  "runtime": "NetCore31",
+  "swaggerGenerator":{
+    "fromSwagger":{
+      "json":"swagger.json"
+    }
+  },
+  "codeGenerators": {
+    "openApiToCSharpClient": {
+      "className": "PlayerApiClient",
+      "namespace": "Player.Api.Client",
+      "output": "Player.Api.Client.cs",
+      "generateClientInterfaces": true,
+      "generateContractsOutput": true,
+      "contractsNamespace": "Player.Api.Client",
+      "contractsOutputFilePath": "Player.Api.Contracts.cs",
+      "jsonLibrary": "SystemTextJson",
+      "operationGenerationMode": "SingleClientFromOperationId",
+      "useBaseUrl": false
+    }
+  }
+}
