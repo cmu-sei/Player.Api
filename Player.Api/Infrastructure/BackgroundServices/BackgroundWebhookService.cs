@@ -90,6 +90,8 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             var payload = new ViewModels.Webhooks.ViewCreated();
                             payload.ViewId = createdView.Id;
                             payload.ParentId = createdView.ViewId != null ? (Guid) createdView.ViewId : Guid.Empty;
+                            payload.Name = "View Created";
+                            payload.Timestamp = DateTime.Now;
 
                             _logger.LogWarning("Calling callback");
                             var jsonPayload = System.Text.Json.JsonSerializer.Serialize(payload);
@@ -101,6 +103,8 @@ namespace Player.Api.Infrastructure.BackgroundServices
                         {
                             var payload = new ViewModels.Webhooks.ViewDeleted();
                             payload.ViewId = eventObj.EffectedEntityId;
+                            payload.Name = "View Deleted";
+                            payload.Timestamp = DateTime.Now;
                             
                             var jsonPayload = System.Text.Json.JsonSerializer.Serialize(payload);
                             resp = await SendJsonPost(jsonPayload, sub.CallbackUri);
@@ -112,7 +116,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                 }
 
                 // The callback request was accepted, so remove this event from the db
-                if (resp != null && resp.StatusCode == HttpStatusCode.Accepted)
+                if (resp != null && resp.StatusCode == HttpStatusCode.Created)
                 {
                     var toRemove = await context.PendingEvents
                         .Where(e => e.Id == eventId)
