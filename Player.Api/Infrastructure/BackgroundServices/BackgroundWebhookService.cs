@@ -21,7 +21,8 @@ namespace Player.Api.Infrastructure.BackgroundServices
 {
     public interface IBackgroundWebhookService
     {
-        void AddEvent(Guid eventId);
+        void AddEvent(Task t);
+        Task ProcessEvent(Guid eventId);
     }
 
     public class BackgroundWebhookService : BackgroundService, IBackgroundWebhookService
@@ -29,7 +30,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
         private readonly ILogger<BackgroundWebhookService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IHttpClientFactory _clientFactory;
-        private ActionBlock<Guid> _eventQueue;
+        private ActionBlock<Task> _eventQueue;
         
 
         public BackgroundWebhookService(ILogger<BackgroundWebhookService> logger, IServiceScopeFactory scopeFactory, IHttpClientFactory clientFactory)
@@ -39,23 +40,22 @@ namespace Player.Api.Infrastructure.BackgroundServices
             _clientFactory = clientFactory;
         }
 
-        public void AddEvent(Guid eventId)
+        public void AddEvent(Task t)
         {
             // Should this use SendAsync? 
             if (_eventQueue != null)
             {
-                var success = _eventQueue.Post(eventId);
+                var success = _eventQueue.Post(t);
                 if (success) _logger.LogWarning("Event added successfully"); 
             }
         }
 
         protected override async Task ExecuteAsync(CancellationToken ct)
         {
-            _eventQueue = new ActionBlock<Guid>(
-                async eventId => await ProcessEvent(eventId));
+            _eventQueue = new ActionBlock<Task>(t => t.Start());
         }
 
-        private async Task ProcessEvent(Guid eventId)
+        public async Task ProcessEvent(Guid eventId)
         {
             // TODO make VM API side of this work
             using (var scope = _scopeFactory.CreateScope())
@@ -120,7 +120,12 @@ namespace Player.Api.Infrastructure.BackgroundServices
                 // Wait some amount of time before trying again?
                 else if (resp != null)
                 {
-                    AddEvent(eventId);
+                    var t = new Task(async id => {
+                        await Task.Delay(1000);
+                        await ProcessEvent((Guid) id);
+                    }, eventId, new CancellationToken());
+
+                    AddEvent(t);
                 }
             }
         }
