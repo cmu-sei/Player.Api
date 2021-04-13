@@ -28,17 +28,15 @@ namespace Player.Api.Infrastructure.BackgroundServices
     {
         private readonly ILogger<BackgroundWebhookService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IHttpClientFactory _clientFactory;
         private ActionBlock<Guid> _eventQueue;
-        private readonly HttpClient _client;
         
 
-        public BackgroundWebhookService(ILogger<BackgroundWebhookService> logger, IServiceScopeFactory scopeFactory)
+        public BackgroundWebhookService(ILogger<BackgroundWebhookService> logger, IServiceScopeFactory scopeFactory, IHttpClientFactory clientFactory)
         {
             _logger = logger;
             _scopeFactory = scopeFactory;
-            // We could use dependency injection, but this is the only place where an http client is needed
-            // use http client factory
-            _client = new HttpClient();
+            _clientFactory = clientFactory;
         }
 
         public void AddEvent(Guid eventId)
@@ -62,22 +60,24 @@ namespace Player.Api.Infrastructure.BackgroundServices
             // TODO make VM API side of this work
             using (var scope = _scopeFactory.CreateScope())
             {
-                var _context = scope.ServiceProvider.GetRequiredService<PlayerContext>();
+                var context = scope.ServiceProvider.GetRequiredService<PlayerContext>();
 
-                var eventObj = await _context.PendingEvents
+                var eventObj = await context.PendingEvents
                     .Where(e => e.Id == eventId)
                     .SingleOrDefaultAsync();
                 
-                var subs = await _context.Webhooks
+                // The subscriptions to the current event
+                var subs = await context.Webhooks
                     .Include(w => w.EventTypes)
                     .Where(w => w.EventTypes.Any(et => et.EventType == eventObj.EventType))
                     .ToListAsync();
 
+                HttpResponseMessage resp = null;
                 // For each subcriber to this event, call their callback endpoint
                 switch(eventObj.EventType)
                 {
                     case EventType.ViewCreated:
-                        var createdView = await _context.Views
+                        var createdView = await context.Views
                             .Where(v => v.Id == eventObj.EffectedEntityId)
                             .SingleOrDefaultAsync();
 
@@ -89,7 +89,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
 
                             _logger.LogWarning("Calling callback");
                             var jsonPayload = JsonSerializer.Serialize(payload);
-                            var resp = await SendJsonPost(jsonPayload, sub.CallbackUri);
+                            resp = await SendJsonPost(jsonPayload, sub.CallbackUri);
                         }
                         break;
                     case EventType.ViewDeleted:
@@ -99,31 +99,39 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             payload.ViewId = eventObj.EffectedEntityId;
                             
                             var jsonPayload = JsonSerializer.Serialize(payload);
-                            var resp = SendJsonPost(jsonPayload, sub.CallbackUri);
+                            resp = await SendJsonPost(jsonPayload, sub.CallbackUri);
                         }
                         break;
                     default:
                         _logger.LogDebug("Unknown event type");
                         break;
                 }
+
+                // The callback request was accepted, so remove this event from the db
+                if (resp != null && resp.StatusCode == HttpStatusCode.Accepted)
+                {
+                    var toRemove = await context.PendingEvents
+                        .Where(e => e.Id == eventId)
+                        .SingleOrDefaultAsync();
+                    context.Remove(toRemove);
+                    await context.SaveChangesAsync();
+                }
+                // We got some sort of error, so add this event back to the queue and try again later
+                // Wait some amount of time before trying again?
+                else if (resp != null)
+                {
+                    AddEvent(eventId);
+                }
             }
         }
 
-        private async Task<string> SendJsonPost(string json, string url)
+        private async Task<HttpResponseMessage> SendJsonPost(string json, string url)
         {
-            var request = (HttpWebRequest) WebRequest.Create(url);
-            request.ContentType = "application/json";
-            request.Method = "POST";
-
-            using (var writer = new StreamWriter(request.GetRequestStream()))
+            using (var client = _clientFactory.CreateClient())
             {
-                writer.Write(json);
-            }
-
-            var resp = (HttpWebResponse) await request.GetResponseAsync();
-            using (var reader = new StreamReader(resp.GetResponseStream()))
-            {
-                return await reader.ReadToEndAsync();
+                return await client.PostAsync(
+                    url,
+                    new StringContent(json));
             }
         }
     }
