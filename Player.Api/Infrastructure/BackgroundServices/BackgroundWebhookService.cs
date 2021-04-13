@@ -78,7 +78,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
 
                 HttpResponseMessage resp = null;
                 // For each subcriber to this event, call their callback endpoint
-                switch(eventObj.EventType)
+                switch (eventObj.EventType)
                 {
                     case EventType.ViewCreated:
                         var createdView = await context.Views
@@ -154,21 +154,17 @@ namespace Player.Api.Infrastructure.BackgroundServices
         {
             using (var client = _clientFactory.CreateClient())
             {
-                // TODO add settings for these. Also need to figure out how to handle username and password
+                // TODO add settings for these
                 var tokenAddr = "http://localhost:5000/connect/token";
-                var grantType = "password";
-                var clientId = "player-provider";
+                var grantType = "client_credentials";
+                var clientId = "webhook-client";
                 var clientSecret = "";
-                var username = "administrator@this.ws";
-                var password = "ChangeMe321!";
 
                 var form = new Dictionary<string, string>
                 {
                     {"grant_type", grantType},
                     {"client_id", clientId},
                     {"client_secret", clientSecret},
-                    {"username", username},
-                    {"password", password}
                 };
 
                 var resp = await client.PostAsync(tokenAddr, new FormUrlEncodedContent(form));
