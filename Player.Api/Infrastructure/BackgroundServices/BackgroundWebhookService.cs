@@ -12,10 +12,14 @@ using Player.Api.Data.Data;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data.Models.Webhooks;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Net;
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+using System.Text;
 
 namespace Player.Api.Infrastructure.BackgroundServices
 {
@@ -88,7 +92,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             payload.ParentId = createdView.ViewId != null ? (Guid) createdView.ViewId : Guid.Empty;
 
                             _logger.LogWarning("Calling callback");
-                            var jsonPayload = JsonSerializer.Serialize(payload);
+                            var jsonPayload = System.Text.Json.JsonSerializer.Serialize(payload);
                             resp = await SendJsonPost(jsonPayload, sub.CallbackUri);
                         }
                         break;
@@ -98,7 +102,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             var payload = new ViewModels.Webhooks.ViewDeleted();
                             payload.ViewId = eventObj.EffectedEntityId;
                             
-                            var jsonPayload = JsonSerializer.Serialize(payload);
+                            var jsonPayload = System.Text.Json.JsonSerializer.Serialize(payload);
                             resp = await SendJsonPost(jsonPayload, sub.CallbackUri);
                         }
                         break;
@@ -117,11 +121,12 @@ namespace Player.Api.Infrastructure.BackgroundServices
                     await context.SaveChangesAsync();
                 }
                 // We got some sort of error, so add this event back to the queue and try again later
-                // Wait some amount of time before trying again?
+                // Add a delay to the new task so it doesn't execute immediately 
                 else if (resp != null)
                 {
+                    _logger.LogWarning("Callback request returned with status code {}", resp.StatusCode);
                     var t = new Task(async id => {
-                        await Task.Delay(1000);
+                        await Task.Delay(10000);
                         await ProcessEvent((Guid) id);
                     }, eventId, new CancellationToken());
 
@@ -134,10 +139,53 @@ namespace Player.Api.Infrastructure.BackgroundServices
         {
             using (var client = _clientFactory.CreateClient())
             {
-                return await client.PostAsync(
-                    url,
-                    new StringContent(json));
+                var auth = await getAuthToken();
+                _logger.LogWarning("Auth token: " + auth);
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth);
+                return await client.PostAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
             }
         }
+
+        private async Task<string> getAuthToken()
+        {
+            using (var client = _clientFactory.CreateClient())
+            {
+                // TODO add settings for these. Also need to figure out how to handle username and password
+                var tokenAddr = "http://localhost:5000/connect/token";
+                var grantType = "password";
+                var clientId = "player-provider";
+                var clientSecret = "";
+                var username = "administrator@this.ws";
+                var password = "ChangeMe321!";
+
+                var form = new Dictionary<string, string>
+                {
+                    {"grant_type", grantType},
+                    {"client_id", clientId},
+                    {"client_secret", clientSecret},
+                    {"username", username},
+                    {"password", password}
+                };
+
+                var resp = await client.PostAsync(tokenAddr, new FormUrlEncodedContent(form));
+                var json = await resp.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<BearerToken>(json).AccessToken;
+            }
+        }
+
+        internal class BearerToken
+        {
+            [JsonProperty("access_token")]
+            public string AccessToken { get; set; }
+
+            [JsonProperty("token_type")]
+            public string TokenType { get; set; }
+
+            [JsonProperty("expires_in")]
+            public int ExpiresIn { get; set; }
+
+            [JsonProperty("refresh_token")]
+            public string RefreshToken { get; set; }
+        } 
     }
 }
