@@ -95,7 +95,10 @@ namespace Player.Api
                     .AddScoped(config => config.GetService<IOptionsMonitor<SeedDataOptions>>().CurrentValue)
 
                 .Configure<FileUploadOptions>(Configuration.GetSection("FileUpload"))
-                    .AddScoped(config => config.GetService<IOptionsMonitor<FileUploadOptions>>().CurrentValue);
+                    .AddScoped(config => config.GetService<IOptionsMonitor<FileUploadOptions>>().CurrentValue)
+                
+                .Configure<Player.Api.Options.AuthorizationOptions>(Configuration.GetSection("FileUpload"))
+                    .AddSingleton(config => config.GetService<IOptionsMonitor<Player.Api.Options.AuthorizationOptions>>().CurrentValue);
 
             services.AddCors(options => options.UseConfiguredCors(Configuration.GetSection("CorsPolicy")));
 

@@ -9,6 +9,7 @@ using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Player.Api.Data.Data;
+using Player.Api.Options;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data.Models.Webhooks;
 using System.Net.Http;
@@ -65,6 +66,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
             using (var scope = _scopeFactory.CreateScope())
             {
                 var context = scope.ServiceProvider.GetRequiredService<PlayerContext>();
+                var authOptions = scope.ServiceProvider.GetRequiredService<AuthorizationOptions>();
 
                 var eventObj = await context.PendingEvents
                     .Where(e => e.Id == eventId)
@@ -95,7 +97,8 @@ namespace Player.Api.Infrastructure.BackgroundServices
 
                             _logger.LogWarning("Calling callback");
                             var jsonPayload = System.Text.Json.JsonSerializer.Serialize(payload);
-                            resp = await SendJsonPost(jsonPayload, sub.CallbackUri);
+                            var auth = await getAuthToken(sub.ClientId, sub.ClientSecret, authOptions.TokenUrl); 
+                            resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
                         }
                         break;
                     case EventType.ViewDeleted:
@@ -107,7 +110,8 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             payload.Timestamp = DateTime.Now;
                             
                             var jsonPayload = System.Text.Json.JsonSerializer.Serialize(payload);
-                            resp = await SendJsonPost(jsonPayload, sub.CallbackUri);
+                            var auth = await getAuthToken(sub.ClientId, sub.ClientSecret, authOptions.TokenUrl); 
+                            resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
                         }
                         break;
                     default:
@@ -139,26 +143,22 @@ namespace Player.Api.Infrastructure.BackgroundServices
             }
         }
 
-        private async Task<HttpResponseMessage> SendJsonPost(string json, string url)
+        private async Task<HttpResponseMessage> SendJsonPost(string json, string url, string auth)
         {
             using (var client = _clientFactory.CreateClient())
             {
-                var auth = await getAuthToken();
-                _logger.LogWarning("Auth token: " + auth);
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth);
                 return await client.PostAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
             }
         }
 
-        private async Task<string> getAuthToken()
+        private async Task<string> getAuthToken(string clientId, string clientSecret, string tokenUrl)
         {
             using (var client = _clientFactory.CreateClient())
             {
-                // TODO add settings for these
+                // TODO add settings for these?
                 var tokenAddr = "http://localhost:5000/connect/token";
                 var grantType = "client_credentials";
-                var clientId = "webhook-client";
-                var clientSecret = "";
 
                 var form = new Dictionary<string, string>
                 {
