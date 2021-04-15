@@ -14,6 +14,7 @@ namespace Player.Api.Infrastructure.DocumentFilters
 
             context.SchemaGenerator.GenerateSchema(typeof(ViewCreated), context.SchemaRepository);
             context.SchemaGenerator.GenerateSchema(typeof(ViewDeleted), context.SchemaRepository);
+            context.SchemaGenerator.GenerateSchema(typeof(WebhookEvent), context.SchemaRepository);
         }
     }
 }

@@ -93,8 +93,11 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             var payload = new ViewModels.Webhooks.ViewCreated();
                             payload.ViewId = createdView.Id;
                             payload.ParentId = createdView.ViewId != null ? (Guid) createdView.ViewId : Guid.Empty;
-                            payload.Name = "View Created";
-                            payload.Timestamp = DateTime.Now;
+                            
+                            var webhookEvent = new ViewModels.Webhooks.WebhookEvent();
+                            webhookEvent.Name = "View Created";
+                            webhookEvent.Timestamp = DateTime.Now;
+                            webhookEvent.Payload = payload;
 
                             _logger.LogWarning("Calling callback");
                             var jsonPayload = System.Text.Json.JsonSerializer.Serialize(payload);
@@ -107,8 +110,11 @@ namespace Player.Api.Infrastructure.BackgroundServices
                         {
                             var payload = new ViewModels.Webhooks.ViewDeleted();
                             payload.ViewId = eventObj.EffectedEntityId;
-                            payload.Name = "View Deleted";
-                            payload.Timestamp = DateTime.Now;
+
+                            var webhookEvent = new ViewModels.Webhooks.WebhookEvent();
+                            webhookEvent.Name = "View Deleted";
+                            webhookEvent.Timestamp = DateTime.Now;
+                            webhookEvent.Payload = payload;
                             
                             var jsonPayload = System.Text.Json.JsonSerializer.Serialize(payload);
                             var auth = await getAuthToken(sub.ClientId, sub.ClientSecret, authOptions.TokenUrl); 
