@@ -4,7 +4,7 @@ namespace Player.Api.ViewModels.Webhooks
 {
     public class ViewCreated : WebhookEvent
     {
-        public Guid ViewId;
-        public Guid ParentId;
+        public Guid ViewId { get; set; }
+        public Guid ParentId { get; set; }
     }
 }

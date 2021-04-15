@@ -80,6 +80,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
 
                 HttpResponseMessage resp = null;
                 // For each subcriber to this event, call their callback endpoint
+                // Only consider it an error if VM API does not receive request
                 switch (eventObj.EventType)
                 {
                     case EventType.ViewCreated:
