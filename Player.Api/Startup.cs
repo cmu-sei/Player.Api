@@ -160,7 +160,7 @@ namespace Player.Api
             services.AddScoped<IPrincipal>(p => p.GetService<IHttpContextAccessor>().HttpContext.User);
 
             services.AddSingleton<BackgroundWebhookService>();
-            services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
+            // services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
             services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
             services.AddHttpClient();
 

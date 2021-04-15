@@ -30,7 +30,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
         Task ProcessEvent(Guid eventId);
     }
 
-    public class BackgroundWebhookService : BackgroundService, IBackgroundWebhookService
+    public class BackgroundWebhookService : IBackgroundWebhookService
     {
         private readonly ILogger<BackgroundWebhookService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
@@ -43,21 +43,13 @@ namespace Player.Api.Infrastructure.BackgroundServices
             _logger = logger;
             _scopeFactory = scopeFactory;
             _clientFactory = clientFactory;
+            _eventQueue = new ActionBlock<Task>(t => t.Start());
         }
 
         public void AddEvent(Task t)
         {
             // Should this use SendAsync? 
-            if (_eventQueue != null)
-            {
-                var success = _eventQueue.Post(t);
-                if (success) _logger.LogWarning("Event added successfully"); 
-            }
-        }
-
-        protected override async Task ExecuteAsync(CancellationToken ct)
-        {
-            _eventQueue = new ActionBlock<Task>(t => t.Start());
+            _eventQueue.Post(t);
         }
 
         public async Task ProcessEvent(Guid eventId)
@@ -100,7 +92,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             webhookEvent.Payload = payload;
 
                             _logger.LogWarning("Calling callback");
-                            var jsonPayload = System.Text.Json.JsonSerializer.Serialize(payload);
+                            var jsonPayload = System.Text.Json.JsonSerializer.Serialize(webhookEvent);
                             var auth = await getAuthToken(sub.ClientId, sub.ClientSecret, authOptions.TokenUrl); 
                             resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
                         }
@@ -116,7 +108,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             webhookEvent.Timestamp = DateTime.Now;
                             webhookEvent.Payload = payload;
                             
-                            var jsonPayload = System.Text.Json.JsonSerializer.Serialize(payload);
+                            var jsonPayload = System.Text.Json.JsonSerializer.Serialize(webhookEvent);
                             var auth = await getAuthToken(sub.ClientId, sub.ClientSecret, authOptions.TokenUrl); 
                             resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
                         }
@@ -127,7 +119,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                 }
 
                 // The callback request was accepted, so remove this event from the db
-                if (resp != null && resp.StatusCode == HttpStatusCode.Created)
+                if (resp != null && resp.StatusCode == HttpStatusCode.Accepted)
                 {
                     var toRemove = await context.PendingEvents
                         .Where(e => e.Id == eventId)
