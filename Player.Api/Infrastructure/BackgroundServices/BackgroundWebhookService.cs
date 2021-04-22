@@ -34,7 +34,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
     {
         private readonly ILogger<BackgroundWebhookService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
-        private readonly IHttpClientFactory _clientFactory;
+        private readonly IHttpClientFactory _clientFactory; 
         private ActionBlock<Task> _eventQueue;
         
 
@@ -88,7 +88,6 @@ namespace Player.Api.Infrastructure.BackgroundServices
                     .Where(w => w.EventTypes.Any(et => et.EventType == eventObj.EventType))
                     .ToListAsync();
 
-                HttpResponseMessage resp = null;
                 // For each subcriber to this event, call their callback endpoint
                 // Only consider it an error if VM API does not receive request
                 switch (eventObj.EventType)
@@ -100,6 +99,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
 
                         foreach (var sub in subs)
                         {
+                            HttpResponseMessage resp = null;
                             var payload = new ViewModels.Webhooks.ViewCreated();
                             payload.ViewId = createdView.Id;
                             payload.ParentId = createdView.ViewId != null ? (Guid) createdView.ViewId : Guid.Empty;
@@ -116,11 +116,14 @@ namespace Player.Api.Infrastructure.BackgroundServices
                                 resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
                             }
                             catch (HttpRequestException) {}
+                            
+                            await handleErrors(resp, sub.Id, eventId);
                         }
                         break;
                     case EventType.ViewDeleted:
                         foreach (var sub in subs)
                         {
+                            HttpResponseMessage resp = null;
                             var payload = new ViewModels.Webhooks.ViewDeleted();
                             payload.ViewId = eventObj.EffectedEntityId;
 
@@ -136,13 +139,22 @@ namespace Player.Api.Infrastructure.BackgroundServices
                                 resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
                             }
                             catch (HttpRequestException) {}
+
+                            await handleErrors(resp, sub.Id, eventId);
                         }
                         break;
                     default:
                         _logger.LogDebug("Unknown event type");
                         break;
                 }
+            }
+        }
 
+        private async Task handleErrors(HttpResponseMessage resp, Guid subId, Guid eventId)
+        {
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<PlayerContext>();
                 // The callback request was accepted, so remove this event from the db
                 if (resp != null && resp.StatusCode == HttpStatusCode.Accepted)
                 {
@@ -156,6 +168,22 @@ namespace Player.Api.Infrastructure.BackgroundServices
                 // Add a delay to the new task so it doesn't execute immediately 
                 else
                 {
+                    var sub = await context.Webhooks
+                        .Where(w => w.Id == subId)
+                        .SingleOrDefaultAsync();
+
+                    // There was an issue sending the message to the callback endpoint
+                    if (resp == null)
+                    {
+                        sub.LastError = "Error sending message to callback endpoint";
+                    }
+                    else
+                    {
+                        sub.LastError = "Callback endpoint returned status code " + resp.StatusCode;
+                    }
+
+                    await context.SaveChangesAsync();
+                    // Update the error field in db
                     var t = new Task(async id => {
                         await Task.Delay(10000);
                         await ProcessEvent((Guid) id);

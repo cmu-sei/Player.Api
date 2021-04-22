@@ -15,6 +15,7 @@ namespace Player.Api.Data.Data.Models.Webhooks
         public string CallbackUri { get; set; }
         public string ClientId { get; set; }
         public string ClientSecret { get; set; }
+        public string LastError { get; set; }
         public ICollection<WebhookSubscriptionEventTypeEntity> EventTypes { get; set; } = new List<WebhookSubscriptionEventTypeEntity>();
     }
     public enum EventType
