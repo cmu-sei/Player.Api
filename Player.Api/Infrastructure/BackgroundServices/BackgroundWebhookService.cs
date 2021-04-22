@@ -30,7 +30,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
         Task ProcessEvent(Guid eventId);
     }
 
-    public class BackgroundWebhookService : IBackgroundWebhookService
+    public class BackgroundWebhookService : BackgroundService, IBackgroundWebhookService
     {
         private readonly ILogger<BackgroundWebhookService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
@@ -46,15 +46,33 @@ namespace Player.Api.Infrastructure.BackgroundServices
             _eventQueue = new ActionBlock<Task>(t => t.Start());
         }
 
+        protected async override Task ExecuteAsync(CancellationToken ct)
+        {
+            // Add any pending events in the db to event queue
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<PlayerContext>();
+                var events = await context.PendingEvents.ToListAsync(ct);
+
+                foreach (var evt in events)
+                {
+                    var t = new Task(async id => {
+                        await ProcessEvent((Guid) id);
+                    }, evt.Id, ct);
+
+                    AddEvent(t);
+                }
+            }
+        }
+
         public void AddEvent(Task t)
         {
             // Should this use SendAsync? 
-            _eventQueue.Post(t);
+            var success = _eventQueue.Post(t);
         }
 
         public async Task ProcessEvent(Guid eventId)
         {
-            // TODO make VM API side of this work
             using (var scope = _scopeFactory.CreateScope())
             {
                 var context = scope.ServiceProvider.GetRequiredService<PlayerContext>();
@@ -91,10 +109,13 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             webhookEvent.Timestamp = DateTime.Now;
                             webhookEvent.Payload = payload;
 
-                            _logger.LogWarning("Calling callback");
                             var jsonPayload = System.Text.Json.JsonSerializer.Serialize(webhookEvent);
-                            var auth = await getAuthToken(sub.ClientId, sub.ClientSecret, authOptions.TokenUrl); 
-                            resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
+                            try
+                            {
+                                var auth = await getAuthToken(sub.ClientId, sub.ClientSecret, authOptions.TokenUrl); 
+                                resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
+                            }
+                            catch (HttpRequestException) {}
                         }
                         break;
                     case EventType.ViewDeleted:
@@ -109,8 +130,12 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             webhookEvent.Payload = payload;
                             
                             var jsonPayload = System.Text.Json.JsonSerializer.Serialize(webhookEvent);
-                            var auth = await getAuthToken(sub.ClientId, sub.ClientSecret, authOptions.TokenUrl); 
-                            resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
+                            try
+                            {
+                                var auth = await getAuthToken(sub.ClientId, sub.ClientSecret, authOptions.TokenUrl); 
+                                resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
+                            }
+                            catch (HttpRequestException) {}
                         }
                         break;
                     default:
@@ -129,9 +154,8 @@ namespace Player.Api.Infrastructure.BackgroundServices
                 }
                 // We got some sort of error, so add this event back to the queue and try again later
                 // Add a delay to the new task so it doesn't execute immediately 
-                else if (resp != null)
+                else
                 {
-                    _logger.LogWarning("Callback request returned with status code {}", resp.StatusCode);
                     var t = new Task(async id => {
                         await Task.Delay(10000);
                         await ProcessEvent((Guid) id);
@@ -162,8 +186,10 @@ namespace Player.Api.Infrastructure.BackgroundServices
                 var form = new Dictionary<string, string>
                 {
                     {"grant_type", grantType},
-                    {"client_id", clientId},
+                    {"client_id", "webhook-client"},
                     {"client_secret", clientSecret},
+                    // {"username", "administrator@this.ws"},
+                    // {"password", "ChangeMe321!"}
                 };
 
                 var resp = await client.PostAsync(tokenAddr, new FormUrlEncodedContent(form));

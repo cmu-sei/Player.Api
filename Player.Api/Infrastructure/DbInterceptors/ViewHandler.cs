@@ -34,7 +34,6 @@ namespace Player.Api.Infrastructure.DbInterceptors
             ILogger<ViewHandlerBase> logger,
             IBackgroundWebhookService backgroundService) : base(context, logger, backgroundService) {}
 
-        // TODO: why is this not happening after an insert?
         public async Task Handle(EntityCreated<ViewEntity> notification, CancellationToken ct)
         {
             // Add pending event to db
@@ -48,8 +47,6 @@ namespace Player.Api.Infrastructure.DbInterceptors
 
             // Add event to event queue
             Task t = new Task(async eventId => await _backgroundService.ProcessEvent((Guid) eventId), eventEntity.Id, new CancellationToken());
-
-            _logger.LogWarning("Calling AddEvent");
             _backgroundService.AddEvent(t);
         }
     }
