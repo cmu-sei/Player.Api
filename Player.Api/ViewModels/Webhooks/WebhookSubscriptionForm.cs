@@ -4,14 +4,12 @@ using System.Text.Json.Serialization;
 
 namespace Player.Api.ViewModels.Webhooks
 {
-    public class WebhookSubscription
+    public class WebhookSubscriptionForm
     {
-        public Guid Id { get; set; }
         public string Name { get; set; }
         public string CallbackUri { get; set; }
         public string ClientId { get; set; }
         public string ClientSecret { get; set; }
-        public string LastError { get; set; }
         public List<Player.Api.Data.Data.Models.Webhooks.EventType> EventTypes { get; set; }
     }
 }

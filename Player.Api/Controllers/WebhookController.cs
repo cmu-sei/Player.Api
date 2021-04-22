@@ -43,7 +43,7 @@ namespace Player.Api.Controllers
         [HttpPost("webhooks/subscribe")]
         [ProducesResponseType((int) HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "subscribe")]
-        public async Task<IActionResult> Subscribe([FromBody] WebhookSubscription form, CancellationToken ct)
+        public async Task<IActionResult> Subscribe([FromBody] WebhookSubscriptionForm form, CancellationToken ct)
         {
             await _webhookService.Subscribe(form, ct);
             return Ok();

@@ -20,7 +20,7 @@ namespace Player.Api.Services
 {
     public interface IWebhookService
     {
-        Task<WebhookSubscription> Subscribe(WebhookSubscription form, CancellationToken ct);
+        Task<WebhookSubscription> Subscribe(WebhookSubscriptionForm form, CancellationToken ct);
         Task<IEnumerable<WebhookSubscription>> GetAll(CancellationToken ct);
         Task DeleteAsync(Guid id, CancellationToken ct);
     }
@@ -42,14 +42,14 @@ namespace Player.Api.Services
             _claimsService = claimsService;
         }
 
-        public async Task<WebhookSubscription> Subscribe(WebhookSubscription form, CancellationToken ct)
+        public async Task<WebhookSubscription> Subscribe(WebhookSubscriptionForm form, CancellationToken ct)
         {
             // Simply add the subscription to the db so it can be used later
             var entity = _mapper.Map<WebhookSubscriptionEntity>(form);
             _context.Webhooks.Add(entity);
             await _context.SaveChangesAsync();
 
-            return form;  
+            return _mapper.Map<WebhookSubscription>(entity);  
         }
 
         public async Task<IEnumerable<WebhookSubscription>> GetAll(CancellationToken ct)

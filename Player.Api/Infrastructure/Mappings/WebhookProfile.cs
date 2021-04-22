@@ -13,7 +13,8 @@ namespace Player.Api.Infrastructure.Mappings
                 .ForMember(dest => dest.EventTypes, opt => opt.MapFrom(src => src.EventTypes.Select(et => new WebhookSubscriptionEventTypeEntity(Guid.Empty, et))));
             CreateMap<WebhookSubscriptionEntity, WebhookSubscription>()
                 .ForMember(dest => dest.EventTypes, opt => opt.MapFrom(src => src.EventTypes.Select(x => x.EventType)));
-            // CreateMap<Player.Api.Data.Data.Models.Webhooks.EventType, ViewModels.Webhooks.EventType>();
+            CreateMap<WebhookSubscriptionForm, WebhookSubscriptionEntity>()
+                .ForMember(dest => dest.EventTypes, opt => opt.MapFrom(src => src.EventTypes.Select(et => new WebhookSubscriptionEventTypeEntity(Guid.Empty, et))));
         }
     }
 }
