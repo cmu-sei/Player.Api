@@ -155,9 +155,16 @@ namespace Player.Api.Infrastructure.BackgroundServices
             using (var scope = _scopeFactory.CreateScope())
             {
                 var context = scope.ServiceProvider.GetRequiredService<PlayerContext>();
+
+                var sub = await context.Webhooks
+                    .Where(w => w.Id == subId)
+                    .SingleOrDefaultAsync();
                 // The callback request was accepted, so remove this event from the db
                 if (resp != null && resp.StatusCode == HttpStatusCode.Accepted)
                 {
+                    // No error occured
+                    sub.LastError = null;
+
                     var toRemove = await context.PendingEvents
                         .Where(e => e.Id == eventId)
                         .SingleOrDefaultAsync();
@@ -168,15 +175,12 @@ namespace Player.Api.Infrastructure.BackgroundServices
                 // Add a delay to the new task so it doesn't execute immediately 
                 else
                 {
-                    var sub = await context.Webhooks
-                        .Where(w => w.Id == subId)
-                        .SingleOrDefaultAsync();
-
                     // There was an issue sending the message to the callback endpoint
                     if (resp == null)
                     {
                         sub.LastError = "Error sending message to callback endpoint";
                     }
+                    // The endpoint returned a status other than 202
                     else
                     {
                         sub.LastError = "Callback endpoint returned status code " + resp.StatusCode;
