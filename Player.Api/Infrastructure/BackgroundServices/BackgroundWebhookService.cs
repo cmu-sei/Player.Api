@@ -179,20 +179,16 @@ namespace Player.Api.Infrastructure.BackgroundServices
         {
             using (var client = _clientFactory.CreateClient())
             {
-                // TODO add settings for these?
-                var tokenAddr = "http://localhost:5000/connect/token";
                 var grantType = "client_credentials";
 
                 var form = new Dictionary<string, string>
                 {
                     {"grant_type", grantType},
-                    {"client_id", "webhook-client"},
+                    {"client_id", clientId},
                     {"client_secret", clientSecret},
-                    // {"username", "administrator@this.ws"},
-                    // {"password", "ChangeMe321!"}
                 };
 
-                var resp = await client.PostAsync(tokenAddr, new FormUrlEncodedContent(form));
+                var resp = await client.PostAsync(tokenUrl, new FormUrlEncodedContent(form));
                 var json = await resp.Content.ReadAsStringAsync();
                 return JsonConvert.DeserializeObject<BearerToken>(json).AccessToken;
             }
