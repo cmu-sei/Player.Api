@@ -104,7 +104,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             
                             var webhookEvent = new ViewModels.Webhooks.WebhookEvent();
                             webhookEvent.Name = "View Created";
-                            webhookEvent.Timestamp = DateTime.Now;
+                            webhookEvent.Timestamp = DateTime.UtcNow;
                             webhookEvent.Payload = payload;
 
                             var jsonPayload = System.Text.Json.JsonSerializer.Serialize(webhookEvent);
@@ -127,7 +127,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
 
                             var webhookEvent = new ViewModels.Webhooks.WebhookEvent();
                             webhookEvent.Name = "View Deleted";
-                            webhookEvent.Timestamp = DateTime.Now;
+                            webhookEvent.Timestamp = DateTime.UtcNow;
                             webhookEvent.Payload = payload;
                             
                             var jsonPayload = System.Text.Json.JsonSerializer.Serialize(webhookEvent);

@@ -39,7 +39,7 @@ namespace Player.Api.Infrastructure.DbInterceptors
             // Add pending event to db
             var eventEntity = new PendingEventEntity();
             eventEntity.EventType = EventType.ViewCreated;
-            eventEntity.Timestamp = DateTime.Now;
+            eventEntity.Timestamp = DateTime.UtcNow;
             eventEntity.EffectedEntityId = notification.Entity.Id;
 
             _context.Add(eventEntity);
@@ -62,7 +62,7 @@ namespace Player.Api.Infrastructure.DbInterceptors
             // Add pending event to db
             var eventEntity = new PendingEventEntity();
             eventEntity.EventType = EventType.ViewDeleted;
-            eventEntity.Timestamp = DateTime.Now;
+            eventEntity.Timestamp = DateTime.UtcNow;
             eventEntity.EffectedEntityId = notification.Entity.Id;
 
             _context.Add(eventEntity);
