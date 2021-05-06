@@ -25,7 +25,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
 {
     public interface IBackgroundWebhookService
     {
-        void AddEvent(Task t);
+        Task AddEvent(Task t);
         Task ProcessEvent(Guid eventId);
     }
 
@@ -59,15 +59,14 @@ namespace Player.Api.Infrastructure.BackgroundServices
                         await ProcessEvent((Guid) id);
                     }, evt.Id, ct);
 
-                    AddEvent(t);
+                    await AddEvent(t);
                 }
             }
         }
 
-        public void AddEvent(Task t)
-        {
-            // Should this use SendAsync? 
-            var success = _eventQueue.Post(t);
+        public async Task AddEvent(Task t)
+        { 
+            await _eventQueue.SendAsync(t);
         }
 
         public async Task ProcessEvent(Guid eventId)
@@ -192,7 +191,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                         await ProcessEvent((Guid) id);
                     }, eventId, new CancellationToken());
 
-                    AddEvent(t);
+                    await AddEvent(t);
                 }
             }
         }
