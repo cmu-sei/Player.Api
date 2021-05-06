@@ -50,4 +50,27 @@ namespace Player.Api.Infrastructure.DbInterceptors
             _backgroundService.AddEvent(t);
         }
     }
+
+    public class ViewDeletedHandler : ViewHandlerBase, INotificationHandler<EntityDeleted<ViewEntity>>
+    {
+        public ViewDeletedHandler(
+            PlayerContext context, 
+            ILogger<ViewHandlerBase> logger,
+            IBackgroundWebhookService backgroundService) : base(context, logger, backgroundService) {}
+        public async Task Handle(EntityDeleted<ViewEntity> notification, CancellationToken ct)
+        {
+            // Add pending event to db
+            var eventEntity = new PendingEventEntity();
+            eventEntity.EventType = EventType.ViewDeleted;
+            eventEntity.Timestamp = DateTime.Now;
+            eventEntity.EffectedEntityId = notification.Entity.Id;
+
+            _context.Add(eventEntity);
+            await _context.SaveChangesAsync(ct);
+
+            // Add event to event queue
+            Task t = new Task(async eventId => await _backgroundService.ProcessEvent((Guid) eventId), eventEntity.Id, new CancellationToken());
+            _backgroundService.AddEvent(t);
+        }
+    }
 }

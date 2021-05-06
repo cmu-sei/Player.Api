@@ -16,7 +16,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Net;
-using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Generic;
 using Newtonsoft.Json;
@@ -115,7 +114,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                                 var auth = await getAuthToken(sub.ClientId, sub.ClientSecret, authOptions.TokenUrl); 
                                 resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
                             }
-                            catch (HttpRequestException) {}
+                            catch (Exception) {}
                             
                             await handleErrors(resp, sub.Id, eventId);
                         }
@@ -138,7 +137,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                                 var auth = await getAuthToken(sub.ClientId, sub.ClientSecret, authOptions.TokenUrl); 
                                 resp = await SendJsonPost(jsonPayload, sub.CallbackUri, auth);
                             }
-                            catch (HttpRequestException) {}
+                            catch (Exception) {}
 
                             await handleErrors(resp, sub.Id, eventId);
                         }
