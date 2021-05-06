@@ -14,9 +14,6 @@ using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using System.Collections.Generic;
-using Player.Api.Infrastructure.BackgroundServices;
-using System.Threading.Tasks;
-using System.Threading;
 
 namespace Player.Api.Extensions
 {
@@ -33,7 +30,6 @@ namespace Player.Api.Extensions
                     var databaseOptions = services.GetService<DatabaseOptions>();
                     var ctx = services.GetRequiredService<PlayerContext>();
                     var seedDataOptions = services.GetService<SeedDataOptions>();
-                    var backgroundService = services.GetService<IBackgroundWebhookService>();
 
                     if (ctx != null)
                     {
