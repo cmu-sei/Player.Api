@@ -25,7 +25,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
 {
     public interface IBackgroundWebhookService
     {
-        Task AddEvent(Task t);
+        Task AddEvent(Guid id);
         Task ProcessEvent(Guid eventId);
     }
 
@@ -34,7 +34,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
         private readonly ILogger<BackgroundWebhookService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IHttpClientFactory _clientFactory; 
-        private ActionBlock<Task> _eventQueue;
+        private ActionBlock<Guid> _eventQueue;
         
 
         public BackgroundWebhookService(ILogger<BackgroundWebhookService> logger, IServiceScopeFactory scopeFactory, IHttpClientFactory clientFactory)
@@ -42,7 +42,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
             _logger = logger;
             _scopeFactory = scopeFactory;
             _clientFactory = clientFactory;
-            _eventQueue = new ActionBlock<Task>(t => t.Start());
+            _eventQueue = new ActionBlock<Guid>(async id => await ProcessEvent(id));
         }
 
         protected async override Task ExecuteAsync(CancellationToken ct)
@@ -55,18 +55,14 @@ namespace Player.Api.Infrastructure.BackgroundServices
 
                 foreach (var evt in events)
                 {
-                    var t = new Task(async id => {
-                        await ProcessEvent((Guid) id);
-                    }, evt.Id, ct);
-
-                    await AddEvent(t);
+                    await AddEvent(evt.Id);
                 }
             }
         }
 
-        public async Task AddEvent(Task t)
+        public async Task AddEvent(Guid id)
         { 
-            await _eventQueue.SendAsync(t);
+            await _eventQueue.SendAsync(id);
         }
 
         public async Task ProcessEvent(Guid eventId)
@@ -185,13 +181,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                     }
 
                     await context.SaveChangesAsync();
-                    // Update the error field in db
-                    var t = new Task(async id => {
-                        await Task.Delay(10000);
-                        await ProcessEvent((Guid) id);
-                    }, eventId, new CancellationToken());
-
-                    await AddEvent(t);
+                    await AddEvent(eventId);
                 }
             }
         }

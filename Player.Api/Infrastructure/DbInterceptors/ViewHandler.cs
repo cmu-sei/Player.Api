@@ -46,8 +46,7 @@ namespace Player.Api.Infrastructure.DbInterceptors
             await _context.SaveChangesAsync(ct);
 
             // Add event to event queue
-            Task t = new Task(async eventId => await _backgroundService.ProcessEvent((Guid) eventId), eventEntity.Id, new CancellationToken());
-            _backgroundService.AddEvent(t);
+            _backgroundService.AddEvent(eventEntity.Id);
         }
     }
 
@@ -69,8 +68,7 @@ namespace Player.Api.Infrastructure.DbInterceptors
             await _context.SaveChangesAsync(ct);
 
             // Add event to event queue
-            Task t = new Task(async eventId => await _backgroundService.ProcessEvent((Guid) eventId), eventEntity.Id, new CancellationToken());
-            _backgroundService.AddEvent(t);
+            _backgroundService.AddEvent(eventEntity.Id);
         }
     }
 }
