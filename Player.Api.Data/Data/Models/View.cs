@@ -27,7 +27,7 @@ namespace Player.Api.Data.Data.Models
         public ViewEntity Clone()
         {
             var entity = this.MemberwiseClone() as ViewEntity;
-            entity.Id = Guid.NewGuid();
+            entity.Id = Guid.Empty;
             entity.Teams = new List<TeamEntity>();
             entity.Applications = new List<ApplicationEntity>();
             entity.Memberships = new List<ViewMembershipEntity>();
