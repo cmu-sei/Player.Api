@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using AutoMapper.QueryableExtensions;
 using System.Linq;
 using System;
+using Player.Api.Infrastructure.Exceptions;
 
 namespace Player.Api.Services
 {
@@ -23,6 +24,7 @@ namespace Player.Api.Services
         Task<WebhookSubscription> Subscribe(WebhookSubscriptionForm form, CancellationToken ct);
         Task<IEnumerable<WebhookSubscription>> GetAll(CancellationToken ct);
         Task DeleteAsync(Guid id, CancellationToken ct);
+        Task<WebhookSubscription> UpdateAsync(Guid id, WebhookSubscriptionForm form, CancellationToken ct);
     }
 
     public class WebhookService : IWebhookService
@@ -67,6 +69,33 @@ namespace Player.Api.Services
             
             _context.Remove(toDelete);
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<WebhookSubscription> UpdateAsync(Guid id, WebhookSubscriptionForm form, CancellationToken ct)
+        {
+            var toUpdate = await _context.Webhooks
+                .Where(w => w.Id == id)
+                .SingleOrDefaultAsync(ct);
+            
+            if (toUpdate == null)
+                throw new EntityNotFoundException<WebhookSubscription>();
+            
+            // Need to delete existing rows in webhook_subscription_event_types for this subscription or we will
+            // get a uniqueness constraint error (event type id + subscription id must be unique)
+            var toDelete = await _context.WebhookSubscriptionEventTypes
+                .Where(et => et.SubscriptionId == id)
+                .ToListAsync(ct);
+
+            foreach (var row in toDelete)
+            {
+                _context.Remove(row);
+            }
+            
+            _mapper.Map(form, toUpdate);
+
+            _context.Webhooks.Update(toUpdate);
+            await _context.SaveChangesAsync(ct);
+            return _mapper.Map<WebhookSubscription>(toUpdate);
         }
     }
 }

@@ -62,5 +62,19 @@ namespace Player.Api.Controllers
             await _webhookService.DeleteAsync(id, ct);
             return NoContent();
         }
+
+        /// <summary>
+        /// Updates a subscription
+        /// </summary>
+        /// <param name="id">The Id of the subscription to update</param>
+        /// <param name="ct"></param>
+        [HttpPut("webhooks/{id}")]
+        [ProducesResponseType(typeof(WebhookSubscription), (int) HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "update")]
+        public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] WebhookSubscriptionForm form, CancellationToken ct)
+        {
+            var updated = await _webhookService.UpdateAsync(id, form, ct);
+            return Ok(updated);
+        }
     }
 }
