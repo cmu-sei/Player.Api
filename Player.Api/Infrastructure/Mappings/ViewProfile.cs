@@ -16,8 +16,7 @@ namespace Player.Api.Infrastructure.Mappings
         public ViewProfile()
         {
             CreateMap<ViewEntity, View>()
-                .ForMember(dest => dest.CanManage, opt => opt.MapFrom<ManageViewResolver>())
-                .ForMember(dest => dest.ParentViewId, opt => opt.MapFrom(src => src.ViewId));
+                .ForMember(dest => dest.CanManage, opt => opt.MapFrom<ManageViewResolver>());
 
             CreateMap<View, ViewEntity>();
 

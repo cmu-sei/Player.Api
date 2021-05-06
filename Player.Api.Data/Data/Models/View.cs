@@ -14,8 +14,8 @@ namespace Player.Api.Data.Data.Models
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public Guid Id { get; set; }
-        public Guid? ViewId { get; set; }
-        public virtual ViewEntity View { get; set; }
+        public Guid? ParentViewId { get; set; }
+        public virtual ViewEntity ParentView { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
         public ViewStatus Status { get; set; }
@@ -32,8 +32,8 @@ namespace Player.Api.Data.Data.Models
             entity.Applications = new List<ApplicationEntity>();
             entity.Memberships = new List<ViewMembershipEntity>();
             entity.Files = new List<FileEntity>();
-            entity.ViewId = this.Id;
-            entity.View = this;
+            entity.ParentViewId = this.Id;
+            entity.ParentView = this;
 
             return entity;
         }

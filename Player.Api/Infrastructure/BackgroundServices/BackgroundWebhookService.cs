@@ -96,7 +96,7 @@ namespace Player.Api.Infrastructure.BackgroundServices
                             HttpResponseMessage resp = null;
                             var payload = new ViewModels.Webhooks.ViewCreated();
                             payload.ViewId = createdView.Id;
-                            payload.ParentId = createdView.ViewId != null ? (Guid) createdView.ViewId : Guid.Empty;
+                            payload.ParentId = createdView.ParentViewId != null ? (Guid) createdView.ParentViewId : Guid.Empty;
                             
                             var webhookEvent = new ViewModels.Webhooks.WebhookEvent();
                             webhookEvent.Name = "View Created";
