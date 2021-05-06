@@ -16,6 +16,7 @@ using AutoMapper.QueryableExtensions;
 using System.Linq;
 using System;
 using Player.Api.Infrastructure.Exceptions;
+using Player.Api.Infrastructure.Authorization;
 
 namespace Player.Api.Services
 {
@@ -46,7 +47,10 @@ namespace Player.Api.Services
 
         public async Task<WebhookSubscription> Subscribe(WebhookSubscriptionForm form, CancellationToken ct)
         {
-            // Simply add the subscription to the db so it can be used later
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+                throw new ForbiddenException();
+
+            // Add the subscription to the db so it can be used later
             var entity = _mapper.Map<WebhookSubscriptionEntity>(form);
             _context.Webhooks.Add(entity);
             await _context.SaveChangesAsync();
@@ -56,6 +60,9 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<WebhookSubscription>> GetAll(CancellationToken ct)
         {
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+                throw new ForbiddenException();
+
             return await _context.Webhooks
                 .ProjectTo<WebhookSubscription>(_mapper.ConfigurationProvider)
                 .ToListAsync();
@@ -63,6 +70,9 @@ namespace Player.Api.Services
 
         public async Task DeleteAsync(Guid id, CancellationToken ct)
         {
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+                throw new ForbiddenException();
+
             var toDelete = await _context.Webhooks
                 .Where(w => w.Id == id)
                 .SingleOrDefaultAsync();
@@ -73,6 +83,9 @@ namespace Player.Api.Services
 
         public async Task<WebhookSubscription> UpdateAsync(Guid id, WebhookSubscriptionForm form, CancellationToken ct)
         {
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+                throw new ForbiddenException();
+
             var toUpdate = await _context.Webhooks
                 .Where(w => w.Id == id)
                 .SingleOrDefaultAsync(ct);
