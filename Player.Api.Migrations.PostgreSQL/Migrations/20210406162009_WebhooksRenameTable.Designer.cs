@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Player.Api.Data.Data;
@@ -15,9 +16,10 @@ using Player.Api.Data.Data;
 namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(PlayerContext))]
-    partial class PlayerContextModelSnapshot : ModelSnapshot
+    [Migration("20210406162009_WebhooksRenameTable")]
+    partial class WebhooksRenameTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -468,17 +470,17 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         .HasColumnName("name")
                         .HasColumnType("text");
 
-                    b.Property<Guid?>("ParentViewId")
-                        .HasColumnName("parent_view_id")
-                        .HasColumnType("uuid");
-
                     b.Property<int>("Status")
                         .HasColumnName("status")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("ViewId")
+                        .HasColumnName("view_id")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("ParentViewId");
+                    b.HasIndex("ViewId");
 
                     b.ToTable("views");
                 });
@@ -515,31 +517,6 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                     b.ToTable("view_memberships");
                 });
 
-            modelBuilder.Entity("Player.Api.Data.Data.Models.Webhooks.PendingEventEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnName("id")
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("uuid_generate_v4()");
-
-                    b.Property<Guid>("EffectedEntityId")
-                        .HasColumnName("effected_entity_id")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("EventType")
-                        .HasColumnName("event_type")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnName("timestamp")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("pending_events");
-                });
-
             modelBuilder.Entity("Player.Api.Data.Data.Models.Webhooks.WebhookSubscriptionEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -558,10 +535,6 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
                     b.Property<string>("ClientSecret")
                         .HasColumnName("client_secret")
-                        .HasColumnType("text");
-
-                    b.Property<string>("LastError")
-                        .HasColumnName("last_error")
                         .HasColumnType("text");
 
                     b.Property<string>("Name")
@@ -726,9 +699,9 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.ViewEntity", b =>
                 {
-                    b.HasOne("Player.Api.Data.Data.Models.ViewEntity", "ParentView")
+                    b.HasOne("Player.Api.Data.Data.Models.ViewEntity", "View")
                         .WithMany()
-                        .HasForeignKey("ParentViewId");
+                        .HasForeignKey("ViewId");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.ViewMembershipEntity", b =>

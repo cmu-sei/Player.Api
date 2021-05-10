@@ -11,6 +11,7 @@ using System.Reflection;
 using Microsoft.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.OpenApi.Models;
+using Player.Api.Infrastructure.DocumentFilters;
 
 namespace Player.Api.Infrastructure.Extensions
 {
@@ -61,6 +62,7 @@ namespace Player.Api.Infrastructure.Extensions
                 c.IncludeXmlComments(commentsFile);
                 c.EnableAnnotations();
                 c.OperationFilter<DefaultResponseOperationFilter>();
+                c.DocumentFilter<WebhookDocumentFilter>();
                 c.MapType<Optional<Guid?>>(() => new OpenApiSchema { Type = "string", Format = "uuid" });
                 c.MapType<JsonElement?>(() => new OpenApiSchema { Type = "object", Nullable = true });
             });
