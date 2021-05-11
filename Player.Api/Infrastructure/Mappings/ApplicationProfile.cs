@@ -3,7 +3,7 @@
 
 using Player.Api.Data.Data.Models;
 using Player.Api.ViewModels;
-using System.Net;
+using System;
 
 namespace Player.Api.Infrastructure.Mappings
 {
@@ -39,9 +39,9 @@ namespace Player.Api.Infrastructure.Mappings
                 .ForMember(dest => dest.Url, opt => opt.MapFrom(src =>
                     (src.Application.Url ?? src.Application.Template.Url ?? string.Empty)
                         .Replace("{viewId}", src.Application.ViewId.ToString())
-                        .Replace("{viewName}", src.Application.View.Name != null ? WebUtility.UrlEncode(src.Application.View.Name) : string.Empty)
+                        .Replace("{viewName}", src.Application.View.Name != null ? Uri.EscapeUriString(src.Application.View.Name) : string.Empty)
                         .Replace("{teamId}", src.TeamId.ToString())
-                        .Replace("{teamName}", src.Team.Name != null ? WebUtility.UrlEncode(src.Team.Name) : string.Empty)))
+                        .Replace("{teamName}", src.Team.Name != null ? Uri.EscapeUriString(src.Team.Name) : string.Empty)))
 
                 .ForMember(dest => dest.ViewId, opt => opt.MapFrom(src =>
                     src.Application.ViewId));
