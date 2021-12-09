@@ -149,7 +149,7 @@ namespace Player.Api.Services
             if (file == null)
                 throw new EntityNotFoundException<FileModel>(); 
             
-            EnsureAccessFile(file);
+            await EnsureAccessFile(file);
             
             return _mapper.Map<FileModel>(file);
         }
@@ -164,7 +164,7 @@ namespace Player.Api.Services
             if (file == null)
                 throw new EntityNotFoundException<FileModel>();
             
-            EnsureAccessFile(file);
+            await EnsureAccessFile(file);
 
             return Tuple.Create(File.OpenRead(file.Path), file.Name);            
         }
@@ -304,7 +304,7 @@ namespace Player.Api.Services
             return toStore;
         }
 
-        private async void EnsureAccessFile(FileEntity file)
+        private async Task EnsureAccessFile(FileEntity file)
         {
             // The user can see this file if they are in at least one of the teams it is assigned to
             var canAccess = (await _authorizationService.AuthorizeAsync(_user, null, new TeamsMemberRequirement(file.TeamIds))).Succeeded;
