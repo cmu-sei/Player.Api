@@ -237,6 +237,7 @@ namespace Player.Api
             services.AddSingleton<IAuthorizationHandler, ViewCreationHandler>();
             services.AddSingleton<IAuthorizationHandler, ManageTeamHandler>();
             services.AddSingleton<IAuthorizationHandler, TeamMemberHandler>();
+            services.AddSingleton<IAuthorizationHandler, TeamsMemberHandler>();
             services.AddSingleton<IAuthorizationHandler, PrimaryTeamHandler>();
             services.AddSingleton<IAuthorizationHandler, ManageViewHandler>();
             services.AddScoped<IAuthorizationHandler, UserAccessHandler>();

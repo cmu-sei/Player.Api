@@ -24,7 +24,7 @@ namespace Player.Api.Infrastructure.Authorization
         {
             foreach (var teamId in requirement.TeamIds)
             {
-                if (context.User.HasClaim(PlayerClaimTypes.TeamMember.ToString(), teamId.ToString()))
+                if (context.User.HasClaim(PlayerClaimTypes.PrimaryTeam.ToString(), teamId.ToString()))
                 {
                     context.Succeed(requirement);
                 }
