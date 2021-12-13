@@ -139,12 +139,15 @@ namespace Player.Api
             services.AddScoped<IViewMembershipService, ViewMembershipService>();
             services.AddScoped<ITeamMembershipService, TeamMembershipService>();
             services.AddScoped<IFileService, FileService>();
+            services.AddScoped<IPresenceService, PresenceService>();
 
             services.AddScoped<IClaimsTransformation, AuthorizationClaimsTransformer>();
             services.AddScoped<IUserClaimsService, UserClaimsService>();
 
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
             services.AddScoped<IPrincipal>(p => p.GetService<IHttpContextAccessor>().HttpContext.User);
+
+            services.AddSingleton<ConnectionCacheService>();
 
             ApplyPolicies(services);
 
