@@ -156,6 +156,7 @@ namespace Player.Api.Services
 
             var newView = view.Clone();
             newView.Name = $"Clone of {newView.Name}";
+            newView.Status = ViewStatus.Active;
 
             //copy view applications
             foreach (var application in view.Applications)
