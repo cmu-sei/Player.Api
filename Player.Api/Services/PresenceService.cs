@@ -78,7 +78,10 @@ namespace Player.Api.Services
 
                         lock (viewLock)
                         {
-                            connectionIds.Add(connectionId);
+                            if (!connectionIds.Contains(connectionId))
+                            {
+                                connectionIds.Add(connectionId);
+                            }
                         }
 
                         return connectionIds;

@@ -25,8 +25,8 @@ namespace Player.Api.Hubs
         private readonly IPresenceService _presenceService;
 
         public ViewHub(
-            IViewService service, 
-            INotificationService notificationService, 
+            IViewService service,
+            INotificationService notificationService,
             IPresenceService presenceService)
         {
             _viewService = service;
@@ -46,7 +46,7 @@ namespace Player.Api.Hubs
             }
 
             var presenceId = await _presenceService.AddConnectionToView(new Guid(idString), Context.User.GetId(), Context.ConnectionId, _ct);
-            Context.Items.Add("presenceId", presenceId);
+            Context.Items["presence"] = presenceId;
 
             await Clients.Caller.SendAsync("Reply", notification);
         }
