@@ -2,19 +2,8 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using Microsoft.AspNetCore.Authentication;
-using Player.Api.Data.Data;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using System.Linq;
-using Player.Api.Extensions;
-using Z.EntityFramework.Plus;
-using Player.Api.Data.Data.Models;
-using System;
-using System.Collections.Generic;
-using Microsoft.Extensions.Caching.Memory;
-using Player.Api.Options;
-using Microsoft.EntityFrameworkCore;
-using Player.Api.Infrastructure.Authorization;
 using Player.Api.Services;
 
 namespace Player.Api.Infrastructure.ClaimsTransformers

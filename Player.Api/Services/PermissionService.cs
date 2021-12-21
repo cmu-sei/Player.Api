@@ -18,7 +18,6 @@ using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
-using Z.EntityFramework.Plus;
 
 namespace Player.Api.Services
 {
@@ -148,17 +147,14 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<Permission>> GetByTeamIdForUserAsync(Guid teamId, Guid userId)
         {
-            var userQuery = _context.Users
+            var user = await _context.Users
                 .IncludePermissions()
                 .Where(u => u.Id == userId)
-                .Future();
+                .SingleOrDefaultAsync();
 
-            var teamQuery = _context.Teams
+            var team = await _context.Teams
                 .Where(t => t.Id == teamId)
-                .Future();
-
-            UserEntity user = (await userQuery.ToListAsync()).FirstOrDefault();
-            TeamEntity team = (await teamQuery.ToListAsync()).FirstOrDefault();
+                .SingleOrDefaultAsync();
 
             if (user == null)
                 throw new EntityNotFoundException<User>();
@@ -241,16 +237,13 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var roleQuery = _context.Roles
+            var role = await _context.Roles
                 .Where(r => r.Id == roleId)
-                .Future();
+                .SingleOrDefaultAsync();
 
-            var permissionQuery = _context.Permissions
+            var permission = await _context.Permissions
                 .Where(p => p.Id == permissionId)
-                .Future();
-
-            var role = (await roleQuery.ToListAsync()).FirstOrDefault();
-            var permission = (await permissionQuery.ToListAsync()).FirstOrDefault();
+                .SingleOrDefaultAsync();
 
             if (role == null)
                 throw new EntityNotFoundException<Role>();
@@ -271,27 +264,23 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var roleQuery = _context.Roles
+            var role = await _context.Roles
                 .Where(r => r.Id == roleId)
-                .Future();
-
-            var permissionQuery = _context.Permissions
-                .Where(p => p.Id == permissionId)
-                .Future();
-
-            var rolePermissionQuery = _context.RolePermissions
-                .Where(x => x.RoleId == roleId && x.PermissionId == permissionId)
-                .Future();
-
-            var role = (await roleQuery.ToListAsync()).FirstOrDefault();
-            var permission = (await permissionQuery.ToListAsync()).FirstOrDefault();
-            var rolePermission = (await rolePermissionQuery.ToListAsync()).FirstOrDefault();
+                .SingleOrDefaultAsync();
 
             if (role == null)
                 throw new EntityNotFoundException<Role>();
 
+            var permission = await _context.Permissions
+                .Where(p => p.Id == permissionId)
+                .SingleOrDefaultAsync();
+
             if (permission == null)
                 throw new EntityNotFoundException<Permission>();
+
+            var rolePermission = await _context.RolePermissions
+                .Where(x => x.RoleId == roleId && x.PermissionId == permissionId)
+                .SingleOrDefaultAsync();
 
             if (rolePermission != null)
             {
@@ -304,19 +293,16 @@ namespace Player.Api.Services
 
         public async Task<bool> AddToTeamAsync(Guid teamId, Guid permissionId)
         {
-            var teamQuery = _context.Teams
+            var team = await _context.Teams
                 .Where(t => t.Id == teamId)
-                .Future();
-
-            var permissionQuery = _context.Permissions
-                .Where(p => p.Id == permissionId)
-                .Future();
-
-            var team = (await teamQuery.ToListAsync()).FirstOrDefault();
-            var permission = (await permissionQuery.ToListAsync()).FirstOrDefault();
+                .FirstOrDefaultAsync();
 
             if (team == null)
                 throw new EntityNotFoundException<Team>();
+
+            var permission = await _context.Permissions
+                .Where(p => p.Id == permissionId)
+                .FirstOrDefaultAsync();
 
             if (permission == null)
                 throw new EntityNotFoundException<Permission>();
@@ -334,27 +320,23 @@ namespace Player.Api.Services
 
         public async Task<bool> RemoveFromTeamAsync(Guid teamId, Guid permissionId)
         {
-            var teamQuery = _context.Teams
+            var team = await _context.Teams
                 .Where(t => t.Id == teamId)
-                .Future();
-
-            var permissionQuery = _context.Permissions
-                .Where(p => p.Id == permissionId)
-                .Future();
-
-            var teamPermissionQuery = _context.TeamPermissions
-                .Where(x => x.TeamId == teamId && x.PermissionId == permissionId)
-                .Future();
-
-            var team = (await teamQuery.ToListAsync()).FirstOrDefault();
-            var permission = (await permissionQuery.ToListAsync()).FirstOrDefault();
-            var teamPermission = (await teamPermissionQuery.ToListAsync()).FirstOrDefault();
+                .FirstOrDefaultAsync();
 
             if (team == null)
                 throw new EntityNotFoundException<Team>();
 
+            var permission = await _context.Permissions
+                .Where(p => p.Id == permissionId)
+                .FirstOrDefaultAsync();
+
             if (permission == null)
                 throw new EntityNotFoundException<Permission>();
+
+            var teamPermission = await _context.TeamPermissions
+                .Where(x => x.TeamId == teamId && x.PermissionId == permissionId)
+                .FirstOrDefaultAsync();
 
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(team.ViewId))).Succeeded)
                 throw new ForbiddenException();
@@ -373,19 +355,16 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var userQuery = _context.Users
+            var user = await _context.Users
                 .Where(t => t.Id == userId)
-                .Future();
-
-            var permissionQuery = _context.Permissions
-                .Where(p => p.Id == permissionId)
-                .Future();
-
-            var user = (await userQuery.ToListAsync()).FirstOrDefault();
-            var permission = (await permissionQuery.ToListAsync()).FirstOrDefault();
+                .FirstOrDefaultAsync();
 
             if (user == null)
                 throw new EntityNotFoundException<User>();
+
+            var permission = await _context.Permissions
+                .Where(p => p.Id == permissionId)
+                .FirstOrDefaultAsync();
 
             if (permission == null)
                 throw new EntityNotFoundException<Permission>();
@@ -403,27 +382,23 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            var userQuery = _context.Users
+            var user = await _context.Users
                 .Where(t => t.Id == userId)
-                .Future();
-
-            var permissionQuery = _context.Permissions
-                .Where(p => p.Id == permissionId)
-                .Future();
-
-            var userPermissionQuery = _context.UserPermissions
-                .Where(x => x.UserId == userId && x.PermissionId == permissionId)
-                .Future();
-
-            var user = (await userQuery.ToListAsync()).FirstOrDefault();
-            var permission = (await permissionQuery.ToListAsync()).FirstOrDefault();
-            var userPermission = (await userPermissionQuery.ToListAsync()).FirstOrDefault();
+                .FirstOrDefaultAsync();
 
             if (user == null)
                 throw new EntityNotFoundException<User>();
 
+            var permission = await _context.Permissions
+                .Where(p => p.Id == permissionId)
+                .FirstOrDefaultAsync();
+
             if (permission == null)
                 throw new EntityNotFoundException<Permission>();
+
+            var userPermission = await _context.UserPermissions
+                .Where(x => x.UserId == userId && x.PermissionId == permissionId)
+                .FirstOrDefaultAsync();
 
             if (userPermission != null)
             {

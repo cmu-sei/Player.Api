@@ -315,3 +315,4 @@ Version.h
 Version.cpp
 *.db
 Player.Api/appsettings.Development.json
+Player.Api/player/

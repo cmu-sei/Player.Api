@@ -3,10 +3,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
 using System.Security.Principal;
-using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
@@ -14,11 +12,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
-using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
-using Z.EntityFramework.Plus;
 
 namespace Player.Api.Services
 {
@@ -39,9 +35,9 @@ namespace Player.Api.Services
         private readonly ClaimsPrincipal _user;
         private readonly IMapper _mapper;
 
-        public RoleService(PlayerContext context, 
-                            IAuthorizationService authorizationService, 
-                            IPrincipal user, 
+        public RoleService(PlayerContext context,
+                            IAuthorizationService authorizationService,
+                            IPrincipal user,
                             IMapper mapper)
         {
             _context = context;
@@ -94,7 +90,7 @@ namespace Player.Api.Services
             var role = await _context.Roles
                 .ProjectTo<Role>(_mapper.ConfigurationProvider)
                 .SingleOrDefaultAsync(o => o.Name == form.Name);
-            
+
             if (role != null)
             {
                 throw new ConflictException("A role with that name already exists.");

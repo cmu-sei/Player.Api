@@ -17,7 +17,6 @@ using System.Security.Claims;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
-using Z.EntityFramework.Plus;
 
 namespace Player.Api.Services
 {
@@ -65,19 +64,17 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewId))).Succeeded)
                 throw new ForbiddenException();
 
-            var viewExists = _context.Views
+            var viewExists = await _context.Views
                 .Where(e => e.Id == viewId)
-                .DeferredAny()
-                .FutureValue();
+                .AnyAsync();
 
-            var teamsQuery = _context.Teams
-                .Where(e => e.ViewId == viewId)
-                .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
-
-            if (!(await viewExists.ValueAsync()))
+            if (!viewExists)
                 throw new EntityNotFoundException<View>();
 
-            var teams = await teamsQuery.ToListAsync();
+            var teams = await _context.Teams
+                .Where(e => e.ViewId == viewId)
+                .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider)
+                .ToArrayAsync();
 
             return _mapper.Map<IEnumerable<Team>>(teams);
         }
@@ -87,15 +84,19 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new SameUserOrViewAdminRequirement(viewId, userId))).Succeeded)
                 throw new ForbiddenException();
 
-            var viewExists = _context.Views
+            var viewExists = await _context.Views
                 .Where(e => e.Id == viewId)
-                .DeferredAny()
-                .FutureValue();
+                .AnyAsync();
 
-            var userExists = _context.Users
+            if (!viewExists)
+                throw new EntityNotFoundException<View>();
+
+            var userExists = await _context.Users
                 .Where(u => u.Id == userId)
-                .DeferredAny()
-                .FutureValue();
+                .AnyAsync();
+
+            if (!userExists)
+                throw new EntityNotFoundException<User>();
 
             IQueryable<TeamDTO> teamQuery;
 
@@ -115,12 +116,6 @@ namespace Player.Api.Services
             }
 
             var teams = await teamQuery.ToListAsync();
-
-            if (!(await userExists.ValueAsync()))
-                throw new EntityNotFoundException<User>();
-
-            if (!(await viewExists.ValueAsync()))
-                throw new EntityNotFoundException<View>();
 
             return _mapper.Map<IEnumerable<Team>>(teams);
         }

@@ -17,7 +17,6 @@ using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
-using Z.EntityFramework.Plus;
 
 namespace Player.Api.Services
 {
@@ -228,17 +227,15 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<ViewModels.ApplicationInstance>> GetInstancesByTeamAsync(Guid teamId, CancellationToken ct)
         {
-            var teamQuery = _context.Teams
+            var team = await _context.Teams
                 .Where(e => e.Id == teamId)
-                .Future();
+                .SingleOrDefaultAsync(ct);
 
-            var instanceQuery = _context.ApplicationInstances
+            var instances = await _context.ApplicationInstances
                 .Where(i => i.TeamId == teamId)
                 .OrderBy(a => a.DisplayOrder)
                 .ProjectTo<ViewModels.ApplicationInstance>(_mapper.ConfigurationProvider)
-                .Future();
-
-            var team = (await teamQuery.ToListAsync()).SingleOrDefault();
+                .ToArrayAsync(ct);
 
             if (team == null)
                 throw new EntityNotFoundException<Team>();
@@ -246,7 +243,7 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new TeamAccessRequirement(team.ViewId, teamId))).Succeeded)
                 throw new ForbiddenException();
 
-            return await instanceQuery.ToListAsync();
+            return instances;
         }
 
         public async Task<ViewModels.ApplicationInstance> GetInstanceAsync(Guid id, CancellationToken ct)

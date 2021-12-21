@@ -18,7 +18,6 @@ using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
-using Z.EntityFramework.Plus;
 
 namespace Player.Api.Services
 {
@@ -67,18 +66,9 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<ViewModels.User>> GetByTeamAsync(Guid teamId, CancellationToken ct)
         {
-            var teamQuery = _context.Teams
+            var team = await _context.Teams
                 .Where(t => t.Id == teamId)
-                .Future();
-
-            var userQuery = _context.TeamMemberships
-                .Where(t => t.TeamId == teamId)
-                .Select(m => m.User)
-                .Distinct()
-                .ProjectTo<User>(_mapper.ConfigurationProvider);
-            //.Future();
-
-            var team = (await teamQuery.ToListAsync()).FirstOrDefault();
+                .FirstOrDefaultAsync(ct);
 
             if (team == null)
                 throw new EntityNotFoundException<Team>();
@@ -86,7 +76,14 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new TeamAccessRequirement(team.ViewId, team.Id))).Succeeded)
                 throw new ForbiddenException();
 
-            return await userQuery.ToListAsync();
+            var users = await _context.TeamMemberships
+                .Where(t => t.TeamId == teamId)
+                .Select(m => m.User)
+                .Distinct()
+                .ProjectTo<User>(_mapper.ConfigurationProvider)
+                .ToArrayAsync(ct);
+
+            return users;
         }
 
         public async Task<IEnumerable<ViewModels.User>> GetByViewAsync(Guid viewId, CancellationToken ct)
@@ -94,22 +91,21 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewId))).Succeeded)
                 throw new ForbiddenException();
 
-            var viewQuery = _context.Views
+            var view = await _context.Views
                 .Where(e => e.Id == viewId)
-                .Future();
-
-            var view = (await viewQuery.ToListAsync()).FirstOrDefault();
+                .FirstOrDefaultAsync(ct);
 
             if (view == null)
                 throw new EntityNotFoundException<View>();
 
-            var users = _context.ViewMemberships
+            var users = await _context.ViewMemberships
                 .Where(m => m.ViewId == viewId)
                 .Select(m => m.User)
                 .Distinct()
-                .ProjectTo<User>(_mapper.ConfigurationProvider);
+                .ProjectTo<User>(_mapper.ConfigurationProvider)
+                .ToArrayAsync(ct);
 
-            return await users.ToListAsync();
+            return users;
         }
 
         public async Task<ViewModels.User> GetAsync(Guid id, CancellationToken ct)
@@ -183,27 +179,28 @@ namespace Player.Api.Services
 
         public async Task<bool> AddToTeamAsync(Guid teamId, Guid userId, CancellationToken ct)
         {
-            var teamQuery = _context.Teams.Where(t => t.Id == teamId).Future();
-            var userExists = _context.Users.Where(u => u.Id == userId).DeferredAny().FutureValue();
-
-            var viewIdQuery = _context.Teams.Where(t => t.Id == teamId).Select(t => t.ViewId);
-
-            var viewMembershipQuery = _context.ViewMemberships
-                .Where(x => x.UserId == userId && viewIdQuery.Contains(x.ViewId))
-                .Future();
-
-            var team = (await teamQuery.ToListAsync()).SingleOrDefault();
+            var team = await _context.Teams
+                .Where(t => t.Id == teamId)
+                .FirstOrDefaultAsync();
 
             if (team == null)
                 throw new EntityNotFoundException<Team>();
 
-            if (!(await userExists.ValueAsync()))
+            var userExists = await _context.Users
+                .Where(u => u.Id == userId)
+                .AnyAsync(ct);
+
+            if (!userExists)
                 throw new EntityNotFoundException<User>();
+
+            var viewIdQuery = _context.Teams.Where(t => t.Id == teamId).Select(t => t.ViewId);
+
+            var viewMembership = await _context.ViewMemberships
+                .Where(x => x.UserId == userId && viewIdQuery.Contains(x.ViewId))
+                .SingleOrDefaultAsync(ct);
 
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(team.ViewId))).Succeeded)
                 throw new ForbiddenException();
-
-            var viewMembership = (await viewMembershipQuery.ToListAsync()).FirstOrDefault();
 
             bool setPrimary = false;
             if (viewMembership == null)
@@ -231,22 +228,28 @@ namespace Player.Api.Services
 
         public async Task<bool> RemoveFromTeamAsync(Guid teamId, Guid userId, CancellationToken ct)
         {
-            var teamQuery = _context.Teams.Where(t => t.Id == teamId).Future();
-            var userExists = _context.Users.Where(u => u.Id == userId).DeferredAny().FutureValue();
-            var teamMembershipQuery = _context.TeamMemberships.Include(m => m.Team).Where(m => m.UserId == userId).Future();
-
-            var team = (await teamQuery.ToListAsync()).SingleOrDefault();
+            var team = await _context.Teams
+                .Where(t => t.Id == teamId)
+                .FirstOrDefaultAsync(ct);
 
             if (team == null)
                 throw new EntityNotFoundException<Team>();
 
-            if (!(await userExists.ValueAsync()))
+            var userExists = await _context.Users
+                .Where(u => u.Id == userId)
+                .AnyAsync(ct);
+
+            if (!userExists)
                 throw new EntityNotFoundException<User>();
 
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(team.ViewId))).Succeeded)
                 throw new ForbiddenException();
 
-            var teamMemberships = await teamMembershipQuery.ToListAsync();
+            var teamMemberships = await _context.TeamMemberships
+                .Include(m => m.Team)
+                .Where(m => m.UserId == userId)
+                .ToArrayAsync(ct);
+
             var teamMembership = teamMemberships.SingleOrDefault(tu => tu.TeamId == teamId);
 
             if (teamMembership != null)
