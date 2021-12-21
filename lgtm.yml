@@ -9,4 +9,4 @@ extraction:
       dotnet:
         # Specify the version of .NET Core SDK to use.
         # Default: The version installed on the build machine.
-        version: 6.0.1
+        version: 6
