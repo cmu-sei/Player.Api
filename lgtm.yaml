@@ -1,0 +1,12 @@
+extraction:
+  # Define settings for C# analysis
+  ##################################
+  csharp:
+    # The `index` step builds the code and extracts information during the build
+    # process.
+    index:
+      # Specify .NET Core settings.
+      dotnet:
+        # Specify the version of .NET Core SDK to use.
+        # Default: The version installed on the build machine.
+        version: 6.0.1
