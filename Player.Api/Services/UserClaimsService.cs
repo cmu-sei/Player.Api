@@ -5,22 +5,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
-using System.Security.Principal;
-using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
-using Player.Api.Infrastructure.Exceptions;
 using Player.Api.Options;
 using Player.Api.ViewModels;
-using Z.EntityFramework.Plus;
 
 namespace Player.Api.Services
 {
@@ -111,9 +106,10 @@ namespace Player.Api.Services
 
         private async Task<UserEntity> ValidateUser(Guid subClaim, string nameClaim, bool update)
         {
-            var userQuery = _context.Users.Where(u => u.Id == subClaim).Future();
-            var anyUsers = _context.Users.DeferredAny().FutureValue();
-            var user = (await userQuery.ToListAsync()).SingleOrDefault();
+            var anyUsers = await _context.Users.AnyAsync();
+            var user = await _context.Users
+                .Where(u => u.Id == subClaim)
+                .SingleOrDefaultAsync();
 
             if (update)
             {
@@ -126,7 +122,7 @@ namespace Player.Api.Services
                     };
 
                     // First user is default SystemAdmin
-                    if (!(await anyUsers.ValueAsync()))
+                    if (!anyUsers)
                     {
                         var systemAdminPermission = await _context.Permissions.Where(p => p.Key == PlayerClaimTypes.SystemAdmin.ToString()).FirstOrDefaultAsync();
 

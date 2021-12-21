@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       clientVersion:
-        description: 'Version of the Client package'
+        description: "Version of the Client package"
         required: true
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
       - name: Setup dotnet
         uses: actions/setup-dotnet@v1
         with:
-          dotnet-version: '3.1.x'
+          dotnet-version: "6.x.x"
 
       - name: Setup Package Name
         id: package_name
@@ -40,8 +40,8 @@ jobs:
       - name: Run NSwag
         run: |
           cd ${{ steps.package_name.outputs.name }}
-          npm install nswag@13.10.8
-          ./node_modules/.bin/nswag run /runtime:NetCore31
+          npm install
+          ./node_modules/.bin/nswag run /runtime:Net60
 
       - name: Create NuGet Package
         run: |

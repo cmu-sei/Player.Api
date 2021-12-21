@@ -106,8 +106,7 @@ namespace Player.Api
             .AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-            })
-            .SetCompatibilityVersion(CompatibilityVersion.Latest);
+            });
 
             services.AddSwagger(_authOptions);
 

@@ -6,19 +6,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Security.Principal;
-using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data;
-using Player.Api.Data.Data.Models;
-using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
-using Z.EntityFramework.Plus;
 
 namespace Player.Api.Services
 {
@@ -36,8 +32,8 @@ namespace Player.Api.Services
         private readonly ClaimsPrincipal _user;
         private readonly IMapper _mapper;
 
-        public TeamMembershipService(PlayerContext context, 
-                                        IAuthorizationService authorizationService, 
+        public TeamMembershipService(PlayerContext context,
+                                        IAuthorizationService authorizationService,
                                         IPrincipal user,
                                         IMapper mapper)
         {
@@ -64,20 +60,19 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new SameUserOrViewAdminRequirement(viewId, userId))).Succeeded)
                 throw new ForbiddenException();
 
-            var userExists = _context.Users
+            var userExists = await _context.Users
                 .Where(u => u.Id == userId)
-                .DeferredAny()
-                .FutureValue();
+                .AnyAsync();
 
-            var membershipQuery = _context.TeamMemberships
-                .Where(m => m.UserId == userId && m.ViewMembership.ViewId == viewId)
-                .ProjectTo<TeamMembership>(_mapper.ConfigurationProvider)
-                .Future();
-
-            if (!(await userExists.ValueAsync()))
+            if (!userExists)
                 throw new EntityNotFoundException<User>();
 
-            return await membershipQuery.ToListAsync();
+            var memberships = await _context.TeamMemberships
+                .Where(m => m.UserId == userId && m.ViewMembership.ViewId == viewId)
+                .ProjectTo<TeamMembership>(_mapper.ConfigurationProvider)
+                .ToArrayAsync();
+
+            return memberships;
         }
 
         public async Task<TeamMembership> UpdateAsync(Guid id, TeamMembershipForm form)

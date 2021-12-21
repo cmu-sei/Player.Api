@@ -10,40 +10,40 @@ namespace Player.Api.Data.Data
 {
     public class Seed
     {
-        private static readonly log4net.ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
-
         public static void Run(PlayerContext context)
         {
             // Permissions
             PermissionEntity systemAdminPermission;
-            if (!context.Permissions.Where(x => x.Key == "SystemAdmin").Any()) 
+            if (!context.Permissions.Where(x => x.Key == "SystemAdmin").Any())
             {
-                systemAdminPermission = new PermissionEntity { 
-                    Id = Guid.NewGuid(), 
-                    Key = "SystemAdmin", 
+                systemAdminPermission = new PermissionEntity
+                {
+                    Id = Guid.NewGuid(),
+                    Key = "SystemAdmin",
                     Description = "Can do anything",
                     ReadOnly = true,
-                    Value = "True" 
+                    Value = "True"
                 };
                 context.Permissions.Add(systemAdminPermission);
             }
-            else 
+            else
             {
                 systemAdminPermission = context.Permissions.Where(x => x.Key == "SystemAdmin").FirstOrDefault();
             }
             PermissionEntity viewAdminPermission;
-            if (!context.Permissions.Where(x => x.Key == "ViewAdmin").Any()) 
+            if (!context.Permissions.Where(x => x.Key == "ViewAdmin").Any())
             {
-                viewAdminPermission = new PermissionEntity { 
-                    Id = Guid.NewGuid(), 
-                    Key = "ViewAdmin", 
+                viewAdminPermission = new PermissionEntity
+                {
+                    Id = Guid.NewGuid(),
+                    Key = "ViewAdmin",
                     Description = "Can edit an View, Add/Remove Teams/Members, etc",
                     ReadOnly = true,
-                    Value = "True" 
+                    Value = "True"
                 };
                 context.Permissions.Add(viewAdminPermission);
             }
-            else 
+            else
             {
                 viewAdminPermission = context.Permissions.Where(x => x.Key == "ViewAdmin").FirstOrDefault();
             }
@@ -236,8 +236,6 @@ namespace Player.Api.Data.Data
             exMembership1.PrimaryTeamMembership = enderBlueMembership;
 
             context.SaveChanges();
-
-            log.Debug("Seed completed");
         }
     }
 }

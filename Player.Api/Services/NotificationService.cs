@@ -2,7 +2,6 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -11,7 +10,6 @@ using Player.Api.Data.Data.Models;
 using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Exceptions;
-using Player.Api.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,7 +17,6 @@ using System.Security.Claims;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
-using Z.EntityFramework.Plus;
 
 namespace Player.Api.Services
 {
