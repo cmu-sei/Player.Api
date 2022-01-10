@@ -46,7 +46,7 @@ namespace Player.Api.Hubs
             }
 
             var presenceId = await _presenceService.AddConnectionToView(new Guid(idString), Context.User.GetId(), Context.ConnectionId, _ct);
-            Context.Items["presence"] = presenceId;
+            Context.Items["presenceId"] = presenceId;
 
             await Clients.Caller.SendAsync("Reply", notification);
         }
