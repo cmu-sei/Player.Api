@@ -6,7 +6,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Principal;
 using System.Text.Json.Serialization;
-using AutoMapper;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -14,11 +13,9 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Player.Api.Data.Data;
@@ -30,10 +27,8 @@ using Player.Api.Infrastructure.Filters;
 using Player.Api.Infrastructure.Mappings;
 using Player.Api.Options;
 using Player.Api.Services;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using MediatR;
 using Player.Api.Infrastructure.DbInterceptors;
-using Player.Api.Infrastructure.BackgroundServices;
 
 namespace Player.Api
 {

@@ -5,7 +5,6 @@ using System.Net;
 using System.Threading;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Player.Api.Services;
 using Player.Api.ViewModels.Webhooks;
@@ -16,12 +15,10 @@ namespace Player.Api.Controllers
 {
     public class WebhookController : BaseController
     {
-        private readonly IAuthorizationService _authorizationService;
         private readonly IWebhookService _webhookService;
 
-        public WebhookController(IAuthorizationService authorizationService, IWebhookService webhookService)
+        public WebhookController(IWebhookService webhookService)
         {
-            _authorizationService = authorizationService;
             _webhookService = webhookService;
         }
 
@@ -30,7 +27,7 @@ namespace Player.Api.Controllers
         /// </summary>
         [HttpGet("webhooks")]
         [ProducesResponseType(typeof(IEnumerable<WebhookSubscription>), (int)HttpStatusCode.OK)]
-        [SwaggerOperation(OperationId = "getAll")]
+        [SwaggerOperation(OperationId = "getAllWebhooks")]
         public async Task<IActionResult> GetAction(CancellationToken ct)
         {
             var subs = await _webhookService.GetAll(ct);
@@ -41,8 +38,8 @@ namespace Player.Api.Controllers
         /// Subscribes to an event in the Player API
         /// </summary>
         [HttpPost("webhooks/subscribe")]
-        [ProducesResponseType((int) HttpStatusCode.OK)]
-        [SwaggerOperation(OperationId = "subscribe")]
+        [ProducesResponseType((int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "createWebhookSubscription")]
         public async Task<IActionResult> Subscribe([FromBody] WebhookSubscriptionForm form, CancellationToken ct)
         {
             await _webhookService.Subscribe(form, ct);
@@ -55,8 +52,8 @@ namespace Player.Api.Controllers
         /// <param name="id">The Id of the subscription to delete</param>
         /// <param name="ct"></param>
         [HttpDelete("webhooks/{id}")]
-        [ProducesResponseType((int) HttpStatusCode.NoContent)]
-        [SwaggerOperation(OperationId = "delete")]
+        [ProducesResponseType((int)HttpStatusCode.NoContent)]
+        [SwaggerOperation(OperationId = "deleteWebhookSubscription")]
         public async Task<IActionResult> Delete([FromRoute] Guid id, CancellationToken ct)
         {
             await _webhookService.DeleteAsync(id, ct);
@@ -67,10 +64,11 @@ namespace Player.Api.Controllers
         /// Updates a subscription
         /// </summary>
         /// <param name="id">The Id of the subscription to update</param>
+        /// <param name="form"></param>
         /// <param name="ct"></param>
         [HttpPut("webhooks/{id}")]
-        [ProducesResponseType(typeof(WebhookSubscription), (int) HttpStatusCode.OK)]
-        [SwaggerOperation(OperationId = "update")]
+        [ProducesResponseType(typeof(WebhookSubscription), (int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "updateWebhookSubscription")]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] WebhookSubscriptionForm form, CancellationToken ct)
         {
             var updated = await _webhookService.UpdateAsync(id, form, ct);

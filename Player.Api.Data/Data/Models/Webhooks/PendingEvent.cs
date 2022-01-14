@@ -16,6 +16,14 @@ namespace Player.Api.Data.Data.Models.Webhooks
         public Guid Id { get; set; }
         public EventType EventType { get; set; }
         public DateTime Timestamp { get; set; }
-        public Guid EffectedEntityId { get; set; }
+        public Guid SubscriptionId { get; set; }
+        public virtual WebhookSubscriptionEntity Subscription { get; set; }
+        public string Payload { get; set; }
+    }
+
+    public enum EventType
+    {
+        ViewCreated,
+        ViewDeleted
     }
 }

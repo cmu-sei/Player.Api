@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Player.Api.Events;
 
 namespace Player.Api.Infrastructure.DbInterceptors
 {
@@ -91,7 +92,7 @@ namespace Player.Api.Infrastructure.DbInterceptors
                             var generatedProps = entry.Properties
                                 .Where(x => x.Metadata.ValueGenerated == Microsoft.EntityFrameworkCore.Metadata.ValueGenerated.OnAdd)
                                 .ToList();
-                            
+
                             foreach (var prop in generatedProps)
                             {
                                 entityType.GetProperty(prop.Metadata.Name).SetValue(entry.Entity, prop.CurrentValue);
@@ -146,22 +147,22 @@ namespace Player.Api.Infrastructure.DbInterceptors
                             x.State == EntityState.Deleted)
                 .ToList();
 
-            // Remove children so we don't duplicate events
-            foreach (var entry in entries.ToArray())
-            {
-                foreach (var collection in entry.Collections)
-                {
-                    foreach (var val in collection.CurrentValue)
-                    {
-                        var e = entries.Where(e => e.Entity == val).FirstOrDefault();
+            // // Remove children so we don't duplicate events
+            // foreach (var entry in entries.ToArray())
+            // {
+            //     foreach (var collection in entry.Collections)
+            //     {
+            //         foreach (var val in collection.CurrentValue)
+            //         {
+            //             var e = entries.Where(e => e.Entity == val).FirstOrDefault();
 
-                        if (e != null)
-                        {
-                            entries.Remove(e);
-                        }
-                    }
-                }
-            }
+            //             if (e != null)
+            //             {
+            //                 entries.Remove(e);
+            //             }
+            //         }
+            //     }
+            // }
 
             return entries.ToArray();
         }

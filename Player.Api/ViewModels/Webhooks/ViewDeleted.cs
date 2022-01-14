@@ -7,7 +7,7 @@ using System;
 
 namespace Player.Api.ViewModels.Webhooks
 {
-    public class ViewDeleted
+    public class ViewDeleted : IWebhookEventPayload
     {
         public Guid ViewId { get; set; }
     }

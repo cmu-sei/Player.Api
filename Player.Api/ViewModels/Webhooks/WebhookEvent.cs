@@ -4,13 +4,21 @@ Copyright 2021 Carnegie Mellon University. All Rights Reserved.
 */
 
 using System;
+using Player.Api.Data.Data.Models.Webhooks;
 
 namespace Player.Api.ViewModels.Webhooks
 {
     public class WebhookEvent
     {
-        public string Name { get; set; }
-        public DateTime Timestamp { get; set; }
-        public object Payload { get; set; } // Constrain to certain types?
+        public WebhookEvent(EventType eventType, IWebhookEventPayload payload)
+        {
+            this.Type = eventType;
+            this.Timestamp = DateTime.UtcNow;
+            this.Payload = payload;
+        }
+
+        public EventType Type { get; }
+        public DateTime Timestamp { get; }
+        public IWebhookEventPayload Payload { get; }
     }
 }

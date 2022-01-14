@@ -3,7 +3,7 @@
 
 using MediatR;
 
-namespace Player.Api.Infrastructure.DbInterceptors
+namespace Player.Api.Events
 {
     public class EntityCreated<TEntity> : INotification
     {
