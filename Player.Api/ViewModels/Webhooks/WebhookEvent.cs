@@ -17,8 +17,9 @@ namespace Player.Api.ViewModels.Webhooks
             this.Payload = payload;
         }
 
+        public Guid Id { get; } = new Guid();
         public EventType Type { get; }
         public DateTime Timestamp { get; }
-        public IWebhookEventPayload Payload { get; }
+        public object Payload { get; }
     }
 }

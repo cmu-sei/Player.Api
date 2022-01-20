@@ -49,7 +49,8 @@ namespace Player.Api.Services
             _logger = logger;
             _scopeFactory = scopeFactory;
             _clientFactory = clientFactory;
-            _eventQueue = new ActionBlock<WebhookEvent>(async evt => await ProcessEvent(evt));
+            _eventQueue = new ActionBlock<WebhookEvent>(async evt => await ProcessEvent(evt),
+                 new ExecutionDataflowBlockOptions { MaxDegreeOfParallelism = 1 });
             _sendQueueDict = new ConcurrentDictionary<Guid, ActionBlock<PendingEventEntity>>();
             _authOptions = authOptions;
         }
@@ -78,7 +79,7 @@ namespace Player.Api.Services
         private async Task AddPendingEvent(PendingEventEntity evt)
         {
             var sendQueue = _sendQueueDict.GetOrAdd(evt.SubscriptionId,
-                new ActionBlock<PendingEventEntity>(async evt => await SendEvent(evt),
+                new ActionBlock<PendingEventEntity>(async evt => await SendEvent(evt.Id),
                 new ExecutionDataflowBlockOptions { MaxDegreeOfParallelism = 1 }));
             await sendQueue.SendAsync(evt);
         }
@@ -115,65 +116,74 @@ namespace Player.Api.Services
             pendingEvents.ForEach(async x => await AddPendingEvent(x));
         }
 
-        private async Task SendEvent(PendingEventEntity evt)
+        private async Task SendEvent(Guid eventId)
         {
             bool complete = false;
 
             while (!complete)
             {
-                using var scope = _scopeFactory.CreateScope();
-                var context = scope.ServiceProvider.GetRequiredService<PlayerContext>();
-                var authOptions = _authOptions.CurrentValue;
-
-                var subscription = await context.Webhooks
-                    .Where(x => x.Id == evt.SubscriptionId)
-                    .FirstOrDefaultAsync();
-
-                if (subscription != null)
+                try
                 {
-                    HttpResponseMessage resp = null;
+                    using var scope = _scopeFactory.CreateScope();
+                    var context = scope.ServiceProvider.GetRequiredService<PlayerContext>();
+                    var authOptions = _authOptions.CurrentValue;
 
-                    try
-                    {
-                        var auth = await getAuthToken(subscription.ClientId, subscription.ClientSecret, subscription.Scope, authOptions.TokenUrl);
-                        resp = await SendJsonPost(evt.Payload, subscription.CallbackUri, auth);
-                    }
-                    catch (Exception) { }
+                    var evt = await context.PendingEvents
+                        .Include(x => x.Subscription)
+                        .Where(x => x.Id == eventId)
+                        .FirstOrDefaultAsync();
 
-                    // The callback request was accepted, so remove this event from the db
-                    if (resp != null && resp.StatusCode == HttpStatusCode.Accepted)
+                    if (evt.Subscription != null)
                     {
-                        // No error occured
-                        subscription.LastError = null;
-                        complete = true;
-                    }
-                    // We got some sort of error, so try again later
-                    else
-                    {
-                        // There was an issue sending the message to the callback endpoint
-                        if (resp == null)
+                        HttpResponseMessage resp = null;
+
+                        try
                         {
-                            subscription.LastError = "Error sending message to callback endpoint";
+                            var auth = await getAuthToken(evt.Subscription.ClientId, evt.Subscription.ClientSecret, evt.Subscription.Scope, authOptions.TokenUrl);
+                            resp = await SendJsonPost(evt.Payload, evt.Subscription.CallbackUri, auth);
                         }
-                        // The endpoint returned a status other than 202
+                        catch (Exception) { }
+
+                        // The callback request was accepted, so remove this event from the db
+                        if (resp != null && resp.StatusCode == HttpStatusCode.Accepted)
+                        {
+                            // No error occured
+                            evt.Subscription.LastError = null;
+                            complete = true;
+                        }
+                        // We got some sort of error, so try again later
                         else
                         {
-                            subscription.LastError = "Callback endpoint returned status code " + resp.StatusCode;
-                        }
+                            // There was an issue sending the message to the callback endpoint
+                            if (resp == null)
+                            {
+                                evt.Subscription.LastError = "Error sending message to callback endpoint";
+                            }
+                            // The endpoint returned a status other than 202
+                            else
+                            {
+                                evt.Subscription.LastError = "Callback endpoint returned status code " + resp.StatusCode;
+                            }
 
+                            await context.SaveChangesAsync();
+                            await Task.Delay(new TimeSpan(0, 1, 0));
+                        }
+                    }
+                    else
+                    {
+                        complete = true;
+                    }
+
+                    if (complete)
+                    {
+                        context.Remove(evt);
                         await context.SaveChangesAsync();
-                        await Task.Delay(new TimeSpan(0, 1, 0));
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    complete = true;
-                }
-
-                if (complete)
-                {
-                    context.Remove(evt);
-                    await context.SaveChangesAsync();
+                    _logger.LogError(ex, "Exception processing Event");
+                    await Task.Delay(new TimeSpan(0, 1, 0));
                 }
             }
         }
