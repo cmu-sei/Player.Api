@@ -38,7 +38,7 @@ namespace Player.Api.Data.Data.Models.Webhooks
             builder
                 .HasOne(et => et.Subscription)
                 .WithMany(s => s.EventTypes)
-                .HasPrincipalKey(x => x.Id);
+                .HasForeignKey(x => x.SubscriptionId);
         }
     }
 }

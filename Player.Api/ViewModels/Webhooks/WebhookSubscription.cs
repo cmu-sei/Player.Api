@@ -5,7 +5,6 @@ Copyright 2021 Carnegie Mellon University. All Rights Reserved.
 
 using System;
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
 
 namespace Player.Api.ViewModels.Webhooks
 {
@@ -15,7 +14,27 @@ namespace Player.Api.ViewModels.Webhooks
         public string Name { get; set; }
         public string CallbackUri { get; set; }
         public string ClientId { get; set; }
-        public string ClientSecret { get; set; }
+
+        private string _clientSecret;
+        public string ClientSecret
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(_clientSecret))
+                {
+                    return "REDACTED";
+                }
+                else
+                {
+                    return null;
+                }
+            }
+
+            set
+            {
+                _clientSecret = value;
+            }
+        }
         public string LastError { get; set; }
         public List<Player.Api.Data.Data.Models.Webhooks.EventType> EventTypes { get; set; }
     }

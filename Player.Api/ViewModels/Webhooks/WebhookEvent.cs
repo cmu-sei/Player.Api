@@ -4,6 +4,7 @@ Copyright 2021 Carnegie Mellon University. All Rights Reserved.
 */
 
 using System;
+using System.Text.Json;
 using Player.Api.Data.Data.Models.Webhooks;
 
 namespace Player.Api.ViewModels.Webhooks
@@ -14,12 +15,14 @@ namespace Player.Api.ViewModels.Webhooks
         {
             this.Type = eventType;
             this.Timestamp = DateTime.UtcNow;
-            this.Payload = payload;
+            this.Payload = JsonSerializer.Serialize((object)payload);
         }
 
         public Guid Id { get; } = new Guid();
         public EventType Type { get; }
         public DateTime Timestamp { get; }
-        public object Payload { get; }
+
+        // Serialized object of type stored in Type property
+        public string Payload { get; }
     }
 }

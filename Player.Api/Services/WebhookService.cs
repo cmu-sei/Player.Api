@@ -25,7 +25,7 @@ namespace Player.Api.Services
         Task<WebhookSubscription> Subscribe(WebhookSubscriptionForm form, CancellationToken ct);
         Task<IEnumerable<WebhookSubscription>> GetAll(CancellationToken ct);
         Task DeleteAsync(Guid id, CancellationToken ct);
-        Task<WebhookSubscription> UpdateAsync(Guid id, WebhookSubscriptionForm form, CancellationToken ct);
+        Task<WebhookSubscription> UpdateAsync(Guid id, WebhookSubscriptionPartialEditForm form, CancellationToken ct);
     }
 
     public class WebhookService : IWebhookService
@@ -50,12 +50,11 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
 
-            // Add the subscription to the db so it can be used later
             var entity = _mapper.Map<WebhookSubscriptionEntity>(form);
             _context.Webhooks.Add(entity);
             await _context.SaveChangesAsync();
 
-            return _mapper.Map<WebhookSubscription>(entity);  
+            return _mapper.Map<WebhookSubscription>(entity);
         }
 
         public async Task<IEnumerable<WebhookSubscription>> GetAll(CancellationToken ct)
@@ -76,37 +75,43 @@ namespace Player.Api.Services
             var toDelete = await _context.Webhooks
                 .Where(w => w.Id == id)
                 .SingleOrDefaultAsync();
-            
+
             _context.Remove(toDelete);
             await _context.SaveChangesAsync();
         }
 
-        public async Task<WebhookSubscription> UpdateAsync(Guid id, WebhookSubscriptionForm form, CancellationToken ct)
+        public async Task<WebhookSubscription> UpdateAsync(Guid id, WebhookSubscriptionPartialEditForm form, CancellationToken ct)
         {
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
 
             var toUpdate = await _context.Webhooks
+                .Include(x => x.EventTypes)
                 .Where(w => w.Id == id)
                 .SingleOrDefaultAsync(ct);
-            
+
             if (toUpdate == null)
                 throw new EntityNotFoundException<WebhookSubscription>();
-            
-            // Need to delete existing rows in webhook_subscription_event_types for this subscription or we will
-            // get a uniqueness constraint error (event type id + subscription id must be unique)
-            var toDelete = await _context.WebhookSubscriptionEventTypes
-                .Where(et => et.SubscriptionId == id)
-                .ToListAsync(ct);
 
-            foreach (var row in toDelete)
-            {
-                _context.Remove(row);
-            }
-            
             _mapper.Map(form, toUpdate);
+            await _context.SaveChangesAsync(ct);
+            return _mapper.Map<WebhookSubscription>(toUpdate);
+        }
 
-            _context.Webhooks.Update(toUpdate);
+        public async Task<WebhookSubscription> PartialUpdateAsync(Guid id, WebhookSubscriptionForm form, CancellationToken ct)
+        {
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+                throw new ForbiddenException();
+
+            var toUpdate = await _context.Webhooks
+                .Include(x => x.EventTypes)
+                .Where(w => w.Id == id)
+                .SingleOrDefaultAsync(ct);
+
+            if (toUpdate == null)
+                throw new EntityNotFoundException<WebhookSubscription>();
+
+            _mapper.Map(form, toUpdate);
             await _context.SaveChangesAsync(ct);
             return _mapper.Map<WebhookSubscription>(toUpdate);
         }

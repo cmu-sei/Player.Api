@@ -16,10 +16,17 @@ namespace Player.Api.Infrastructure.Mappings
         {
             CreateMap<WebhookSubscription, WebhookSubscriptionEntity>()
                 .ForMember(dest => dest.EventTypes, opt => opt.MapFrom(src => src.EventTypes.Select(et => new WebhookSubscriptionEventTypeEntity(Guid.Empty, et))));
+
             CreateMap<WebhookSubscriptionEntity, WebhookSubscription>()
                 .ForMember(dest => dest.EventTypes, opt => opt.MapFrom(src => src.EventTypes.Select(x => x.EventType)));
+
             CreateMap<WebhookSubscriptionForm, WebhookSubscriptionEntity>()
                 .ForMember(dest => dest.EventTypes, opt => opt.MapFrom(src => src.EventTypes.Select(et => new WebhookSubscriptionEventTypeEntity(Guid.Empty, et))));
+
+            CreateMap<WebhookSubscriptionPartialEditForm, WebhookSubscriptionEntity>()
+                .ForMember(dest => dest.EventTypes, opt => opt.MapFrom(src => src.EventTypes.Select(et => new WebhookSubscriptionEventTypeEntity(Guid.Empty, et))))
+                .ForMember(dest => dest.EventTypes, opts => opts.PreCondition((src) => src.EventTypes != null))
+                .ForAllOtherMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
         }
     }
 }

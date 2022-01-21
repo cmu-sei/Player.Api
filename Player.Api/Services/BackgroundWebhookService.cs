@@ -139,7 +139,7 @@ namespace Player.Api.Services
 
                         try
                         {
-                            var auth = await getAuthToken(evt.Subscription.ClientId, evt.Subscription.ClientSecret, evt.Subscription.Scope, authOptions.TokenUrl);
+                            var auth = await getAuthToken(evt.Subscription.ClientId, evt.Subscription.ClientSecret, authOptions.TokenUrl);
                             resp = await SendJsonPost(evt.Payload, evt.Subscription.CallbackUri, auth);
                         }
                         catch (Exception) { }
@@ -197,7 +197,7 @@ namespace Player.Api.Services
             }
         }
 
-        private async Task<string> getAuthToken(string clientId, string clientSecret, string scope, string tokenUrl)
+        private async Task<string> getAuthToken(string clientId, string clientSecret, string tokenUrl)
         {
             using (var client = _clientFactory.CreateClient())
             {
@@ -205,8 +205,7 @@ namespace Player.Api.Services
                 {
                     Address = tokenUrl,
                     ClientId = clientId,
-                    ClientSecret = clientSecret,
-                    Scope = scope
+                    ClientSecret = clientSecret
                 });
 
                 return response.AccessToken;

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Player.Api.Data.Data;
@@ -12,9 +13,10 @@ using Player.Api.Data.Data;
 namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(PlayerContext))]
-    partial class PlayerContextModelSnapshot : ModelSnapshot
+    [Migration("20220121205228_Webhooks2")]
+    partial class Webhooks2
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -66,7 +68,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
                     b.HasIndex("ViewId");
 
-                    b.ToTable("applications", (string)null);
+                    b.ToTable("applications");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.ApplicationInstanceEntity", b =>
@@ -95,7 +97,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
                     b.HasIndex("TeamId");
 
-                    b.ToTable("application_instances", (string)null);
+                    b.ToTable("application_instances");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.ApplicationTemplateEntity", b =>
@@ -128,7 +130,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("application_templates", (string)null);
+                    b.ToTable("application_templates");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.FileEntity", b =>
@@ -159,7 +161,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
                     b.HasIndex("ViewId");
 
-                    b.ToTable("files", (string)null);
+                    b.ToTable("files");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.NotificationEntity", b =>
@@ -221,7 +223,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
                     b.HasKey("Key");
 
-                    b.ToTable("notifications", (string)null);
+                    b.ToTable("notifications");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.PermissionEntity", b =>
@@ -253,7 +255,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                     b.HasIndex("Key", "Value")
                         .IsUnique();
 
-                    b.ToTable("permissions", (string)null);
+                    b.ToTable("permissions");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.RoleEntity", b =>
@@ -273,7 +275,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("roles", (string)null);
+                    b.ToTable("roles");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.RolePermissionEntity", b =>
@@ -299,7 +301,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                     b.HasIndex("RoleId", "PermissionId")
                         .IsUnique();
 
-                    b.ToTable("role_permissions", (string)null);
+                    b.ToTable("role_permissions");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.TeamEntity", b =>
@@ -328,7 +330,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
                     b.HasIndex("ViewId");
 
-                    b.ToTable("teams", (string)null);
+                    b.ToTable("teams");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.TeamMembershipEntity", b =>
@@ -366,7 +368,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                     b.HasIndex("TeamId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("team_memberships", (string)null);
+                    b.ToTable("team_memberships");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.TeamPermissionEntity", b =>
@@ -392,7 +394,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                     b.HasIndex("TeamId", "PermissionId")
                         .IsUnique();
 
-                    b.ToTable("team_permissions", (string)null);
+                    b.ToTable("team_permissions");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.UserEntity", b =>
@@ -423,7 +425,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("users", (string)null);
+                    b.ToTable("users");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.UserPermissionEntity", b =>
@@ -449,7 +451,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                     b.HasIndex("UserId", "PermissionId")
                         .IsUnique();
 
-                    b.ToTable("user_permissions", (string)null);
+                    b.ToTable("user_permissions");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.ViewEntity", b =>
@@ -480,7 +482,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
                     b.HasIndex("ParentViewId");
 
-                    b.ToTable("views", (string)null);
+                    b.ToTable("views");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.ViewMembershipEntity", b =>
@@ -512,7 +514,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                     b.HasIndex("ViewId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("view_memberships", (string)null);
+                    b.ToTable("view_memberships");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.Webhooks.PendingEventEntity", b =>
@@ -543,7 +545,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
                     b.HasIndex("SubscriptionId");
 
-                    b.ToTable("pending_events", (string)null);
+                    b.ToTable("pending_events");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.Webhooks.WebhookSubscriptionEntity", b =>
@@ -576,7 +578,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("webhooks", (string)null);
+                    b.ToTable("webhooks");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.Webhooks.WebhookSubscriptionEventTypeEntity", b =>
@@ -600,7 +602,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                     b.HasIndex("SubscriptionId", "EventType")
                         .IsUnique();
 
-                    b.ToTable("webhook_subscription_event_types", (string)null);
+                    b.ToTable("webhook_subscription_event_types");
                 });
 
             modelBuilder.Entity("Player.Api.Data.Data.Models.ApplicationEntity", b =>

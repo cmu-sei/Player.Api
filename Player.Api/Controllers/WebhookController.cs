@@ -69,7 +69,7 @@ namespace Player.Api.Controllers
         [HttpPut("webhooks/{id}")]
         [ProducesResponseType(typeof(WebhookSubscription), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "updateWebhookSubscription")]
-        public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] WebhookSubscriptionForm form, CancellationToken ct)
+        public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] WebhookSubscriptionPartialEditForm form, CancellationToken ct)
         {
             var updated = await _webhookService.UpdateAsync(id, form, ct);
             return Ok(updated);
