@@ -8,7 +8,9 @@ using Player.Api.Data.Data.Models.Webhooks;
 
 namespace Player.Api.ViewModels.Webhooks
 {
-    public class WebhookSubscriptionForm
+    public interface IWebhookSubscriptionForm { }
+
+    public class WebhookSubscriptionForm : IWebhookSubscriptionForm
     {
         public string Name { get; set; }
         public string CallbackUri { get; set; }
@@ -17,7 +19,7 @@ namespace Player.Api.ViewModels.Webhooks
         public List<EventType> EventTypes { get; set; }
     }
 
-    public class WebhookSubscriptionPartialEditForm : WebhookSubscriptionForm
+    public class WebhookSubscriptionPartialEditForm : WebhookSubscriptionForm, IWebhookSubscriptionForm
     {
 
     }

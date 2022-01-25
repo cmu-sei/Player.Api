@@ -38,12 +38,12 @@ namespace Player.Api.Controllers
         /// Subscribes to an event in the Player API
         /// </summary>
         [HttpPost("webhooks/subscribe")]
-        [ProducesResponseType((int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(WebhookSubscription), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "createWebhookSubscription")]
         public async Task<IActionResult> Subscribe([FromBody] WebhookSubscriptionForm form, CancellationToken ct)
         {
-            await _webhookService.Subscribe(form, ct);
-            return Ok();
+            var subscription = await _webhookService.Subscribe(form, ct);
+            return Ok(subscription);
         }
 
         /// <summary>
@@ -69,7 +69,22 @@ namespace Player.Api.Controllers
         [HttpPut("webhooks/{id}")]
         [ProducesResponseType(typeof(WebhookSubscription), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "updateWebhookSubscription")]
-        public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] WebhookSubscriptionPartialEditForm form, CancellationToken ct)
+        public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] WebhookSubscriptionForm form, CancellationToken ct)
+        {
+            var updated = await _webhookService.UpdateAsync(id, form, ct);
+            return Ok(updated);
+        }
+
+        /// <summary>
+        /// Partially updates a subscription
+        /// </summary>
+        /// <param name="id">The Id of the subscription to update</param>
+        /// <param name="form"></param>
+        /// <param name="ct"></param>
+        [HttpPatch("webhooks/{id}")]
+        [ProducesResponseType(typeof(WebhookSubscription), (int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "partialUpdateWebhookSubscription")]
+        public async Task<IActionResult> PartialUpdate([FromRoute] Guid id, [FromBody] WebhookSubscriptionPartialEditForm form, CancellationToken ct)
         {
             var updated = await _webhookService.UpdateAsync(id, form, ct);
             return Ok(updated);

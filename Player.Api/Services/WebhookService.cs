@@ -25,7 +25,7 @@ namespace Player.Api.Services
         Task<WebhookSubscription> Subscribe(WebhookSubscriptionForm form, CancellationToken ct);
         Task<IEnumerable<WebhookSubscription>> GetAll(CancellationToken ct);
         Task DeleteAsync(Guid id, CancellationToken ct);
-        Task<WebhookSubscription> UpdateAsync(Guid id, WebhookSubscriptionPartialEditForm form, CancellationToken ct);
+        Task<WebhookSubscription> UpdateAsync(Guid id, IWebhookSubscriptionForm form, CancellationToken ct);
     }
 
     public class WebhookService : IWebhookService
@@ -80,25 +80,7 @@ namespace Player.Api.Services
             await _context.SaveChangesAsync();
         }
 
-        public async Task<WebhookSubscription> UpdateAsync(Guid id, WebhookSubscriptionPartialEditForm form, CancellationToken ct)
-        {
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
-                throw new ForbiddenException();
-
-            var toUpdate = await _context.Webhooks
-                .Include(x => x.EventTypes)
-                .Where(w => w.Id == id)
-                .SingleOrDefaultAsync(ct);
-
-            if (toUpdate == null)
-                throw new EntityNotFoundException<WebhookSubscription>();
-
-            _mapper.Map(form, toUpdate);
-            await _context.SaveChangesAsync(ct);
-            return _mapper.Map<WebhookSubscription>(toUpdate);
-        }
-
-        public async Task<WebhookSubscription> PartialUpdateAsync(Guid id, WebhookSubscriptionForm form, CancellationToken ct)
+        public async Task<WebhookSubscription> UpdateAsync(Guid id, IWebhookSubscriptionForm form, CancellationToken ct)
         {
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();

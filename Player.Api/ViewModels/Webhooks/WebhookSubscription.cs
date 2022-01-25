@@ -22,7 +22,7 @@ namespace Player.Api.ViewModels.Webhooks
             {
                 if (!string.IsNullOrEmpty(_clientSecret))
                 {
-                    return "REDACTED";
+                    return string.Empty;
                 }
                 else
                 {
@@ -33,6 +33,14 @@ namespace Player.Api.ViewModels.Webhooks
             set
             {
                 _clientSecret = value;
+            }
+        }
+
+        public bool ClientSecretSet
+        {
+            get
+            {
+                return !string.IsNullOrEmpty(_clientSecret);
             }
         }
         public string LastError { get; set; }
