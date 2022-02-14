@@ -6,7 +6,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Principal;
 using System.Text.Json.Serialization;
-using AutoMapper;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -14,11 +13,9 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Player.Api.Data.Data;
@@ -30,6 +27,8 @@ using Player.Api.Infrastructure.Filters;
 using Player.Api.Infrastructure.Mappings;
 using Player.Api.Options;
 using Player.Api.Services;
+using MediatR;
+using Player.Api.Infrastructure.DbInterceptors;
 
 namespace Player.Api
 {
@@ -54,12 +53,16 @@ namespace Player.Api
             switch (provider)
             {
                 case "InMemory":
-                    services.AddDbContextPool<PlayerContext>(opt => opt.UseInMemoryDatabase("api"));
+                    services.AddDbContextPool<PlayerContext>((serviceProvider, opt) => opt
+                        .AddInterceptors(serviceProvider.GetRequiredService<EventTransactionInterceptor>())
+                        .UseInMemoryDatabase("api"));
                     break;
                 case "Sqlite":
                 case "SqlServer":
                 case "PostgreSQL":
-                    services.AddDbContextPool<PlayerContext>(builder => builder.UseConfiguredDatabase(Configuration));
+                    services.AddDbContextPool<PlayerContext>((serviceProvider, builder) => builder
+                        .AddInterceptors(serviceProvider.GetRequiredService<EventTransactionInterceptor>())
+                        .UseConfiguredDatabase(Configuration));
                     break;
             }
             var connectionString = Configuration.GetConnectionString(DatabaseExtensions.DbProvider(Configuration));
@@ -88,7 +91,10 @@ namespace Player.Api
                     .AddScoped(config => config.GetService<IOptionsMonitor<SeedDataOptions>>().CurrentValue)
 
                 .Configure<FileUploadOptions>(Configuration.GetSection("FileUpload"))
-                    .AddScoped(config => config.GetService<IOptionsMonitor<FileUploadOptions>>().CurrentValue);
+                    .AddScoped(config => config.GetService<IOptionsMonitor<FileUploadOptions>>().CurrentValue)
+
+                .Configure<Player.Api.Options.AuthorizationOptions>(Configuration.GetSection("Authorization"))
+                    .AddSingleton(config => config.GetService<IOptionsMonitor<Player.Api.Options.AuthorizationOptions>>().CurrentValue);
 
             services.AddCors(options => options.UseConfiguredCors(Configuration.GetSection("CorsPolicy")));
 
@@ -127,6 +133,8 @@ namespace Player.Api
             });
 
             services.AddMemoryCache();
+            services.AddMediatR(typeof(Startup));
+            services.AddTransient<EventTransactionInterceptor>();
 
             services.AddScoped<IViewService, ViewService>();
             services.AddScoped<IApplicationService, ApplicationService>();
@@ -139,6 +147,7 @@ namespace Player.Api
             services.AddScoped<ITeamMembershipService, TeamMembershipService>();
             services.AddScoped<IFileService, FileService>();
             services.AddScoped<IPresenceService, PresenceService>();
+            services.AddScoped<IWebhookService, WebhookService>();
 
             services.AddScoped<IClaimsTransformation, AuthorizationClaimsTransformer>();
             services.AddScoped<IUserClaimsService, UserClaimsService>();
@@ -147,6 +156,10 @@ namespace Player.Api
             services.AddScoped<IPrincipal>(p => p.GetService<IHttpContextAccessor>().HttpContext.User);
 
             services.AddSingleton<ConnectionCacheService>();
+            services.AddSingleton<BackgroundWebhookService>();
+            services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
+            services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
+            services.AddHttpClient();
 
             ApplyPolicies(services);
 
