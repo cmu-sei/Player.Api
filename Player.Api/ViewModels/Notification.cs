@@ -8,6 +8,7 @@ namespace Player.Api.ViewModels
 {
     public class Notification
     {
+        public int Key { get; set; }
         public Guid FromId { get; set; }
         public NotificationType FromType { get; set; }
         public Guid ToId { get; set; }
