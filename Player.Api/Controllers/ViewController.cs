@@ -244,6 +244,7 @@ namespace Player.Api.Controllers
         public async Task<IActionResult> DeleteNotification([FromRoute] Guid id, [FromRoute] int key, CancellationToken ct)
         {
             await _notificationService.DeleteAsync(key, ct);
+            await _viewHub.Clients.Group(id.ToString()).SendAsync("Delete", key);
             return Ok("Notification deleted - " + key.ToString());
         }
 
@@ -262,6 +263,7 @@ namespace Player.Api.Controllers
         public async Task<IActionResult> DeleteViewNotifications([FromRoute] Guid id, CancellationToken ct)
         {
             await _notificationService.DeleteViewNotificationsAsync(id, ct);
+            await _viewHub.Clients.Group(id.ToString()).SendAsync("Delete", "all");
             return Ok("Notifications deleted for view " + id.ToString());
         }
 
