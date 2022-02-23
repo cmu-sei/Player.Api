@@ -24,6 +24,7 @@ namespace Player.Api.Services
     {
         Task<IEnumerable<ViewModels.Notification>> GetAsync(CancellationToken ct);
         Task<IEnumerable<ViewModels.Notification>> GetByViewAsync(Guid viewId, CancellationToken ct);
+        Task<IEnumerable<ViewModels.Notification>> GetAllViewNotificationsAsync(Guid viewId, CancellationToken ct);
         Task<IEnumerable<ViewModels.Notification>> GetByTeamAsync(Guid teamId, CancellationToken ct);
         Task<IEnumerable<ViewModels.Notification>> GetByUserAsync(Guid viewId, Guid userId, CancellationToken ct);
         Task<ViewModels.Notification> JoinView(Guid id, CancellationToken ct);
@@ -32,6 +33,8 @@ namespace Player.Api.Services
         Task<ViewModels.Notification> PostToTeam(Guid teamId, ViewModels.Notification incomingData, CancellationToken ct);
         Task<ViewModels.Notification> JoinUser(Guid viewId, Guid userId, CancellationToken ct);
         Task<ViewModels.Notification> PostToUser(Guid viewId, Guid userId, ViewModels.Notification incomingData, CancellationToken ct);
+        Task<bool> DeleteAsync(int key, CancellationToken ct);
+        Task<bool> DeleteViewNotificationsAsync(Guid viewId, CancellationToken ct);
     }
 
     public class NotificationService : INotificationService
@@ -71,6 +74,17 @@ namespace Player.Api.Services
                 throw new ForbiddenException();
             // get all notifications for the selected view, not including the System notifications
             var items = await _context.Notifications.Where(x => x.ToId == viewId && x.ToType == NotificationType.View && x.Priority != NotificationPriority.System).OrderByDescending(y => y.BroadcastTime).ToListAsync();
+            // Databases do not preserve DateTimeKind, so we need to add UTC kind
+            items.ForEach(item => item.BroadcastTime = DateTime.SpecifyKind(item.BroadcastTime, DateTimeKind.Utc));
+            return _mapper.Map<IEnumerable<ViewModels.Notification>>(items);
+        }
+
+        public async Task<IEnumerable<ViewModels.Notification>> GetAllViewNotificationsAsync(Guid viewId, CancellationToken ct)
+        {
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewId))).Succeeded)
+                throw new ForbiddenException();
+            // get all notifications for the selected view
+            var items = await _context.Notifications.Where(n => n.ToId == viewId || n.ViewId == viewId).OrderByDescending(y => y.BroadcastTime).ToListAsync();
             // Databases do not preserve DateTimeKind, so we need to add UTC kind
             items.ForEach(item => item.BroadcastTime = DateTime.SpecifyKind(item.BroadcastTime, DateTimeKind.Utc));
             return _mapper.Map<IEnumerable<ViewModels.Notification>>(items);
@@ -360,6 +374,39 @@ namespace Player.Api.Services
             returnNotification.IconUrl = GetIconUrl(notificationEntity.Priority, notificationEntity.FromName);
             return returnNotification;
         }
+
+        public async Task<bool> DeleteAsync(int key, CancellationToken ct)
+        {
+            var notificationToDelete = await _context.Notifications.SingleOrDefaultAsync(n => n.Key == key, ct);
+
+            if (notificationToDelete == null)
+                throw new EntityNotFoundException<ViewModels.Notification>();
+
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement((Guid)notificationToDelete.ToId))).Succeeded)
+                throw new ForbiddenException();
+
+            _context.Notifications.Remove(notificationToDelete);
+            await _context.SaveChangesAsync(ct);
+
+            return true;
+        }
+
+        public async Task<bool> DeleteViewNotificationsAsync(Guid viewId, CancellationToken ct)
+        {
+            var notificationsToDelete = await _context.Notifications.Where(n => n.ToId == viewId || n.ViewId == viewId).ToListAsync();
+
+            if (notificationsToDelete == null || !notificationsToDelete.Any())
+                return false;
+
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewId))).Succeeded)
+                throw new ForbiddenException();
+
+            _context.Notifications.RemoveRange(notificationsToDelete);
+            await _context.SaveChangesAsync(ct);
+
+            return true;
+        }
+
 
         private string GetIconUrl(NotificationPriority notificationPriority, string userName)
         {

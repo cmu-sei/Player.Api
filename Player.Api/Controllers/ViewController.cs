@@ -129,10 +129,10 @@ namespace Player.Api.Controllers
         }
 
         /// <summary>
-        /// Updates an View
+        /// Updates a View
         /// </summary>
         /// <remarks>
-        /// Updates an View with the attributes specified
+        /// Updates a View with the attributes specified
         /// <para />
         /// Accessible only to a SuperUser or a User on an Admin Team within the specified View
         /// </remarks>
@@ -149,10 +149,10 @@ namespace Player.Api.Controllers
         }
 
         /// <summary>
-        /// Deletes an View
+        /// Deletes a View
         /// </summary>
         /// <remarks>
-        /// Deletes an View with the specified id
+        /// Deletes a View with the specified id
         /// <para />
         /// Accessible only to a SuperUser or a User on an Admin Team within the specified View
         /// </remarks>
@@ -168,7 +168,7 @@ namespace Player.Api.Controllers
         }
 
         /// <summary>
-        /// Clones an View
+        /// Clones a View
         /// </summary>
         /// <param name="id">Id of the View to be cloned</param>
         /// <param name="ct"></param>
@@ -186,7 +186,7 @@ namespace Player.Api.Controllers
         /// Sends a new View Notification
         /// </summary>
         /// <remarks>
-        /// Creates a new View within an View with the attributes specified
+        /// Creates a new View within a View with the attributes specified
         /// <para />
         /// Accessible only to a SuperUser or a User on an Admin View within the specified View
         /// </remarks>
@@ -210,6 +210,61 @@ namespace Player.Api.Controllers
             }
             await _viewHub.Clients.Group(id.ToString()).SendAsync("Reply", notification);
             return Ok("Message was sent to view " + id.ToString());
+        }
+
+        /// <summary>
+        /// Gets all Notifications for a View
+        /// </summary>
+        /// <remarks>
+        /// Accessible to a SuperUser
+        /// </remarks>
+        /// <returns></returns>
+        [HttpGet("views/{id}/notifications")]
+        [ProducesResponseType(typeof(IEnumerable<View>), (int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "getAllViewNotifications")]
+        public async Task<IActionResult> GetAllViewNotifications(Guid id, CancellationToken ct)
+        {
+            var list = await _notificationService.GetAllViewNotificationsAsync(id, ct);
+            return Ok(list);
+        }
+
+        /// <summary>
+        /// Deletes a  Notification
+        /// </summary>
+        /// <remarks>
+        /// Accessible only to a SuperUser or a View Admin
+        /// </remarks>
+        /// <param name="id">The id of the View</param>
+        /// <param name="key">The key of the notification</param>
+        /// <param name="ct"></param>
+        [HttpDelete("views/{id}/notifications/{key}")]
+        [ProducesResponseType(typeof(string), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(string), (int)HttpStatusCode.Forbidden)]
+        [SwaggerOperation(OperationId = "deleteNotification")]
+        public async Task<IActionResult> DeleteNotification([FromRoute] Guid id, [FromRoute] int key, CancellationToken ct)
+        {
+            await _notificationService.DeleteAsync(key, ct);
+            await _viewHub.Clients.Group(id.ToString()).SendAsync("Delete", key);
+            return Ok("Notification deleted - " + key.ToString());
+        }
+
+        /// <summary>
+        /// Deletes all  Notifications for a view
+        /// </summary>
+        /// <remarks>
+        /// Accessible only to a SuperUser or a View Admin
+        /// </remarks>
+        /// <param name="id">The id of the View</param>
+        /// <param name="ct"></param>
+        [HttpDelete("views/{id}/notifications")]
+        [ProducesResponseType(typeof(string), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(string), (int)HttpStatusCode.Forbidden)]
+        [SwaggerOperation(OperationId = "deleteViewNotifications")]
+        public async Task<IActionResult> DeleteViewNotifications([FromRoute] Guid id, CancellationToken ct)
+        {
+            await _notificationService.DeleteViewNotificationsAsync(id, ct);
+            await _viewHub.Clients.Group(id.ToString()).SendAsync("Delete", "all");
+            return Ok("Notifications deleted for view " + id.ToString());
         }
 
     }
