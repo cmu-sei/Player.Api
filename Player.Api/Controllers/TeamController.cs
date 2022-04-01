@@ -100,14 +100,15 @@ namespace Player.Api.Controllers
         /// <para />
         /// Accessible only to the current User.
         /// <para/>
-        /// This is a convenience endpoint and simply returns a 302 redirect to the fully qualified users/{userId}/views/{viewId}/teams endpoint
         /// </remarks>
         /// <param name="id">The id of the View</param>
+        /// <param name="ct"></param>
         [HttpGet("me/views/{id}/teams")]
         [SwaggerOperation(OperationId = "getMyViewTeams")]
-        public async Task<IActionResult> GetByViewForMe(Guid id)
+        public async Task<IActionResult> GetByViewForMe(Guid id, CancellationToken ct)
         {
-            return RedirectToAction(nameof(this.GetByViewForUser), new { userId = User.GetId(), viewId = id });
+            var list = await _teamService.GetByViewIdForUserAsync(id, User.GetId(), ct);
+            return Ok(list);
         }
 
         /// <summary>
