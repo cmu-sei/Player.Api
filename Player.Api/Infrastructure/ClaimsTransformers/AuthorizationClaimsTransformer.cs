@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Player.Api.Services;
+using Player.Api.Extensions;
 
 namespace Player.Api.Infrastructure.ClaimsTransformers
 {
@@ -19,7 +20,8 @@ namespace Player.Api.Infrastructure.ClaimsTransformers
 
         public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
         {
-            var user = await _claimsService.AddUserClaims(principal, true);
+            var user = principal.NormalizeScopeClaims();
+            user = await _claimsService.AddUserClaims(user, true);
             _claimsService.SetCurrentClaimsPrincipal(user);
             return user;
         }

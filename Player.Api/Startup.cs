@@ -130,8 +130,25 @@ namespace Player.Api
             {
                 options.Authority = _authOptions.Authority;
                 options.RequireHttpsMetadata = _authOptions.RequireHttpsMetadata;
-                options.Audience = _authOptions.AuthorizationScope;
                 options.SaveToken = true;
+
+                string[] validAudiences;
+
+                if (_authOptions.ValidAudiences != null && _authOptions.ValidAudiences.Any())
+                {
+                    validAudiences = _authOptions.ValidAudiences;
+                }
+                else
+                {
+                    validAudiences = _authOptions.AuthorizationScope.Split(' ');
+                }
+
+                options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                {
+                    ValidateAudience = _authOptions.ValidateAudience,
+                    ValidAudiences = validAudiences
+                };
+
             });
 
             services.AddRouting(options =>
@@ -246,8 +263,14 @@ namespace Player.Api
 
         private void ApplyPolicies(IServiceCollection services)
         {
-            services.AddAuthorization();
+            services.AddAuthorization(options =>
+            {
+                // Require all scopes in authOptions
+                var policyBuilder = new AuthorizationPolicyBuilder().RequireAuthenticatedUser();
+                Array.ForEach(_authOptions.AuthorizationScope.Split(' '), x => policyBuilder.RequireClaim("scope", x));
 
+                options.DefaultPolicy = policyBuilder.Build();
+            });
 
             // TODO: Add these automatically with reflection?
             services.AddSingleton<IAuthorizationHandler, FullRightsHandler>();
