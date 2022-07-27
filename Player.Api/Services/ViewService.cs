@@ -26,7 +26,7 @@ namespace Player.Api.Services
         Task<ViewModels.View> GetAsync(Guid id, CancellationToken ct);
         Task<IEnumerable<ViewModels.View>> GetByUserIdAsync(Guid userId, CancellationToken ct);
         Task<ViewModels.View> CreateAsync(ViewModels.ViewForm view, CancellationToken ct);
-        Task<View> CloneAsync(Guid id, CancellationToken ct);
+        Task<View> CloneAsync(Guid id, ViewCloneOverride viewCloneOverride, CancellationToken ct);
         Task<ViewModels.View> UpdateAsync(Guid id, ViewModels.View view, CancellationToken ct);
         Task<bool> DeleteAsync(Guid id, CancellationToken ct);
     }
@@ -139,7 +139,7 @@ namespace Player.Api.Services
             return await GetAsync(viewEntity.Id, ct);
         }
 
-        public async Task<View> CloneAsync(Guid idToBeCloned, CancellationToken ct)
+        public async Task<View> CloneAsync(Guid idToBeCloned, ViewCloneOverride viewCloneOverride, CancellationToken ct)
         {
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewCreationRequirement())).Succeeded)
                 throw new ForbiddenException();
@@ -157,6 +157,11 @@ namespace Player.Api.Services
             var newView = view.Clone();
             newView.Name = $"Clone of {newView.Name}";
             newView.Status = ViewStatus.Active;
+            if (viewCloneOverride != null)
+            {
+                newView.Name = string.IsNullOrWhiteSpace(viewCloneOverride.Name) ? newView.Name : viewCloneOverride.Name;
+                newView.Description = string.IsNullOrWhiteSpace(viewCloneOverride.Description) ? newView.Description : viewCloneOverride.Description;
+            }
 
             //copy view applications
             foreach (var application in view.Applications)
@@ -262,4 +267,11 @@ namespace Player.Api.Services
             return true;
         }
     }
+
+    public class ViewCloneOverride
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
+    }
+
 }

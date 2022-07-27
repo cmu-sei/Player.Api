@@ -14,7 +14,6 @@ using Player.Api.Services;
 using Player.Api.ViewModels;
 using Microsoft.AspNetCore.SignalR;
 using Player.Api.Hubs;
-using Player.Api.Infrastructure.Authorization;
 using Swashbuckle.AspNetCore.Annotations;
 
 namespace Player.Api.Controllers
@@ -171,14 +170,18 @@ namespace Player.Api.Controllers
         /// Clones a View
         /// </summary>
         /// <param name="id">Id of the View to be cloned</param>
+        /// <param name="viewCloneOverride">OPTIONAL object containing Name and Description to be used for the new clone</param>
         /// <param name="ct"></param>
         /// <returns></returns>
         [HttpPost("views/{id}/clone")]
         [ProducesResponseType(typeof(View), (int)HttpStatusCode.Created)]
         [SwaggerOperation(OperationId = "cloneView")]
-        public async Task<IActionResult> Clone(Guid id, CancellationToken ct)
+        public async Task<IActionResult> Clone(
+            Guid id,
+            [FromBody, ModelBinder(BinderType = typeof(EmptyBodyModelBinder<ViewCloneOverride>))] ViewCloneOverride viewCloneOverride,
+            CancellationToken ct)
         {
-            var createdView = await _viewService.CloneAsync(id, ct);
+            var createdView = await _viewService.CloneAsync(id, viewCloneOverride, ct);
             return CreatedAtAction(nameof(this.Get), new { id = createdView.Id }, createdView);
         }
 

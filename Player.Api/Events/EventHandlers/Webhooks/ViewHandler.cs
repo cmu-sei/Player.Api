@@ -38,7 +38,8 @@ namespace Player.Api.Events.EventHandlers.Webhooks
             IWebhookEventPayload payload = new ViewModels.Webhooks.ViewCreated()
             {
                 ViewId = notification.Entity.Id,
-                ParentId = notification.Entity.ParentViewId
+                ParentId = notification.Entity.ParentViewId,
+                ViewName = notification.Entity.Name
             };
 
             await _backgroundService.AddEvent(new WebhookEvent(EventType.ViewCreated, payload));
