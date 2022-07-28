@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Player.Api.Extensions;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.Services;
@@ -178,7 +179,7 @@ namespace Player.Api.Controllers
         [SwaggerOperation(OperationId = "cloneView")]
         public async Task<IActionResult> Clone(
             Guid id,
-            [FromBody, ModelBinder(BinderType = typeof(EmptyBodyModelBinder<ViewCloneOverride>))] ViewCloneOverride viewCloneOverride,
+            [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)]  ViewCloneOverride viewCloneOverride,
             CancellationToken ct)
         {
             var createdView = await _viewService.CloneAsync(id, viewCloneOverride, ct);
