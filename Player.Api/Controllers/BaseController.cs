@@ -3,8 +3,6 @@
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Player.Api.ViewModels;
-using System.Net;
 
 namespace Player.Api.Controllers
 {
@@ -14,4 +12,5 @@ namespace Player.Api.Controllers
     public abstract class BaseController : ControllerBase
     {
     }
+
 }
