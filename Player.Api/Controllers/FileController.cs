@@ -1,4 +1,4 @@
-// Copyright 2021 Carnegie Mellon University. All Rights Reserved.
+// Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
@@ -34,7 +34,7 @@ namespace Player.Api.Controllers
         {
             var result = await _fileService.UploadAsync(form, ct);
             return CreatedAtAction(nameof(this.Get), result);
-        } 
+        }
 
         /// <summary> Get all files in the system </summary>
         /// <param name="ct"></param>
@@ -99,7 +99,7 @@ namespace Player.Api.Controllers
                 Response.Headers.Add("Content-Disposition", "inline");
                 return File(stream, "application/pdf", fileName);
             }
-                
+
             else if (IsImage(fileName))
             {
                 Response.Headers.Add("Content-Disposition", "inline");
@@ -147,8 +147,8 @@ namespace Player.Api.Controllers
         // Will need to update this method if we want to support more image types.
         private bool IsImage(string file)
         {
-            return file.EndsWith(".jpg") || file.EndsWith(".jpeg") || file.EndsWith(".png") || file.EndsWith(".bmp") || 
-                file.EndsWith(".heic") || file.EndsWith(".gif"); 
+            return file.EndsWith(".jpg") || file.EndsWith(".jpeg") || file.EndsWith(".png") || file.EndsWith(".bmp") ||
+                file.EndsWith(".heic") || file.EndsWith(".gif");
         }
     }
 }

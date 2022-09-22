@@ -1,4 +1,4 @@
-// Copyright 2021 Carnegie Mellon University. All Rights Reserved.
+// Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System.Collections.Generic;
@@ -18,7 +18,7 @@ namespace Player.Api.Infrastructure.OperationFilters
                 Description = "Problem response",
                 Content = new Dictionary<string, OpenApiMediaType>
                 {
-                    [ "application/json" ] = new OpenApiMediaType
+                    ["application/json"] = new OpenApiMediaType
                     {
                         Schema = context.SchemaGenerator.GenerateSchema(typeof(ProblemDetails), context.SchemaRepository)
                     }

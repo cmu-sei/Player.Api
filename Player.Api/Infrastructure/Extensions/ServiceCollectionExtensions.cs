@@ -1,4 +1,4 @@
-// Copyright 2021 Carnegie Mellon University. All Rights Reserved.
+// Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using Microsoft.Extensions.DependencyInjection;
@@ -32,10 +32,11 @@ namespace Player.Api.Infrastructure.Extensions
                 {
                     Type = SecuritySchemeType.OAuth2,
                     Flows = new OpenApiOAuthFlows
-                    {    
-                        AuthorizationCode = new OpenApiOAuthFlow {                            
+                    {
+                        AuthorizationCode = new OpenApiOAuthFlow
+                        {
                             AuthorizationUrl = new Uri(authOptions.AuthorizationUrl),
-                            TokenUrl = new Uri(authOptions.TokenUrl), 
+                            TokenUrl = new Uri(authOptions.TokenUrl),
                             Scopes = new Dictionary<string, string>()
                             {
                                 {authOptions.AuthorizationScope, "public api access"}

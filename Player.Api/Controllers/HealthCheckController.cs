@@ -1,6 +1,6 @@
 
 /*
-Copyright 2021 Carnegie Mellon University. All Rights Reserved. 
+Copyright 2022 Carnegie Mellon University. All Rights Reserved. 
  Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 */
 
@@ -13,7 +13,7 @@ using System.Threading;
 using Microsoft.AspNetCore.Authorization;
 
 namespace Player.Api.Controllers
-{    
+{
     [AllowAnonymous]
     public class HealthController : BaseController
     {
@@ -56,4 +56,4 @@ namespace Player.Api.Controllers
             return report.Status == HealthStatus.Healthy ? this.Ok(report.Status) : this.StatusCode((int)HttpStatusCode.ServiceUnavailable, report.Status);
         }
     }
-} 
+}
