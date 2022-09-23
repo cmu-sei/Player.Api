@@ -1,4 +1,4 @@
-// Copyright 2021 Carnegie Mellon University. All Rights Reserved.
+// Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using AutoMapper;
@@ -33,7 +33,7 @@ namespace Player.Api.Services
         Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct);
         Task<Tuple<FileStream, string>> DownloadAsync(Guid fileId, CancellationToken ct);
         Task<FileModel> UpdateAsync(Guid fileId, FileUpdateForm form, CancellationToken ct);
-        Task<bool> DeleteAsync (Guid fileId, CancellationToken ct);
+        Task<bool> DeleteAsync(Guid fileId, CancellationToken ct);
     }
 
     public class FileService : IFileService
@@ -59,11 +59,11 @@ namespace Player.Api.Services
         {
             if (form.teamIds == null)
                 throw new ForbiddenException("File must be assigned to at least one team");
-            
+
             var viewEntity = await _context.Views
                 .Where(v => v.Id == form.viewId)
                 .SingleOrDefaultAsync(ct);
-            
+
             // Ensure all teams are in the same view
             if (!await TeamsInSameView(viewEntity.Id, form.teamIds, ct))
                 throw new ForbiddenException("Teams must be in same view.");
@@ -71,9 +71,9 @@ namespace Player.Api.Services
             // Ensyre user can manage this view
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewEntity.Id))).Succeeded)
                 throw new ForbiddenException("Insuffcient Permissions");
-            
+
             List<FileModel> models = new List<FileModel>();
-            foreach(var fp in form.ToUpload)
+            foreach (var fp in form.ToUpload)
             {
                 if (!ValidateFileExtension(fp.FileName))
                     throw new ForbiddenException("Invalid file extension");
@@ -103,7 +103,7 @@ namespace Player.Api.Services
         {
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
-            
+
             var files = await _context.Files
                 .Include(f => f.View)
                 .ToListAsync();
@@ -116,7 +116,7 @@ namespace Player.Api.Services
             var userId = _user.GetId();
             var teams = await _teamService.GetByViewIdForUserAsync(viewId, userId, ct);
             var accessable = new List<FileModel>();
-            
+
             foreach (var team in teams)
             {
                 accessable.AddRange(_mapper.Map<IEnumerable<FileModel>>(await GetByTeamAsync(team.Id, ct)));
@@ -129,28 +129,28 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new TeamMemberRequirement(teamId))).Succeeded
                 && !(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
                 throw new ForbiddenException();
-            
+
             var files = _context.Files
                 .Include(f => f.View)
                 .AsEnumerable()
                 .Where(f => f.TeamIds.Contains(teamId))
                 .ToList();
-            
+
             return _mapper.Map<IEnumerable<FileModel>>(files);
         }
 
         public async Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct)
-        {            
+        {
             var file = await _context.Files
                 .Where(f => f.Id == fileId)
                 .Include(f => f.View)
                 .SingleOrDefaultAsync(ct);
-            
+
             if (file == null)
-                throw new EntityNotFoundException<FileModel>(); 
-            
+                throw new EntityNotFoundException<FileModel>();
+
             await EnsureAccessFile(file);
-            
+
             return _mapper.Map<FileModel>(file);
         }
 
@@ -163,10 +163,10 @@ namespace Player.Api.Services
 
             if (file == null)
                 throw new EntityNotFoundException<FileModel>();
-            
+
             await EnsureAccessFile(file);
 
-            return Tuple.Create(File.OpenRead(file.Path), file.Name);            
+            return Tuple.Create(File.OpenRead(file.Path), file.Name);
         }
 
         public async Task<FileModel> UpdateAsync(Guid fileId, FileUpdateForm form, CancellationToken ct)
@@ -175,19 +175,19 @@ namespace Player.Api.Services
                 .Where(f => f.Id == fileId)
                 .Include(f => f.View)
                 .SingleOrDefaultAsync(ct);
-            
+
             if (entity == null)
                 throw new EntityNotFoundException<FileModel>();
-            
-            if (! await TeamsInSameView(entity.View.Id, form.TeamIds, ct))
+
+            if (!await TeamsInSameView(entity.View.Id, form.TeamIds, ct))
                 throw new ForbiddenException("Teams must be in same view");
-            
+
             // This authorization check assumes all teams for the file are in the same view, but we have verified
             // that that is the case with the above check.
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(entity.View.Id))).Succeeded)
                 throw new ForbiddenException();
-                
-            
+
+
             // File pointed to is being changed
             if (form.ToUpload != null)
             {
@@ -201,7 +201,7 @@ namespace Player.Api.Services
                 // File is now on disk, check if old file should be deleted (only has the one pointer)
                 if (await lastPointer(entity.Path, ct))
                     File.Delete(entity.Path);
-                
+
                 // Move pointer to new file
                 entity.Path = filePath;
                 entity.Name = name;
@@ -224,13 +224,13 @@ namespace Player.Api.Services
                 .Where(f => f.Id == fileId)
                 .Include(f => f.View)
                 .SingleOrDefaultAsync(ct);
-            
+
             if (toDelete == null)
                 throw new EntityNotFoundException<FileModel>();
-            
+
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(toDelete.View.Id))).Succeeded)
                 throw new ForbiddenException();
-            
+
             // If this is the last pointer to the file, the file should be deleted. Else, just delete the pointer
             if (await lastPointer(toDelete.Path, ct))
                 File.Delete(toDelete.Path);
@@ -271,7 +271,7 @@ namespace Player.Api.Services
             var pointerCount = await _context.Files
                 .Where(f => f.Path == path)
                 .CountAsync(ct);
-            
+
             return pointerCount == 1;
         }
 
@@ -284,7 +284,7 @@ namespace Player.Api.Services
 
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(viewId))).Succeeded)
                 throw new ForbiddenException();
-            
+
             var folderPath = Path.Combine(_fileUploadOptions.basePath, viewId.ToString());
             var filepath = Path.Combine(folderPath, name);
 
@@ -319,7 +319,7 @@ namespace Player.Api.Services
                 .Where(v => v.Id == viewId)
                 .Include(v => v.Teams)
                 .SingleOrDefaultAsync(ct);
-            
+
             // Ensure all teams are in the same view
             foreach (var teamId in teamIds)
             {

@@ -1,4 +1,4 @@
-// Copyright 2021 Carnegie Mellon University. All Rights Reserved.
+// Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
@@ -17,7 +17,7 @@ namespace Player.Api.Data.Data.Models
         public virtual ViewEntity View { get; set; }
         public List<Guid> TeamIds { get; set; }
         public string Path { get; set; }
-    
+
         public FileEntity Clone()
         {
             var entity = this.MemberwiseClone() as FileEntity;

@@ -1,4 +1,4 @@
-// Copyright 2021 Carnegie Mellon University. All Rights Reserved.
+// Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
@@ -179,7 +179,7 @@ namespace Player.Api.Controllers
         [SwaggerOperation(OperationId = "cloneView")]
         public async Task<IActionResult> Clone(
             Guid id,
-            [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)]  ViewCloneOverride viewCloneOverride,
+            [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] ViewCloneOverride viewCloneOverride,
             CancellationToken ct)
         {
             var createdView = await _viewService.CloneAsync(id, viewCloneOverride, ct);
