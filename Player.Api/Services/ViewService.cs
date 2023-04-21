@@ -222,6 +222,24 @@ namespace Player.Api.Services
                 }
                 file.TeamIds = newTeamIds;
             }
+
+            // Update any applications pointing to original files
+            foreach (var file in view.Files)
+            {
+                var newFile = newView.Files.Where(x => x.Path == file.Path).FirstOrDefault();
+
+                if (newFile == null)
+                    continue;
+
+                foreach (var application in newView.Applications)
+                {
+                    if (application.Url != null && application.Url.Contains(file.Id.ToString()))
+                    {
+                        application.Url = application.Url.Replace(file.Id.ToString(), newFile.Id.ToString());
+                    }
+                }
+            }
+
             await _context.SaveChangesAsync(ct);
             return _mapper.Map<View>(newView);
         }
