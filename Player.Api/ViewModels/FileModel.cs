@@ -12,6 +12,5 @@ namespace Player.Api.ViewModels
         public string Name { get; set; }
         public Guid viewId { get; set; }
         public List<Guid> teamIds { get; set; }
-        public string Path { get; set; }
     }
 }

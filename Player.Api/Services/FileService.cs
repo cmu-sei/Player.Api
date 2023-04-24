@@ -119,9 +119,18 @@ namespace Player.Api.Services
 
             foreach (var team in teams)
             {
-                accessable.AddRange(_mapper.Map<IEnumerable<FileModel>>(await GetByTeamAsync(team.Id, ct)));
+                var teamFiles = await GetByTeamAsync(team.Id, ct);
+
+                foreach (var teamFile in teamFiles)
+                {
+                    if (!accessable.Any(x => x.id == teamFile.id))
+                    {
+                        accessable.Add(teamFile);
+                    }
+                }
             }
-            return _mapper.Map<IEnumerable<FileModel>>(accessable);
+
+            return accessable;
         }
 
         public async Task<IEnumerable<FileModel>> GetByTeamAsync(Guid teamId, CancellationToken ct)
