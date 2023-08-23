@@ -11,7 +11,9 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Player.Api.Data.Data;
+using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
@@ -31,16 +33,19 @@ namespace Player.Api.Services
         private readonly IAuthorizationService _authorizationService;
         private readonly ClaimsPrincipal _user;
         private readonly IMapper _mapper;
+        private ILogger<ITeamMembershipService> _logger;
 
         public TeamMembershipService(PlayerContext context,
                                         IAuthorizationService authorizationService,
                                         IPrincipal user,
-                                        IMapper mapper)
+                                        IMapper mapper,
+                                        ILogger<ITeamMembershipService> logger)
         {
             _context = context;
             _authorizationService = authorizationService;
             _user = user as ClaimsPrincipal;
             _mapper = mapper;
+            _logger = logger;
         }
 
         public async Task<TeamMembership> GetAsync(Guid id)
@@ -91,7 +96,7 @@ namespace Player.Api.Services
 
             _context.TeamMemberships.Update(membershipToUpdate);
             await _context.SaveChangesAsync();
-
+            _logger.LogWarning($"Team Membership updated by {_user.GetId()} = User: {membershipToUpdate.UserId}, Role: {membershipToUpdate.RoleId}, Team: {membershipToUpdate.TeamId}, ViewMembership: {membershipToUpdate.ViewMembershipId}");
             return await GetAsync(id);
         }
     }

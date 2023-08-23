@@ -5,8 +5,10 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
+using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
@@ -39,15 +41,17 @@ namespace Player.Api.Services
         private readonly ClaimsPrincipal _user;
         private readonly IMapper _mapper;
         private IUserClaimsService _claimsService;
+        private ILogger<ITeamService> _logger;
 
 
-        public TeamService(PlayerContext context, IPrincipal user, IAuthorizationService authorizationService, IMapper mapper, IUserClaimsService claimsService)
+        public TeamService(PlayerContext context, IPrincipal user, IAuthorizationService authorizationService, IMapper mapper, IUserClaimsService claimsService, ILogger<ITeamService> logger)
         {
             _context = context;
             _authorizationService = authorizationService;
             _user = user as ClaimsPrincipal;
             _mapper = mapper;
             _claimsService = claimsService;
+            _logger = logger;
         }
 
         public async Task<IEnumerable<Team>> GetAsync(CancellationToken ct)
@@ -66,7 +70,7 @@ namespace Player.Api.Services
 
             var viewExists = await _context.Views
                 .Where(e => e.Id == viewId)
-                .AnyAsync();
+                .AnyAsync(ct);
 
             if (!viewExists)
                 throw new EntityNotFoundException<View>();
@@ -74,7 +78,7 @@ namespace Player.Api.Services
             var teams = await _context.Teams
                 .Where(e => e.ViewId == viewId)
                 .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider)
-                .ToArrayAsync();
+                .ToArrayAsync(ct);
 
             return _mapper.Map<IEnumerable<Team>>(teams);
         }
@@ -86,14 +90,14 @@ namespace Player.Api.Services
 
             var viewExists = await _context.Views
                 .Where(e => e.Id == viewId)
-                .AnyAsync();
+                .AnyAsync(ct);
 
             if (!viewExists)
                 throw new EntityNotFoundException<View>();
 
             var userExists = await _context.Users
                 .Where(u => u.Id == userId)
-                .AnyAsync();
+                .AnyAsync(ct);
 
             if (!userExists)
                 throw new EntityNotFoundException<User>();
@@ -115,7 +119,7 @@ namespace Player.Api.Services
                 .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
             }
 
-            var teams = await teamQuery.ToListAsync();
+            var teams = await teamQuery.ToListAsync(ct);
 
             return _mapper.Map<IEnumerable<Team>>(teams);
         }
@@ -149,7 +153,7 @@ namespace Player.Api.Services
 
             viewEntity.Teams.Add(teamEntity);
             await _context.SaveChangesAsync(ct);
-
+            _logger.LogWarning($"Team {teamEntity.Name} ({teamEntity.Id}) in View {teamEntity.ViewId} created by {_user.GetId()}");
             var team = await GetAsync(teamEntity.Id, ct);
             return _mapper.Map<Team>(team);
         }
@@ -164,11 +168,12 @@ namespace Player.Api.Services
             if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(teamToUpdate.ViewId))).Succeeded)
                 throw new ForbiddenException();
 
+            var newRole = form.RoleId == teamToUpdate.RoleId ? "" : form.RoleId.ToString();
             _mapper.Map(form, teamToUpdate);
 
             _context.Teams.Update(teamToUpdate);
             await _context.SaveChangesAsync(ct);
-
+            _logger.LogWarning($"Team {teamToUpdate.Name} ({teamToUpdate.Id}) in View {teamToUpdate.ViewId} updated by {_user.GetId()} added Role: {newRole}");
             var team = await GetAsync(id, ct);
             return _mapper.Map<Team>(team);
         }
@@ -185,7 +190,7 @@ namespace Player.Api.Services
 
             _context.Teams.Remove(teamToDelete);
             await _context.SaveChangesAsync(ct);
-
+            _logger.LogWarning($"Team {teamToDelete.Name} ({teamToDelete.Id}) in View {teamToDelete.ViewId} deleted by {_user.GetId()}");
             return true;
         }
 

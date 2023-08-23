@@ -11,6 +11,7 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Extensions;
 using Player.Api.Data.Data.Models;
@@ -44,16 +45,19 @@ namespace Player.Api.Services
         private readonly IAuthorizationService _authorizationService;
         private readonly ClaimsPrincipal _user;
         private readonly IMapper _mapper;
+        private readonly ILogger<IPermissionService> _logger;
 
         public PermissionService(PlayerContext context,
                                 IAuthorizationService authorizationService,
                                 IPrincipal user,
-                                IMapper mapper)
+                                IMapper mapper,
+                                ILogger<IPermissionService> logger)
         {
             _context = context;
             _mapper = mapper;
             _authorizationService = authorizationService;
             _user = user as ClaimsPrincipal;
+            _logger = logger;
         }
 
         public async Task<IEnumerable<Permission>> GetAsync()
@@ -255,7 +259,7 @@ namespace Player.Api.Services
             _context.Roles.Update(role);
 
             await _context.SaveChangesAsync();
-
+            _logger.LogWarning($"Permission {permission.Key} ({permissionId}) added to Role {role.Name} ({roleId}) by {_user.GetId()}");
             return true;
         }
 
@@ -287,7 +291,7 @@ namespace Player.Api.Services
                 _context.RolePermissions.Remove(rolePermission);
                 await _context.SaveChangesAsync();
             }
-
+            _logger.LogWarning($"Permission {permission.Key} ({permissionId}) removed from Role {role.Name} ({roleId}) by {_user.GetId()}");
             return true;
         }
 
@@ -314,7 +318,7 @@ namespace Player.Api.Services
             _context.Teams.Update(team);
 
             await _context.SaveChangesAsync();
-
+            _logger.LogWarning($"Permission {permission.Key} ({permissionId}) added to Team {team.Name} ({teamId}) by {_user.GetId()}");
             return true;
         }
 
@@ -346,7 +350,7 @@ namespace Player.Api.Services
                 _context.TeamPermissions.Remove(teamPermission);
                 await _context.SaveChangesAsync();
             }
-
+            _logger.LogWarning($"Permission {permission.Key} ({permissionId}) removed from Team {team.Name} ({teamId}) by {_user.GetId()}");
             return true;
         }
 
@@ -373,7 +377,7 @@ namespace Player.Api.Services
             _context.Users.Update(user);
 
             await _context.SaveChangesAsync();
-
+            _logger.LogWarning($"Permission {permission.Key} ({permissionId}) added to User {user.Name} ({userId}) by {_user.GetId()}");
             return true;
         }
 
@@ -408,7 +412,7 @@ namespace Player.Api.Services
                 _context.UserPermissions.Remove(userPermission);
                 await _context.SaveChangesAsync();
             }
-
+            _logger.LogWarning($"Permission {permission.Key} ({permissionId}) remove from User {user.Name} ({userId}) by {_user.GetId()}");
             return true;
         }
     }
