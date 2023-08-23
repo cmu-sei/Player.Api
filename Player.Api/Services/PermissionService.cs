@@ -412,7 +412,7 @@ namespace Player.Api.Services
                 _context.UserPermissions.Remove(userPermission);
                 await _context.SaveChangesAsync();
             }
-            _logger.LogWarning($"Permission {permission.Key} ({permissionId}) remove from User {user.Name} ({userId}) by {_user.GetId()}");
+            _logger.LogWarning($"Permission {permission.Key} ({permissionId}) removed from User {user.Name} ({userId}) by {_user.GetId()}");
             return true;
         }
     }
