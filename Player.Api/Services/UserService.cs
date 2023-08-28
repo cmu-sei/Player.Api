@@ -12,6 +12,7 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Extensions;
@@ -41,18 +42,21 @@ namespace Player.Api.Services
         private readonly IMapper _mapper;
         private readonly IAuthorizationService _authorizationService;
         private readonly IUserClaimsService _userClaimsService;
+        private ILogger<IUserService> _logger;
 
         public UserService(PlayerContext context,
                             IPrincipal user,
                             IAuthorizationService authorizationService,
                             IUserClaimsService userClaimsService,
-                            IMapper mapper)
+                            IMapper mapper,
+                            ILogger<IUserService> logger)
         {
             _context = context;
             _user = user as ClaimsPrincipal;
             _mapper = mapper;
             _authorizationService = authorizationService;
             _userClaimsService = userClaimsService;
+            _logger = logger;
         }
 
         public async Task<IEnumerable<ViewModels.User>> GetAsync(CancellationToken ct)
@@ -128,7 +132,7 @@ namespace Player.Api.Services
 
             _context.Users.Add(userEntity);
             await _context.SaveChangesAsync(ct);
-
+            _logger.LogWarning($"User {user.Name} ({userEntity.Id}) created by {_user.GetId()}");
             return await GetAsync(user.Id, ct);
         }
 
@@ -152,7 +156,7 @@ namespace Player.Api.Services
 
             _context.Users.Update(userToUpdate);
             await _context.SaveChangesAsync(ct);
-
+            _logger.LogWarning($"User {user.Name} ({userToUpdate.Id}) updated by {_user.GetId()}");
             return await GetAsync(id, ct);
         }
 
@@ -173,7 +177,7 @@ namespace Player.Api.Services
 
             _context.Users.Remove(userToDelete);
             await _context.SaveChangesAsync(ct);
-
+            _logger.LogWarning($"User {userToDelete.Name} ({userToDelete.Id}) deleted by {_user.GetId()}");
             return true;
         }
 
@@ -181,7 +185,7 @@ namespace Player.Api.Services
         {
             var team = await _context.Teams
                 .Where(t => t.Id == teamId)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(ct);
 
             if (team == null)
                 throw new EntityNotFoundException<Team>();
@@ -222,7 +226,7 @@ namespace Player.Api.Services
 
             await _context.SaveChangesAsync(ct);
             await _userClaimsService.RefreshClaims(userId);
-
+            _logger.LogWarning($"User {userId} added to team {teamId} by {_user.GetId()}");
             return true;
         }
 
@@ -281,7 +285,7 @@ namespace Player.Api.Services
 
                 await _context.SaveChangesAsync(ct);
             }
-
+            _logger.LogWarning($"User {userId} removed from team {teamId} by {_user.GetId()}");
             await _userClaimsService.RefreshClaims(userId);
             return true;
         }
