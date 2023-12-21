@@ -252,7 +252,7 @@ namespace Player.Api.Controllers
         [SwaggerOperation(OperationId = "getTeamApplicationInstances")]
         public async Task<IActionResult> GetInstancesByTeam(Guid id, CancellationToken ct)
         {
-            var list = await _applicationService.GetInstancesByTeamAsync(id, ct);
+            var list = await _applicationService.GetInstancesByTeamAsync(id, skipVerification: false, ct);
             return Ok(list);
         }
 
@@ -337,6 +337,44 @@ namespace Player.Api.Controllers
         {
             await _applicationService.DeleteInstanceAsync(id, ct);
             return NoContent();
+        }
+
+        /// <summary>
+        /// Moves an Application Instance up
+        /// </summary>
+        /// <remarks>
+        /// Moves an Application Instance up one spot in the list
+        /// <para />
+        /// Accessible only to a SuperUser or a User on an Admin Team in the Application Instances's Team's View
+        /// </remarks>
+        /// <param name="id">The id of the Application Instance</param>
+        /// <param name="ct"></param>
+        [HttpPost("application-instances/{id}/move-up")]
+        [ProducesResponseType(typeof(IEnumerable<ApplicationInstance>), (int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "moveUpApplicationInstance")]
+        public async Task<IActionResult> MoveUpApplicationInstance([FromRoute] Guid id, CancellationToken ct)
+        {
+            var updatedInstances = await _applicationService.MoveUpInstanceAsync(id, ct);
+            return Ok(updatedInstances);
+        }
+
+        /// <summary>
+        /// Moves an Application Instance down
+        /// </summary>
+        /// <remarks>
+        /// Moves an Application Instance down one spot in the list
+        /// <para />
+        /// Accessible only to a SuperUser or a User on an Admin Team in the Application Instances's Team's View
+        /// </remarks>
+        /// <param name="id">The id of the Application Instance</param>
+        /// <param name="ct"></param>
+        [HttpPost("application-instances/{id}/move-down")]
+        [ProducesResponseType(typeof(IEnumerable<ApplicationInstance>), (int)HttpStatusCode.OK)]
+        [SwaggerOperation(OperationId = "moveDownApplicationInstance")]
+        public async Task<IActionResult> MoveDownApplicationInstance([FromRoute] Guid id, CancellationToken ct)
+        {
+            var updatedInstances = await _applicationService.MoveDownInstanceAsync(id, ct);
+            return Ok(updatedInstances);
         }
 
         #endregion
