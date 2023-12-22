@@ -37,10 +37,12 @@ namespace Player.Api.Services
         Task<bool> DeleteApplicationAsync(Guid id, CancellationToken ct);
 
         // Application Instances
-        Task<IEnumerable<ViewModels.ApplicationInstance>> GetInstancesByTeamAsync(Guid teamId, CancellationToken ct);
+        Task<IEnumerable<ViewModels.ApplicationInstance>> GetInstancesByTeamAsync(Guid teamId, bool skipVerification, CancellationToken ct);
         Task<ViewModels.ApplicationInstance> GetInstanceAsync(Guid id, CancellationToken ct);
         Task<ViewModels.ApplicationInstance> CreateInstanceAsync(Guid teamId, ViewModels.ApplicationInstanceForm instance, CancellationToken ct);
         Task<ViewModels.ApplicationInstance> UpdateInstanceAsync(Guid id, ViewModels.ApplicationInstanceForm instance, CancellationToken ct);
+        Task<IEnumerable<ViewModels.ApplicationInstance>> MoveUpInstanceAsync(Guid id, CancellationToken ct);
+        Task<IEnumerable<ViewModels.ApplicationInstance>> MoveDownInstanceAsync(Guid id, CancellationToken ct);
         Task<bool> DeleteInstanceAsync(Guid id, CancellationToken ct);
     }
 
@@ -225,23 +227,26 @@ namespace Player.Api.Services
 
         #region Application Instances
 
-        public async Task<IEnumerable<ViewModels.ApplicationInstance>> GetInstancesByTeamAsync(Guid teamId, CancellationToken ct)
+        public async Task<IEnumerable<ViewModels.ApplicationInstance>> GetInstancesByTeamAsync(Guid teamId, bool skipVerification, CancellationToken ct)
         {
-            var team = await _context.Teams
+            if (!skipVerification)
+            {
+                var team = await _context.Teams
                 .Where(e => e.Id == teamId)
                 .SingleOrDefaultAsync(ct);
+
+                if (team == null)
+                    throw new EntityNotFoundException<Team>();
+
+                if (!(await _authorizationService.AuthorizeAsync(_user, null, new TeamAccessRequirement(team.ViewId, teamId))).Succeeded)
+                    throw new ForbiddenException();
+            }
 
             var instances = await _context.ApplicationInstances
                 .Where(i => i.TeamId == teamId)
                 .OrderBy(a => a.DisplayOrder)
                 .ProjectTo<ViewModels.ApplicationInstance>(_mapper.ConfigurationProvider)
                 .ToArrayAsync(ct);
-
-            if (team == null)
-                throw new EntityNotFoundException<Team>();
-
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new TeamAccessRequirement(team.ViewId, teamId))).Succeeded)
-                throw new ForbiddenException();
 
             return instances;
         }
@@ -320,6 +325,91 @@ namespace Player.Api.Services
             await _context.SaveChangesAsync(ct);
 
             return true;
+        }
+
+        public async Task<IEnumerable<ViewModels.ApplicationInstance>> MoveUpInstanceAsync(Guid id, CancellationToken ct)
+        {
+            return await this.MoveInstanceAsync(id, Direction.Up, ct);
+        }
+
+        public async Task<IEnumerable<ViewModels.ApplicationInstance>> MoveDownInstanceAsync(Guid id, CancellationToken ct)
+        {
+            return await this.MoveInstanceAsync(id, Direction.Down, ct);
+        }
+
+        private enum Direction
+        {
+            Up,
+            Down
+        }
+
+        private async Task<IEnumerable<ViewModels.ApplicationInstance>> MoveInstanceAsync(Guid id, Direction direction, CancellationToken ct)
+        {
+            var instanceToUpdate = await _context.ApplicationInstances
+                .Include(x => x.Team)
+                .SingleOrDefaultAsync(x => x.Id == id, ct);
+
+            if (instanceToUpdate == null)
+                throw new EntityNotFoundException<ApplicationInstance>();
+
+            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(instanceToUpdate.Team.ViewId))).Succeeded)
+                throw new ForbiddenException();
+
+            var teamInstances = await _context.ApplicationInstances
+                .Where(x => x.TeamId == instanceToUpdate.TeamId)
+                .OrderBy(x => x.DisplayOrder)
+                .ToArrayAsync(ct);
+
+            if (direction == Direction.Up)
+            {
+                for (int i = 0; i < teamInstances.Length; i++)
+                {
+                    var teamInstance = teamInstances[i];
+
+                    if (teamInstance.Id == id)
+                    {
+                        teamInstance.DisplayOrder = i - 1;
+
+                        var previous = teamInstances.ElementAtOrDefault(i - 1);
+
+                        if (previous != null)
+                        {
+                            previous.DisplayOrder = previous.DisplayOrder + 1;
+                        }
+                    }
+                    else
+                    {
+                        teamInstance.DisplayOrder = i;
+                    }
+                }
+            }
+            else if (direction == Direction.Down)
+            {
+                for (int i = teamInstances.Length - 1; i >= 0; i--)
+                {
+                    var teamInstance = teamInstances[i];
+
+                    if (teamInstance.Id == id)
+                    {
+                        teamInstance.DisplayOrder = i + 1;
+
+                        var previous = teamInstances.ElementAtOrDefault(i + 1);
+
+                        if (previous != null)
+                        {
+                            previous.DisplayOrder = previous.DisplayOrder - 1;
+                        }
+                    }
+                    else
+                    {
+                        teamInstance.DisplayOrder = i;
+                    }
+                }
+            }
+
+            await _context.SaveChangesAsync(ct);
+
+            return await this.GetInstancesByTeamAsync(instanceToUpdate.TeamId, skipVerification: true, ct);
         }
 
         #endregion
