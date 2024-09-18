@@ -2,22 +2,19 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
 using Player.Api.Data.Data.Models;
 using Player.Api.Data.Data.Models.Webhooks;
 using Player.Api.Data.Data.Extensions;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.Internal;
+using System;
 
 namespace Player.Api.Data.Data
 {
     public class PlayerContext : DbContext
     {
-        private DbContextOptions<PlayerContext> _options;
+        // Needed for EventInterceptor
+        public IServiceProvider ServiceProvider;
 
-        public PlayerContext(DbContextOptions<PlayerContext> options) : base(options)
-        {
-            _options = options;
-        }
+        public PlayerContext(DbContextOptions<PlayerContext> options) : base(options) { }
 
         public DbSet<UserEntity> Users { get; set; }
         public DbSet<ViewEntity> Views { get; set; }

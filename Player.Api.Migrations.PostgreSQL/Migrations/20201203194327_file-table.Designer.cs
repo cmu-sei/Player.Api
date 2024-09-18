@@ -14,7 +14,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(PlayerContext))]
     [Migration("20201203194327_file-table")]
-    partial class filetable
+    partial class FileTable
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {

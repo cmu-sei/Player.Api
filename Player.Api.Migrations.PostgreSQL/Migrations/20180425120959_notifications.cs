@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace Player.Api.Migrations.PostgreSQL.Migrations.Player
 {
-    public partial class notifications : Migration
+    public partial class Notifications : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {

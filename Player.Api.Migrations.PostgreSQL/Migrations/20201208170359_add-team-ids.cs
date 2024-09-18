@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
-    public partial class addteamids : Migration
+    public partial class AddTeamIds : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {

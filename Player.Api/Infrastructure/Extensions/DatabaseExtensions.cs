@@ -17,12 +17,13 @@ using System.Collections.Generic;
 using Player.Api.ViewModels.Webhooks;
 using Player.Api.Data.Data.Models.Webhooks;
 using AutoMapper;
+using Microsoft.Extensions.Hosting;
 
 namespace Player.Api.Extensions
 {
     public static class DatabaseExtensions
     {
-        public static IWebHost InitializeDatabase(this IWebHost webHost)
+        public static IHost InitializeDatabase(this IHost webHost)
         {
             using (var scope = webHost.Services.CreateScope())
             {

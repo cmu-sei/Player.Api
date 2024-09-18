@@ -15,7 +15,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(PlayerContext))]
     [Migration("20201208170359_add-team-ids")]
-    partial class addteamids
+    partial class AddTeamIds
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {

@@ -17,7 +17,7 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations.Player
 {
     [DbContext(typeof(PlayerContext))]
     [Migration("20180425120959_notifications")]
-    partial class notifications
+    partial class Notifications
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
