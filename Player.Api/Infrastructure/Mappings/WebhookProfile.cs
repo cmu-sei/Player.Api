@@ -26,7 +26,7 @@ namespace Player.Api.Infrastructure.Mappings
             CreateMap<WebhookSubscriptionPartialEditForm, WebhookSubscriptionEntity>()
                 .ForMember(dest => dest.EventTypes, opt => opt.MapFrom(src => src.EventTypes.Select(et => new WebhookSubscriptionEventTypeEntity(Guid.Empty, et))))
                 .ForMember(dest => dest.EventTypes, opts => opts.PreCondition((src) => src.EventTypes != null))
-                .ForAllOtherMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
+                .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
         }
     }
 }

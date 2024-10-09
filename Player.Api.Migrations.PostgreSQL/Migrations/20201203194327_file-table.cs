@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
-    public partial class filetable : Migration
+    public partial class FileTable : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Player.Api.Services;
 using Player.Api.ViewModels;
 using Swashbuckle.AspNetCore.Annotations;
+using Microsoft.AspNetCore.Http;
 
 namespace Player.Api.Controllers
 {
@@ -96,13 +97,13 @@ namespace Player.Api.Controllers
 
             if (IsPdf(fileName))
             {
-                Response.Headers.Add("Content-Disposition", "inline");
+                Response.Headers.Append("Content-Disposition", "inline");
                 return File(stream, "application/pdf", fileName);
             }
 
             else if (IsImage(fileName))
             {
-                Response.Headers.Add("Content-Disposition", "inline");
+                Response.Headers.Append("Content-Disposition", "inline");
                 // We need the extension without the . character
                 var ext = Path.GetExtension(fileName).Substring(1);
                 return File(stream, "image/" + ext, fileName);
