@@ -12,7 +12,7 @@ using System.Linq;
 
 namespace Player.Api.Data.Data.Models
 {
-    public class UserEntity
+    public class UserEntity : IEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
@@ -27,7 +27,6 @@ namespace Player.Api.Data.Data.Models
 
         public ICollection<ViewMembershipEntity> ViewMemberships { get; set; } = new List<ViewMembershipEntity>();
         public ICollection<TeamMembershipEntity> TeamMemberships { get; set; } = new List<TeamMembershipEntity>();
-        public ICollection<UserPermissionEntity> Permissions { get; set; } = new List<UserPermissionEntity>();
     }
 
     public class UserConfiguration : IEntityTypeConfiguration<UserEntity>

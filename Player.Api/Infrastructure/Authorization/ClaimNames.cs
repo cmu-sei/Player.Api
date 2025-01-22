@@ -8,11 +8,8 @@ namespace Player.Api.Infrastructure.Authorization
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum PlayerClaimTypes
     {
-        SystemAdmin,
         TeamMember,
         ViewMember,
-        ViewAdmin,
         PrimaryTeam,
-        HelpDeskAgent // TODO: Remove
     }
 }

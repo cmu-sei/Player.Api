@@ -2,29 +2,23 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
-using System.Net;
-using System.Collections.Generic;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
 using Player.Api.ViewModels;
 using Microsoft.AspNetCore.SignalR;
 using System.Threading;
 using System.Threading.Tasks;
 using Player.Api.Services;
-using Player.Api.Infrastructure.Exceptions;
 
 namespace Player.Api.Hubs
 {
     [Authorize(AuthenticationSchemes = "Bearer")]
     public class UserHub : Hub
     {
-        private readonly IUserService _userService;
         private readonly INotificationService _notificationService;
         private readonly CancellationToken _ct;
 
-        public UserHub(IUserService service, INotificationService notificationService)
+        public UserHub(INotificationService notificationService)
         {
-            _userService = service;
             _notificationService = notificationService;
             CancellationTokenSource source = new CancellationTokenSource();
             _ct = source.Token;

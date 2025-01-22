@@ -35,7 +35,7 @@ namespace Player.Api.Services
     public class PresenceService : IPresenceService
     {
         private readonly PlayerContext _context;
-        private readonly IAuthorizationService _authorizationService;
+        private readonly IPlayerAuthorizationService _authorizationService;
         private readonly IHubContext<ViewHub> _hub;
         private readonly ConnectionCacheService _connectionCacheService;
         private readonly ClaimsPrincipal _user;
@@ -43,7 +43,7 @@ namespace Player.Api.Services
 
         public PresenceService(
             PlayerContext context,
-            IAuthorizationService authorizationService,
+            IPlayerAuthorizationService authorizationService,
             IHubContext<ViewHub> hub,
             IPrincipal user,
             IMapper mapper,
@@ -162,7 +162,7 @@ namespace Player.Api.Services
         {
             ViewMembershipEntity[] viewMembershipList;
 
-            if ((await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(viewId))).Succeeded)
+            if (await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], default))
             {
                 viewMembershipList = await _context.ViewMemberships
                     .Include(x => x.User)
@@ -221,7 +221,7 @@ namespace Player.Api.Services
 
         public async Task<string> GetGroupByViewId(Guid viewId)
         {
-            if ((await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(viewId))).Succeeded)
+            if (await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], default))
             {
                 return GetGroup(viewId);
             }

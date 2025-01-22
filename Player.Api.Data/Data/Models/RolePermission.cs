@@ -9,7 +9,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Player.Api.Data.Data.Models
 {
-    public class RolePermissionEntity
+    public class RolePermissionEntity : IEntity
     {
         public RolePermissionEntity() { }
 

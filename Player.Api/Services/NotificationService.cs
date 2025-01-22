@@ -2,7 +2,6 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using AutoMapper;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Player.Api.Data.Data;
@@ -40,14 +39,14 @@ namespace Player.Api.Services
     public class NotificationService : INotificationService
     {
         private readonly PlayerContext _context;
-        private readonly IAuthorizationService _authorizationService;
+        private readonly IPlayerAuthorizationService _authorizationService;
         private readonly ClaimsPrincipal _user;
         private readonly IMapper _mapper;
         private IUserClaimsService _claimsService;
         private IConfiguration _configuration;
 
 
-        public NotificationService(PlayerContext context, IPrincipal user, IAuthorizationService authorizationService, IMapper mapper, IUserClaimsService claimsService, IConfiguration configuration)
+        public NotificationService(PlayerContext context, IPrincipal user, IPlayerAuthorizationService authorizationService, IMapper mapper, IUserClaimsService claimsService, IConfiguration configuration)
         {
             _context = context;
             _authorizationService = authorizationService;
@@ -59,7 +58,7 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<ViewModels.Notification>> GetAsync(CancellationToken ct)
         {
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+            if (!await _authorizationService.Authorize([SystemPermission.ViewViews], ct))
                 throw new ForbiddenException();
 
             var items = await _context.Notifications.ToListAsync(ct);
@@ -70,7 +69,7 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<ViewModels.Notification>> GetByViewAsync(Guid viewId, CancellationToken ct)
         {
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewMemberRequirement(viewId))).Succeeded)
+            if (!_authorizationService.GetAuthorizedViewIds().Contains(viewId))
                 throw new ForbiddenException();
             // get all notifications for the selected view, not including the System notifications
             var items = await _context.Notifications.Where(x => x.ToId == viewId && x.ToType == NotificationType.View && x.Priority != NotificationPriority.System).OrderByDescending(y => y.BroadcastTime).ToListAsync();
@@ -81,8 +80,6 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<ViewModels.Notification>> GetAllViewNotificationsAsync(Guid viewId, CancellationToken ct)
         {
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewId))).Succeeded)
-                throw new ForbiddenException();
             // get all notifications for the selected view
             var items = await _context.Notifications.Where(n => n.ToId == viewId || n.ViewId == viewId).OrderByDescending(y => y.BroadcastTime).ToListAsync();
             // Databases do not preserve DateTimeKind, so we need to add UTC kind
@@ -92,7 +89,7 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<ViewModels.Notification>> GetByTeamAsync(Guid teamId, CancellationToken ct)
         {
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new TeamMemberRequirement(teamId))).Succeeded)
+            if (!await _authorizationService.Authorize<TeamEntity>(teamId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [TeamPermission.ViewTeam], ct))
                 throw new ForbiddenException();
             // get all notifications for the selected team, not including the System notifications
             var items = await _context.Notifications.Where(x => x.ToId == teamId && x.ToType == NotificationType.Team && x.Priority != NotificationPriority.System).OrderByDescending(y => y.BroadcastTime).ToListAsync();
@@ -103,7 +100,7 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<ViewModels.Notification>> GetByUserAsync(Guid viewId, Guid userId, CancellationToken ct)
         {
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewMemberRequirement(viewId))).Succeeded || !(await _authorizationService.AuthorizeAsync(_user, null, new SameUserRequirement(userId))).Succeeded)
+            if (!_authorizationService.GetAuthorizedViewIds().Contains(viewId) && _user.GetId() != userId)
                 throw new ForbiddenException();
             // get all notifications for the selected view-user, not including the System notifications
             var items = await _context.Notifications.Where(x => x.ToId == userId && x.ToType == NotificationType.User && x.Priority != NotificationPriority.System).OrderByDescending(y => y.BroadcastTime).ToListAsync();
@@ -134,12 +131,12 @@ namespace Player.Api.Services
             notificationEntity.FromName = _user.Claims.Single(x => x.Type == "name").Value;
             notificationEntity.ToName = _context.Views.Find(viewId).Name;
             notificationEntity.Priority = NotificationPriority.System;
-            if ((await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewId))).Succeeded)
+            if (await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken))
             {
                 notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
                 canPost = true;
             }
-            else if ((await _authorizationService.AuthorizeAsync(_user, null, new ViewMemberRequirement(viewId))).Succeeded)
+            else if (_authorizationService.GetAuthorizedViewIds().Contains(viewId))
             {
                 notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
             }
@@ -156,8 +153,7 @@ namespace Player.Api.Services
         }
 
         /// <summary>
-        /// Allows a client to broadcast a notification to all members of the view who are currently joined, IF:
-        ///     1. they are an view administrator
+        /// Allows a client to broadcast a notification to all members of the view who are currently joined
         /// </summary>
         /// <param name="viewId"></param>
         /// <param name="incomingData"></param>
@@ -168,26 +164,17 @@ namespace Player.Api.Services
             var wasSuccess = true;
             var canPost = true;
             var messageTime = DateTime.Now.ToUniversalTime();
-            NotificationEntity notificationEntity;
-            if ((await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewId))).Succeeded)
-            {
-                notificationEntity = _mapper.Map<NotificationEntity>(incomingData);
-                notificationEntity.ToId = viewId;
-                notificationEntity.ToType = NotificationType.View;
-                notificationEntity.BroadcastTime = messageTime;
-                notificationEntity.FromId = _user.GetId();
-                notificationEntity.FromType = NotificationType.User;
-                notificationEntity.FromName = _user.Claims.Single(x => x.Type == "name").Value;
-                notificationEntity.ToName = _context.Views.Find(viewId).Name;
-                _context.Notifications.Add(notificationEntity);
-                await _context.SaveChangesAsync(cancellationToken);
-            }
-            else
-            {
-                notificationEntity = new NotificationEntity { };
-                wasSuccess = false;
-                canPost = false;
-            }
+            var notificationEntity = _mapper.Map<NotificationEntity>(incomingData);
+            notificationEntity.ToId = viewId;
+            notificationEntity.ToType = NotificationType.View;
+            notificationEntity.BroadcastTime = messageTime;
+            notificationEntity.FromId = _user.GetId();
+            notificationEntity.FromType = NotificationType.User;
+            notificationEntity.FromName = _user.Claims.Single(x => x.Type == "name").Value;
+            notificationEntity.ToName = _context.Views.Find(viewId).Name;
+            _context.Notifications.Add(notificationEntity);
+            await _context.SaveChangesAsync(cancellationToken);
+
             var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
@@ -219,12 +206,12 @@ namespace Player.Api.Services
             notificationEntity.FromName = _user.Claims.Single(x => x.Type == "name").Value;
             notificationEntity.ToName = requestedTeam.Name;
             notificationEntity.Priority = NotificationPriority.System;
-            if ((await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(requestedTeam.ViewId))).Succeeded)
+            if (await _authorizationService.Authorize<ViewEntity>(requestedTeam.ViewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken))
             {
                 notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
                 canPost = true;
             }
-            else if ((await _authorizationService.AuthorizeAsync(_user, null, new TeamMemberRequirement(teamId))).Succeeded)
+            else if (await _authorizationService.Authorize<TeamEntity>(teamId, [], [], [TeamPermission.ViewTeam], cancellationToken))
             {
                 notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
             }
@@ -241,8 +228,7 @@ namespace Player.Api.Services
         }
 
         /// <summary>
-        /// Allows a client to broadcast a notification to all members of the team who are currently joined, IF:
-        ///     1. they are an view administrator
+        /// Allows a client to broadcast a notification to all members of the team who are currently joined
         /// </summary>
         /// <param name="teamId"></param>
         /// <param name="incomingData"></param>
@@ -254,26 +240,17 @@ namespace Player.Api.Services
             var canPost = true;
             var messageTime = DateTime.Now.ToUniversalTime();
             var requestedTeam = _context.Teams.Find(teamId);
-            NotificationEntity notificationEntity;
-            if ((await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(requestedTeam.ViewId))).Succeeded)
-            {
-                notificationEntity = _mapper.Map<NotificationEntity>(incomingData);
-                notificationEntity.ToId = teamId;
-                notificationEntity.ToType = NotificationType.Team;
-                notificationEntity.BroadcastTime = messageTime;
-                notificationEntity.FromId = _user.GetId();
-                notificationEntity.FromType = NotificationType.User;
-                notificationEntity.FromName = _user.Claims.Single(x => x.Type == "name").Value;
-                notificationEntity.ToName = _context.Teams.Find(teamId).Name;
-                _context.Notifications.Add(notificationEntity);
-                await _context.SaveChangesAsync(ct);
-            }
-            else
-            {
-                notificationEntity = new NotificationEntity { };
-                wasSuccess = false;
-                canPost = false;
-            }
+            NotificationEntity notificationEntity = _mapper.Map<NotificationEntity>(incomingData);
+            notificationEntity.ToId = teamId;
+            notificationEntity.ToType = NotificationType.Team;
+            notificationEntity.BroadcastTime = messageTime;
+            notificationEntity.FromId = _user.GetId();
+            notificationEntity.FromType = NotificationType.User;
+            notificationEntity.FromName = _user.Claims.Single(x => x.Type == "name").Value;
+            notificationEntity.ToName = _context.Teams.Find(teamId).Name;
+            _context.Notifications.Add(notificationEntity);
+            await _context.SaveChangesAsync(ct);
+
             var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
@@ -306,16 +283,16 @@ namespace Player.Api.Services
             notificationEntity.FromName = _user.Claims.Single(x => x.Type == "name").Value;
             notificationEntity.ToName = notificationEntity.FromName;
             notificationEntity.Priority = NotificationPriority.System;
-            var isViewAdmin = (await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewId))).Succeeded;
-            if (isViewAdmin)
+
+            if (await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], ct))
             {
                 notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
                 canPost = true;
             }
             else
             {
-                var isViewMember = (await _authorizationService.AuthorizeAsync(_user, null, new ViewMemberRequirement(viewId))).Succeeded;
-                var isSameUser = (await _authorizationService.AuthorizeAsync(_user, null, new SameUserRequirement(userId))).Succeeded;
+                var isViewMember = _authorizationService.GetAuthorizedViewIds().Contains(viewId);
+                var isSameUser = _user.GetId() == userId;
                 if (isViewMember && isSameUser)
                 {
                     notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
@@ -347,27 +324,19 @@ namespace Player.Api.Services
             var wasSuccess = true;
             var canPost = true;
             var messageTime = DateTime.Now.ToUniversalTime();
-            NotificationEntity notificationEntity;
-            if ((await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewId))).Succeeded)
-            {
-                notificationEntity = _mapper.Map<NotificationEntity>(incomingData);
-                notificationEntity.ViewId = viewId;
-                notificationEntity.ToId = userId;
-                notificationEntity.ToType = NotificationType.User;
-                notificationEntity.BroadcastTime = messageTime;
-                notificationEntity.FromId = _user.GetId();
-                notificationEntity.FromType = NotificationType.User;
-                notificationEntity.FromName = _user.Claims.Single(x => x.Type == "name").Value;
-                notificationEntity.ToName = _context.Users.Single(x => x.Id == userId).Name;
-                _context.Notifications.Add(notificationEntity);
-                await _context.SaveChangesAsync(cancellationToken);
-            }
-            else
-            {
-                notificationEntity = new NotificationEntity { };
-                wasSuccess = false;
-                canPost = false;
-            }
+
+            var notificationEntity = _mapper.Map<NotificationEntity>(incomingData);
+            notificationEntity.ViewId = viewId;
+            notificationEntity.ToId = userId;
+            notificationEntity.ToType = NotificationType.User;
+            notificationEntity.BroadcastTime = messageTime;
+            notificationEntity.FromId = _user.GetId();
+            notificationEntity.FromType = NotificationType.User;
+            notificationEntity.FromName = _user.Claims.Single(x => x.Type == "name").Value;
+            notificationEntity.ToName = _context.Users.Single(x => x.Id == userId).Name;
+            _context.Notifications.Add(notificationEntity);
+            await _context.SaveChangesAsync(cancellationToken);
+
             var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
@@ -382,9 +351,6 @@ namespace Player.Api.Services
             if (notificationToDelete == null)
                 throw new EntityNotFoundException<ViewModels.Notification>();
 
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement((Guid)notificationToDelete.ToId))).Succeeded)
-                throw new ForbiddenException();
-
             _context.Notifications.Remove(notificationToDelete);
             await _context.SaveChangesAsync(ct);
 
@@ -397,9 +363,6 @@ namespace Player.Api.Services
 
             if (notificationsToDelete == null || !notificationsToDelete.Any())
                 return false;
-
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewId))).Succeeded)
-                throw new ForbiddenException();
 
             _context.Notifications.RemoveRange(notificationsToDelete);
             await _context.SaveChangesAsync(ct);
@@ -419,10 +382,6 @@ namespace Player.Api.Services
             else if (notificationPriority == NotificationPriority.System)
             {
                 iconUrl = _configuration["Notifications:SystemIconUrl"];
-            }
-            else if (_user.HasClaim(ClaimTypes.Role, PlayerClaimTypes.HelpDeskAgent.ToString()))
-            {
-                iconUrl = _context.Applications.FirstOrDefault(x => x.Name == _configuration["Notifications:HelpDeskApplicationName"]).Icon;
             }
             else
             {

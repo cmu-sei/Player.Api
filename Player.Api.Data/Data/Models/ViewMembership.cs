@@ -7,11 +7,10 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using System.Text.Json.Serialization;
 
 namespace Player.Api.Data.Data.Models
 {
-    public class ViewMembershipEntity
+    public class ViewMembershipEntity : IEntity
     {
         public ViewMembershipEntity() { }
 

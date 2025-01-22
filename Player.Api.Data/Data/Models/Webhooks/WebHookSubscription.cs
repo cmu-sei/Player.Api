@@ -10,7 +10,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Player.Api.Data.Data.Models.Webhooks
 {
-    public class WebhookSubscriptionEntity
+    public class WebhookSubscriptionEntity : IEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
