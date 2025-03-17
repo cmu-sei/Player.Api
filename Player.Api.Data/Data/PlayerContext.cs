@@ -277,6 +277,13 @@ namespace Player.Api.Data.Data
                     Name = "UploadVmFiles",
                     Description = "Allows uploading files directly to Vms",
                     Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("42da22ae-ca0f-440f-87e0-5742799f60e1"),
+                    Name = "RevertVms",
+                    Description = "Allows reverting a Vm to it's current snapshot",
+                    Immutable = false
                 }
             };
 
