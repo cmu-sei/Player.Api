@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 
 namespace Player.Api.Data.Data.Models
 {
-    public class ViewEntity
+    public class ViewEntity : IEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]

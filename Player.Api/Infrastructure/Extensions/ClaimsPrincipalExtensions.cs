@@ -11,7 +11,19 @@ namespace Player.Api.Extensions
     {
         public static Guid GetId(this ClaimsPrincipal principal)
         {
-            return Guid.Parse(principal.FindFirst("sub")?.Value);
+            if (principal == null)
+            {
+                return Guid.Empty;
+            }
+
+            try
+            {
+                return Guid.Parse(principal.FindFirst("sub")?.Value);
+            }
+            catch
+            {
+                return Guid.Parse(principal.FindFirst(@"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value);
+            }
         }
 
         /// <summary>

@@ -2,16 +2,12 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
-using System.Net;
-using System.Collections.Generic;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
 using Player.Api.ViewModels;
 using Microsoft.AspNetCore.SignalR;
 using System.Threading;
 using System.Threading.Tasks;
 using Player.Api.Services;
-using Player.Api.Infrastructure.Exceptions;
 
 namespace Player.Api.Hubs
 {

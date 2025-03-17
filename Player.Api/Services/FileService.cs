@@ -2,7 +2,6 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using AutoMapper;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Extensions;
@@ -38,14 +37,14 @@ namespace Player.Api.Services
 
     public class FileService : IFileService
     {
-        private readonly IAuthorizationService _authorizationService;
+        private readonly IPlayerAuthorizationService _authorizationService;
         private readonly ClaimsPrincipal _user;
         private readonly FileUploadOptions _fileUploadOptions;
         private readonly PlayerContext _context;
         private readonly IMapper _mapper;
         private readonly ITeamService _teamService;
 
-        public FileService(IPrincipal user, IAuthorizationService authService, FileUploadOptions fileOptions, PlayerContext context, IMapper mapper, ITeamService teamService)
+        public FileService(IPrincipal user, IPlayerAuthorizationService authService, FileUploadOptions fileOptions, PlayerContext context, IMapper mapper, ITeamService teamService)
         {
             _user = user as ClaimsPrincipal;
             _authorizationService = authService;
@@ -68,9 +67,8 @@ namespace Player.Api.Services
             if (!await TeamsInSameView(viewEntity.Id, form.teamIds, ct))
                 throw new ForbiddenException("Teams must be in same view.");
 
-            // Ensyre user can manage this view
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(viewEntity.Id))).Succeeded)
-                throw new ForbiddenException("Insuffcient Permissions");
+            if (!await _authorizationService.Authorize<ViewEntity>(form.viewId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], ct))
+                throw new ForbiddenException("Insufficient Permissions");
 
             List<FileModel> models = new List<FileModel>();
             foreach (var fp in form.ToUpload)
@@ -91,7 +89,7 @@ namespace Player.Api.Services
 
                 models.Add(_mapper.Map<FileModel>(entity));
 
-                // Add file to list in view 
+                // Add file to list in view
                 viewEntity.Files.Add(entity);
             }
 
@@ -101,7 +99,7 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct)
         {
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+            if (!await _authorizationService.Authorize([SystemPermission.ViewViews], ct))
                 throw new ForbiddenException();
 
             var files = await _context.Files
@@ -114,7 +112,7 @@ namespace Player.Api.Services
         public async Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct)
         {
             var userId = _user.GetId();
-            var teams = await _teamService.GetByViewIdForUserAsync(viewId, userId, ct);
+            var teams = await _teamService.GetByViewIdForCurrentUserAsync(viewId, ct);
             var accessable = new List<FileModel>();
 
             foreach (var team in teams)
@@ -135,8 +133,7 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<FileModel>> GetByTeamAsync(Guid teamId, CancellationToken ct)
         {
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new TeamMemberRequirement(teamId))).Succeeded
-                && !(await _authorizationService.AuthorizeAsync(_user, null, new FullRightsRequirement())).Succeeded)
+            if (!await _authorizationService.Authorize<TeamEntity>(teamId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [TeamPermission.ViewTeam], ct))
                 throw new ForbiddenException();
 
             var files = _context.Files
@@ -193,7 +190,7 @@ namespace Player.Api.Services
 
             // This authorization check assumes all teams for the file are in the same view, but we have verified
             // that that is the case with the above check.
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(entity.View.Id))).Succeeded)
+            if (!await _authorizationService.Authorize<ViewEntity>(entity.View.Id, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], ct))
                 throw new ForbiddenException();
 
 
@@ -237,7 +234,7 @@ namespace Player.Api.Services
             if (toDelete == null)
                 throw new EntityNotFoundException<FileModel>();
 
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(toDelete.View.Id))).Succeeded)
+            if (!await _authorizationService.Authorize<ViewEntity>(toDelete.View.Id, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], ct))
                 throw new ForbiddenException();
 
             // If this is the last pointer to the file, the file should be deleted. Else, just delete the pointer
@@ -291,7 +288,7 @@ namespace Player.Api.Services
             if (size > _fileUploadOptions.maxSize)
                 throw new InvalidOperationException($"File size exceeds the {_fileUploadOptions.maxSize} limit");
 
-            if (!(await _authorizationService.AuthorizeAsync(_user, null, new ManageViewRequirement(viewId))).Succeeded)
+            if (!await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], default))
                 throw new ForbiddenException();
 
             var folderPath = Path.Combine(_fileUploadOptions.basePath, viewId.ToString());
@@ -315,10 +312,15 @@ namespace Player.Api.Services
 
         private async Task EnsureAccessFile(FileEntity file)
         {
-            // The user can see this file if they are in at least one of the teams it is assigned to
-            var canAccess = (await _authorizationService.AuthorizeAsync(_user, null, new TeamsMemberRequirement(file.TeamIds))).Succeeded;
-            // If user is not on any teams, they can't access the file unless they are a view admin    
-            if (!canAccess && !(await _authorizationService.AuthorizeAsync(_user, null, new ViewAdminRequirement(file.View.Id))).Succeeded)
+            bool canAccess = false;
+
+            foreach (var teamId in file.TeamIds)
+            {
+                if (await _authorizationService.Authorize<TeamEntity>(teamId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [TeamPermission.ViewTeam], default))
+                    canAccess = true;
+            }
+
+            if (!canAccess)
                 throw new ForbiddenException();
         }
 

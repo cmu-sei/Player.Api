@@ -6,11 +6,10 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using System.Text.Json.Serialization;
 
 namespace Player.Api.Data.Data.Models
 {
-    public class TeamMembershipEntity
+    public class TeamMembershipEntity : IEntity
     {
         public TeamMembershipEntity() { }
 
@@ -34,7 +33,7 @@ namespace Player.Api.Data.Data.Models
         public virtual ViewMembershipEntity ViewMembership { get; set; }
 
         public Guid? RoleId { get; set; }
-        public RoleEntity Role { get; set; }
+        public TeamRoleEntity Role { get; set; }
     }
 
     public class TeamMembershipConfiguration : IEntityTypeConfiguration<TeamMembershipEntity>

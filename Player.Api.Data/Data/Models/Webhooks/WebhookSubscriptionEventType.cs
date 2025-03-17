@@ -9,7 +9,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Player.Api.Data.Data.Models.Webhooks
 {
-    public class WebhookSubscriptionEventTypeEntity
+    public class WebhookSubscriptionEventTypeEntity : IEntity
     {
         public WebhookSubscriptionEventTypeEntity() { }
 

@@ -12,6 +12,7 @@ using Microsoft.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.OpenApi.Models;
 using Player.Api.Infrastructure.DocumentFilters;
+using System.Runtime.Serialization;
 
 namespace Player.Api.Infrastructure.Extensions
 {
@@ -27,6 +28,7 @@ namespace Player.Api.Infrastructure.Extensions
             services.AddSwaggerGen(c =>
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "Player API", Version = "v1" });
+                c.CustomSchemaIds(schemaIdStrategy);
 
                 c.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
                 {
@@ -63,10 +65,16 @@ namespace Player.Api.Infrastructure.Extensions
                 c.IncludeXmlComments(commentsFile);
                 c.EnableAnnotations();
                 c.OperationFilter<DefaultResponseOperationFilter>();
-                c.DocumentFilter<WebhookDocumentFilter>();
+                c.DocumentFilter<ModelDocumentFilter>();
                 c.MapType<Optional<Guid?>>(() => new OpenApiSchema { Type = "string", Format = "uuid" });
                 c.MapType<JsonElement?>(() => new OpenApiSchema { Type = "object", Nullable = true });
             });
+        }
+
+        private static string schemaIdStrategy(Type currentClass)
+        {
+            var dataContractAttribute = currentClass.GetCustomAttribute<DataContractAttribute>();
+            return dataContractAttribute != null && dataContractAttribute.Name != null ? dataContractAttribute.Name : currentClass.Name;
         }
     }
 }

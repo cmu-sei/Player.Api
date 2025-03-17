@@ -11,7 +11,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Player.Api.Data.Data.Models
 {
-    public class NotificationEntity
+    public class NotificationEntity : IEntity
     {
         [Key]
         public int Key { get; set; }

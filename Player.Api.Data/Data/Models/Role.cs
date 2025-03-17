@@ -10,13 +10,15 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Player.Api.Data.Data.Models
 {
-    public class RoleEntity
+    public class RoleEntity : IEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public Guid Id { get; set; }
 
         public string Name { get; set; }
+        public bool AllPermissions { get; set; }
+        public bool Immutable { get; set; }
 
         public virtual ICollection<RolePermissionEntity> Permissions { get; set; } = new List<RolePermissionEntity>();
     }

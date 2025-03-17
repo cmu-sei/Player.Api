@@ -7,16 +7,14 @@ using Player.Api.Data.Data.Models;
 
 namespace Player.Api.Data.Data.Extensions
 {
-    public static class DirectoryExtensions
+    public static class UserExtensions
     {
         public static IQueryable<UserEntity> IncludePermissions(this IQueryable<UserEntity> query)
         {
             return query
                 .Include(u => u.Role)
                     .ThenInclude(r => r.Permissions)
-                        .ThenInclude(p => p.Permission)
-                .Include(u => u.Permissions)
-                    .ThenInclude(p => p.Permission);
+                        .ThenInclude(p => p.Permission);
         }
     }
 }

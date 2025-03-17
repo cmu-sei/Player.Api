@@ -29,6 +29,10 @@ using Player.Api.Services;
 using Player.Api.Infrastructure.DbInterceptors;
 using Microsoft.IdentityModel.JsonWebTokens;
 using AutoMapper.Internal;
+using Player.Api.Infrastructure.Endpoints;
+using Player.Api.Infrastructure.Exceptions.Middleware;
+using Microsoft.Build.Framework;
+using Microsoft.AspNetCore.Http.Json;
 
 namespace Player.Api;
 
@@ -106,7 +110,10 @@ public class Startup
                 .AddScoped(config => config.GetService<IOptionsMonitor<FileUploadOptions>>().CurrentValue)
 
             .Configure<Player.Api.Options.AuthorizationOptions>(Configuration.GetSection("Authorization"))
-                .AddSingleton(config => config.GetService<IOptionsMonitor<Player.Api.Options.AuthorizationOptions>>().CurrentValue);
+                .AddSingleton(config => config.GetService<IOptionsMonitor<Player.Api.Options.AuthorizationOptions>>().CurrentValue)
+
+            .Configure<RoleOptions>(Configuration.GetSection("Roles"))
+                .AddScoped(config => config.GetService<IOptionsMonitor<RoleOptions>>().CurrentValue);
 
         services.AddCors(options => options.UseConfiguredCors(Configuration.GetSection("CorsPolicy")));
 
@@ -125,6 +132,8 @@ public class Startup
         {
             options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         });
+
+        services.Configure<JsonOptions>(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
         services.AddSwagger(_authOptions);
 
@@ -164,18 +173,12 @@ public class Startup
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<Startup>());
         services.AddTransient<EventInterceptor>();
 
-        services.AddScoped<IViewService, ViewService>();
-        services.AddScoped<IApplicationService, ApplicationService>();
-        services.AddScoped<IUserService, UserService>();
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<INotificationService, NotificationService>();
-        services.AddScoped<IPermissionService, PermissionService>();
-        services.AddScoped<IRoleService, RoleService>();
-        services.AddScoped<IViewMembershipService, ViewMembershipService>();
-        services.AddScoped<ITeamMembershipService, TeamMembershipService>();
         services.AddScoped<IFileService, FileService>();
         services.AddScoped<IPresenceService, PresenceService>();
-        services.AddScoped<IWebhookService, WebhookService>();
+        services.AddScoped<IPlayerAuthorizationService, AuthorizationService>();
+        services.AddScoped<IIdentityResolver, IdentityResolver>();
 
         services.AddScoped<IClaimsTransformation, AuthorizationClaimsTransformer>();
         services.AddScoped<IUserClaimsService, UserClaimsService>();
@@ -197,6 +200,17 @@ public class Startup
                 pm => pm.SourceType != null && Nullable.GetUnderlyingType(pm.SourceType) == pm.DestinationType,
                 (pm, c) => c.MapFrom<object, object, object, object>(new IgnoreNullSourceValues(), pm.SourceMember.Name));
         }, typeof(Startup));
+
+        var endpointTypes = typeof(Program).Assembly.GetTypes()
+            .Where(t => typeof(IEndpoint).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
+
+        foreach (var endpointType in endpointTypes)
+        {
+            services.AddTransient(endpointType);
+        }
+
+        services.AddEndpointsApiExplorer();
+        services.AddSwaggerGen();
     }
 
     // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -211,6 +225,7 @@ public class Startup
 
         app.UseRouting();
         app.UseCors("default");
+        app.UseMiddleware<ExceptionMiddleware>();
 
         //move any querystring jwt to Auth bearer header
         app.Use(async (context, next) =>
@@ -270,6 +285,41 @@ public class Startup
                 {
                     options.AllowStatefulReconnects = _signalROptions.EnableStatefulReconnect;
                 });
+
+                var endpointTypes = typeof(Program).Assembly.GetTypes()
+                    .Where(t => typeof(IEndpoint).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
+
+                var groupedEndpoints = endpointTypes
+                    .Select(endpointType => app.ApplicationServices.GetRequiredService(endpointType) as IEndpoint)
+                    .Where(endpoint => endpoint != null)
+                    .GroupBy(endpoint => endpoint!.GetType().Namespace);
+
+                foreach (var group in groupedEndpoints)
+                {
+                    string groupName = null;
+                    var groupNameIndex = group.Key.LastIndexOf('.');
+
+                    if (groupNameIndex != -1 && groupNameIndex < group.Key.Length - 1)
+                    {
+                        groupName = group.Key.Substring(groupNameIndex + 1);
+                    }
+                    else
+                    {
+                        continue;
+                    }
+
+                    var routeGroup = endpoints.MapGroup($"/api/");
+                    routeGroup.RequireAuthorization();
+
+                    foreach (var endpoint in group)
+                    {
+                        var builders = endpoint.RegisterEndpoints(routeGroup);
+                        foreach (var builder in builders)
+                        {
+                            endpoint.GroupEndpoints(builder, groupName);
+                        }
+                    }
+                }
             }
         );
     }
@@ -286,19 +336,11 @@ public class Startup
             options.DefaultPolicy = policyBuilder.Build();
         });
 
-        // TODO: Add these automatically with reflection?
-        services.AddSingleton<IAuthorizationHandler, FullRightsHandler>();
-        services.AddSingleton<IAuthorizationHandler, ViewAdminHandler>();
-        services.AddSingleton<IAuthorizationHandler, TeamAccessHandler>();
-        services.AddSingleton<IAuthorizationHandler, SameUserOrViewAdminHandler>();
-        services.AddSingleton<IAuthorizationHandler, SameUserHandler>();
         services.AddSingleton<IAuthorizationHandler, ViewMemberHandler>();
-        services.AddSingleton<IAuthorizationHandler, ViewCreationHandler>();
-        services.AddSingleton<IAuthorizationHandler, ManageTeamHandler>();
         services.AddSingleton<IAuthorizationHandler, TeamMemberHandler>();
-        services.AddSingleton<IAuthorizationHandler, TeamsMemberHandler>();
         services.AddSingleton<IAuthorizationHandler, PrimaryTeamHandler>();
-        services.AddSingleton<IAuthorizationHandler, ManageViewHandler>();
-        services.AddScoped<IAuthorizationHandler, UserAccessHandler>();
+
+        services.AddSingleton<IAuthorizationHandler, SystemPermissionsHandler>();
+        services.AddSingleton<IAuthorizationHandler, TeamPermissionsHandler>();
     }
 }

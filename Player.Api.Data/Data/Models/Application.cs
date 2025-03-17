@@ -8,7 +8,7 @@ using System.Text.Json;
 
 namespace Player.Api.Data.Data.Models
 {
-    public class ApplicationTemplateEntity
+    public class ApplicationTemplateEntity : IEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
@@ -29,7 +29,7 @@ namespace Player.Api.Data.Data.Models
         }
     }
 
-    public class ApplicationEntity
+    public class ApplicationEntity : IEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
@@ -83,7 +83,7 @@ namespace Player.Api.Data.Data.Models
         }
     }
 
-    public class ApplicationInstanceEntity
+    public class ApplicationInstanceEntity : IEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
