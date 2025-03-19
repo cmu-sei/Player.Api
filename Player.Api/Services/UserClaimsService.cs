@@ -150,7 +150,6 @@ public class UserClaimsService : IUserClaimsService
                 };
 
                 _context.Users.Add(user);
-                await _context.SaveChangesAsync();
             }
             else
             {
@@ -158,9 +157,15 @@ public class UserClaimsService : IUserClaimsService
                 {
                     user.Name = nameClaim;
                     _context.Update(user);
-                    await _context.SaveChangesAsync();
                 }
             }
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception)
+            { }
         }
 
         return user;
