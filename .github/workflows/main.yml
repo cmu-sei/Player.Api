@@ -16,6 +16,7 @@ jobs:
     with:
       imageName: cmusei/player-api
       additionalTarget: debug
+      push: false
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
