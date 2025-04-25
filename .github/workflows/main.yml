@@ -12,7 +12,7 @@ on:
 jobs:
   build-and-publish:
     name: Build and Publish
-    uses: cmu-sei/Crucible-Github-Actions/.github/workflows/docker-build.yaml@docker-v1.0
+    uses: cmu-sei/Crucible-Github-Actions/.github/workflows/docker-build.yaml@feature/additional-docker-target
     with:
       imageName: cmusei/player-api
     secrets:
