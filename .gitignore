@@ -314,5 +314,5 @@ Version.cs
 Version.h
 Version.cpp
 *.db
-Player.Api/appsettings.*.json
 Player.Api/player/
+**/appsettings.*.json
