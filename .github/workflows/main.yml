@@ -12,11 +12,10 @@ on:
 jobs:
   build-and-publish:
     name: Build and Publish
-    uses: cmu-sei/Crucible-Github-Actions/.github/workflows/docker-build.yaml@feature/additional-docker-target
+    uses: cmu-sei/Crucible-Github-Actions/.github/workflows/docker-build.yaml@docker-v1.0
     with:
       imageName: cmusei/player-api
       additionalTarget: debug
-      push: false
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
