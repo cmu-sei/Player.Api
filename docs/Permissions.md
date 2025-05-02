@@ -26,8 +26,8 @@ Permissions can be applied to Users by grouping them into Roles. There are two t
 
 - Team Roles - When a User is added to a Team in a View, their Team Membership has a Team Role that applies Permissions to that User only for that specific Team. The default Team Roles are:
 
-  - View Member - Can view and access all objects within the View.
-  - View Admin - Can perform all View actions, including managing User access to the View. When creating a new View, the creator is given the `View Admin` Role in that View.
+  - View Member - Can view and access all objects within the Team.
+  - View Admin - Can perform all View actions across all Teams in the View, including managing User access to the View. When creating a new View, the creator is given the `View Admin` Role in that View.
   - Observer - Can view all objects within the View, but not many any changes.
 
   Custom Team Roles can be created if different Permissions combinations are needed.
