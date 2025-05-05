@@ -20,7 +20,6 @@ Permissions can be applied to Users by grouping them into Roles. There are two t
 
   - Administrator - Has all Permissions within the system.
   - Content Developer - Has the `CreateViews` Permissions. Users in this Role can create and manage their own Views, but not affect any global settings or other User's Views.
-  - Observer - Has all `View` Permissions. Users in this Role can view everything in the system, but not make any changes.
 
   Custom System Roles can be created by Users with the `ManageRoles` Permission that include whatever Permissions are desired for that Role. This can be done in the Roles section of the Administration area.
 
