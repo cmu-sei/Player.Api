@@ -191,6 +191,7 @@ public class Startup
         services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
         services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
         services.AddHttpClient();
+        services.AddTelemetry(_authOptions);
 
         ApplyPolicies(services);
 
@@ -322,6 +323,10 @@ public class Startup
                 }
             }
         );
+
+        // more configuring telemetry
+        app.UseOpenTelemetryPrometheusScrapingEndpoint();
+
     }
 
 
