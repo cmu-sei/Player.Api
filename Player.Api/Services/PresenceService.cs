@@ -2,19 +2,17 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using AutoMapper;
-using AutoMapper.QueryableExtensions;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Build.Framework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Extensions;
 using Player.Api.Hubs;
 using Player.Api.Infrastructure.Authorization;
-using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -40,13 +38,16 @@ namespace Player.Api.Services
         private readonly ConnectionCacheService _connectionCacheService;
         private readonly ClaimsPrincipal _user;
         private readonly IMapper _mapper;
+        private readonly TelemetryService _telemetryService;
 
         public PresenceService(
+            ILogger<PresenceService> logger,
             PlayerContext context,
             IPlayerAuthorizationService authorizationService,
             IHubContext<ViewHub> hub,
             IPrincipal user,
             IMapper mapper,
+            TelemetryService telemetryService,
             ConnectionCacheService connectionCacheService)
         {
             _context = context;
@@ -55,6 +56,7 @@ namespace Player.Api.Services
             _user = user as ClaimsPrincipal;
             _mapper = mapper;
             _connectionCacheService = connectionCacheService;
+            _telemetryService = telemetryService;
         }
 
         public async Task<Guid?> AddConnectionToView(Guid viewId, Guid userId, string connectionId, CancellationToken ct)
@@ -63,6 +65,8 @@ namespace Player.Api.Services
 
             var viewMembership = await _context.ViewMemberships
                 .Include(x => x.TeamMemberships)
+                .Include(x => x.PrimaryTeamMembership)
+                .ThenInclude(p => p.Team)
                 .Include(x => x.User)
                 .Where(x => x.UserId == userId && x.ViewId == viewId)
                 .SingleOrDefaultAsync(ct);
@@ -105,6 +109,34 @@ namespace Player.Api.Services
                 });
 
                 returnVal = viewMembership.Id;
+                _telemetryService.ViewActiveUsers.Record(1,
+                    new KeyValuePair<string, object>("view_name", viewMembership.View.Name),
+                    new KeyValuePair<string, object>("team_name", viewMembership.PrimaryTeamMembership.Team.Name),
+                    new KeyValuePair<string, object>("user_name", viewMembership.User.Name)
+                );
+
+                var oldViewMemberships = await _context.ViewMemberships
+                    .Include(x => x.TeamMemberships)
+                    .Include(x => x.PrimaryTeamMembership)
+                    .ThenInclude(p => p.Team)
+                    .Include(x => x.User)
+                    .Include(x => x.View)
+                    .Where(x => x.UserId == userId && x.ViewId != viewId)
+                    .ToListAsync(ct);
+                foreach (var oldOne in oldViewMemberships)
+                {
+                    _telemetryService.ViewActiveUsers.Record(0,
+                        new KeyValuePair<string, object>("view_name", oldOne.View.Name),
+                        new KeyValuePair<string, object>("team_name", oldOne.PrimaryTeamMembership.Team.Name),
+                        new KeyValuePair<string, object>("user_name", oldOne.User.Name)
+                    );
+                }
+
+
+
+
+
+
             }
 
             return returnVal;
@@ -116,12 +148,21 @@ namespace Player.Api.Services
 
             var viewMembership = await _context.ViewMemberships
                 .Include(x => x.TeamMemberships)
+                .Include(x => x.PrimaryTeamMembership)
+                .ThenInclude(p => p.Team)
                 .Include(x => x.User)
+                .Include(x => x.View)
                 .Where(x => x.Id == viewMembershipId)
                 .SingleOrDefaultAsync(ct);
 
             if (viewMembership != null)
             {
+                _telemetryService.ViewActiveUsers.Record(0,
+                    new KeyValuePair<string, object>("view_name", viewMembership.View.Name),
+                    new KeyValuePair<string, object>("team_name", viewMembership.PrimaryTeamMembership.Team.Name),
+                    new KeyValuePair<string, object>("user_name", viewMembership.User.Name)
+                );
+
                 var viewLock = _connectionCacheService.Locks.GetOrAdd(viewMembership.Id, new object());
                 List<string> connectionList;
 

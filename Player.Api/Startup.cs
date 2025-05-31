@@ -31,8 +31,9 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using AutoMapper.Internal;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions.Middleware;
-using Microsoft.Build.Framework;
 using Microsoft.AspNetCore.Http.Json;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 namespace Player.Api;
 
@@ -191,8 +192,19 @@ public class Startup
         services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
         services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
         services.AddHttpClient();
-        services.AddTelemetry(_authOptions);
-
+        var telemetryInstance = new TelemetryService();
+        services.AddSingleton(telemetryInstance);
+        services.AddOpenTelemetry()
+            .WithMetrics(builder =>
+            {
+                builder
+                    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("TelemetryService"))
+                    .AddMeter
+                    (
+                        telemetryInstance.ViewUsersMeter.Name
+                    )
+                    .AddPrometheusExporter();
+            });
         ApplyPolicies(services);
 
         services.AddAutoMapper(cfg =>
@@ -286,6 +298,7 @@ public class Startup
                 {
                     options.AllowStatefulReconnects = _signalROptions.EnableStatefulReconnect;
                 });
+                endpoints.MapPrometheusScrapingEndpoint();
 
                 var endpointTypes = typeof(Program).Assembly.GetTypes()
                     .Where(t => typeof(IEndpoint).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
@@ -323,10 +336,6 @@ public class Startup
                 }
             }
         );
-
-        // more configuring telemetry
-        app.UseOpenTelemetryPrometheusScrapingEndpoint();
-
     }
 
 
