@@ -44,12 +44,14 @@ public class Startup
     private IConfiguration Configuration { get; }
     private const string _routePrefix = "api";
     private string _pathbase;
+    private readonly TelemetryOptions _telemetryOptions = new();
 
     public Startup(IConfiguration configuration)
     {
         Configuration = configuration;
         Configuration.GetSection("Authorization").Bind(_authOptions);
         Configuration.GetSection("SignalR").Bind(_signalROptions);
+        Configuration.GetSection("Telemetry").Bind(_telemetryOptions);
         _pathbase = Configuration["PathBase"];
     }
 
@@ -194,7 +196,7 @@ public class Startup
         services.AddHttpClient();
         var telemetryInstance = new TelemetryService();
         services.AddSingleton(telemetryInstance);
-        services.AddOpenTelemetry()
+        var metricsBuilder = services.AddOpenTelemetry()
             .WithMetrics(builder =>
             {
                 builder
@@ -204,8 +206,38 @@ public class Startup
                         telemetryInstance.ViewUsersMeter.Name
                     )
                     .AddPrometheusExporter();
-            });
-        ApplyPolicies(services);
+                if (_telemetryOptions.AddAspNetCoreInstrumentation)
+                {
+                    builder.AddAspNetCoreInstrumentation();
+                }
+                if (_telemetryOptions.AddHttpClientInstrumentation)
+                {
+                    builder.AddHttpClientInstrumentation();
+                }
+                if (_telemetryOptions.UseMeterMicrosoftAspNetCoreHosting)
+                {
+                    builder.AddMeter("Microsoft.AspNetCore.Hosting");
+                }
+                if (_telemetryOptions.UseMeterMicrosoftAspNetCoreServerKestrel)
+                {
+                    builder.AddMeter("Microsoft.AspNetCore.Server.Kestrel");
+                }
+                if (_telemetryOptions.UseMeterSystemNetHttp)
+                {
+                    builder.AddMeter("System.Net.Http");
+                }
+                if (_telemetryOptions.UseMeterSystemNetNameResolution)
+                {
+                    builder.AddMeter("System.Net.NameResolution");
+                }
+            }
+        );
+
+
+
+
+
+                        ApplyPolicies(services);
 
         services.AddAutoMapper(cfg =>
         {
@@ -298,7 +330,6 @@ public class Startup
                 {
                     options.AllowStatefulReconnects = _signalROptions.EnableStatefulReconnect;
                 });
-                endpoints.MapPrometheusScrapingEndpoint();
 
                 var endpointTypes = typeof(Program).Assembly.GetTypes()
                     .Where(t => typeof(IEndpoint).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
@@ -334,6 +365,7 @@ public class Startup
                         }
                     }
                 }
+                endpoints.MapPrometheusScrapingEndpoint().RequireAuthorization();
             }
         );
     }
