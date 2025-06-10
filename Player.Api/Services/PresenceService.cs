@@ -110,6 +110,9 @@ namespace Player.Api.Services
 
                 returnVal = viewMembership.Id;
                 _telemetryService.ViewActiveUsers.Record(1,
+                    new KeyValuePair<string, object>("view_id", viewMembership.ViewId),
+                    new KeyValuePair<string, object>("team_id", viewMembership.PrimaryTeamMembership.TeamId),
+                    new KeyValuePair<string, object>("user_id", viewMembership.UserId),
                     new KeyValuePair<string, object>("view_name", viewMembership.View.Name),
                     new KeyValuePair<string, object>("team_name", viewMembership.PrimaryTeamMembership.Team.Name),
                     new KeyValuePair<string, object>("user_name", viewMembership.User.Name)
@@ -126,17 +129,14 @@ namespace Player.Api.Services
                 foreach (var oldOne in oldViewMemberships)
                 {
                     _telemetryService.ViewActiveUsers.Record(0,
+                        new KeyValuePair<string, object>("view_id", oldOne.ViewId),
+                        new KeyValuePair<string, object>("team_id", oldOne.PrimaryTeamMembership.TeamId),
+                        new KeyValuePair<string, object>("user_id", oldOne.UserId),
                         new KeyValuePair<string, object>("view_name", oldOne.View.Name),
                         new KeyValuePair<string, object>("team_name", oldOne.PrimaryTeamMembership.Team.Name),
                         new KeyValuePair<string, object>("user_name", oldOne.User.Name)
                     );
                 }
-
-
-
-
-
-
             }
 
             return returnVal;
@@ -158,6 +158,9 @@ namespace Player.Api.Services
             if (viewMembership != null)
             {
                 _telemetryService.ViewActiveUsers.Record(0,
+                    new KeyValuePair<string, object>("view_id", viewMembership.ViewId),
+                    new KeyValuePair<string, object>("team_id", viewMembership.PrimaryTeamMembership.TeamId),
+                    new KeyValuePair<string, object>("user_id", viewMembership.UserId),
                     new KeyValuePair<string, object>("view_name", viewMembership.View.Name),
                     new KeyValuePair<string, object>("team_name", viewMembership.PrimaryTeamMembership.Team.Name),
                     new KeyValuePair<string, object>("user_name", viewMembership.User.Name)

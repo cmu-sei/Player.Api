@@ -233,11 +233,7 @@ public class Startup
             }
         );
 
-
-
-
-
-                        ApplyPolicies(services);
+        ApplyPolicies(services);
 
         services.AddAutoMapper(cfg =>
         {
