@@ -194,8 +194,7 @@ public class Startup
         services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
         services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
         services.AddHttpClient();
-        var telemetryInstance = new TelemetryService();
-        services.AddSingleton(telemetryInstance);
+        services.AddSingleton<TelemetryService>();
         var metricsBuilder = services.AddOpenTelemetry()
             .WithMetrics(builder =>
             {
@@ -203,7 +202,7 @@ public class Startup
                     .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("TelemetryService"))
                     .AddMeter
                     (
-                        telemetryInstance.ViewUsersMeter.Name
+                        TelemetryService.ViewUsersMeterName
                     )
                     .AddPrometheusExporter();
                 if (_telemetryOptions.AddAspNetCoreInstrumentation)
