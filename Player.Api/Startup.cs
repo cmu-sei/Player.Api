@@ -31,8 +31,9 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using AutoMapper.Internal;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions.Middleware;
-using Microsoft.Build.Framework;
 using Microsoft.AspNetCore.Http.Json;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 namespace Player.Api;
 
@@ -43,12 +44,14 @@ public class Startup
     private IConfiguration Configuration { get; }
     private const string _routePrefix = "api";
     private string _pathbase;
+    private readonly TelemetryOptions _telemetryOptions = new();
 
     public Startup(IConfiguration configuration)
     {
         Configuration = configuration;
         Configuration.GetSection("Authorization").Bind(_authOptions);
         Configuration.GetSection("SignalR").Bind(_signalROptions);
+        Configuration.GetSection("Telemetry").Bind(_telemetryOptions);
         _pathbase = Configuration["PathBase"];
     }
 
@@ -191,6 +194,43 @@ public class Startup
         services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
         services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
         services.AddHttpClient();
+        services.AddSingleton<TelemetryService>();
+        var metricsBuilder = services.AddOpenTelemetry()
+            .WithMetrics(builder =>
+            {
+                builder
+                    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("TelemetryService"))
+                    .AddMeter
+                    (
+                        TelemetryService.ViewUsersMeterName
+                    )
+                    .AddPrometheusExporter();
+                if (_telemetryOptions.AddAspNetCoreInstrumentation)
+                {
+                    builder.AddAspNetCoreInstrumentation();
+                }
+                if (_telemetryOptions.AddHttpClientInstrumentation)
+                {
+                    builder.AddHttpClientInstrumentation();
+                }
+                if (_telemetryOptions.UseMeterMicrosoftAspNetCoreHosting)
+                {
+                    builder.AddMeter("Microsoft.AspNetCore.Hosting");
+                }
+                if (_telemetryOptions.UseMeterMicrosoftAspNetCoreServerKestrel)
+                {
+                    builder.AddMeter("Microsoft.AspNetCore.Server.Kestrel");
+                }
+                if (_telemetryOptions.UseMeterSystemNetHttp)
+                {
+                    builder.AddMeter("System.Net.Http");
+                }
+                if (_telemetryOptions.UseMeterSystemNetNameResolution)
+                {
+                    builder.AddMeter("System.Net.NameResolution");
+                }
+            }
+        );
 
         ApplyPolicies(services);
 
@@ -320,6 +360,7 @@ public class Startup
                         }
                     }
                 }
+                endpoints.MapPrometheusScrapingEndpoint().RequireAuthorization();
             }
         );
     }
