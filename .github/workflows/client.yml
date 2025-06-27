@@ -26,16 +26,27 @@ jobs:
 
       - uses: actions/checkout@v2
 
-      - name: Build Package
+      - name: Start API and Generate Live swagger.json
         run: |
           cd ${{ steps.package_name.outputs.directory }}
-          dotnet tool restore
-          dotnet build -c Release /p:version=${{ github.event.inputs.clientVersion }}
 
-      - name: Run Swagger
-        run: |
-          cd ${{ steps.package_name.outputs.directory }}
-          dotnet swagger tofile --output ../${{ steps.package_name.outputs.name }}/swagger.json bin/Release/*/${{ steps.package_name.outputs.dll_name }}.dll v1
+          dotnet build -c Release /p:version=${{ github.event.inputs.clientVersion }}
+          dotnet run --no-build --urls=http://localhost:5000 &
+
+          # Store the process ID of the background job
+          API_PID=$!
+
+          # Wait for the API to be ready. This can be improved with a more robust health check.
+          echo "Waiting for API to start..."
+          sleep 15
+
+          # Download the swagger.json from the running API
+          # The --insecure flag is used to handle the dotnet development certificate.
+          curl --insecure http://localhost:5000/swagger/v1/swagger.json --output ../${{ steps.package_name.outputs.name }}/swagger.json
+
+          # Stop the background API process
+          kill $API_PID
+        shell: bash
 
       - name: Run NSwag
         run: |
