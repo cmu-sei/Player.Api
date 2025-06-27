@@ -13,5 +13,6 @@ namespace Player.Api.Features.Views
         public string Description { get; set; }
         public ViewStatus Status { get; set; }
         public Guid? ParentViewId { get; set; }
+        public bool IsTemplate { get; set; }
     }
 }
