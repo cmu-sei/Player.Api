@@ -1,6 +1,7 @@
 // Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
+using System;
 using System.Linq;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -14,6 +15,8 @@ public class Program
     public static void Main(string[] args)
     {
         var host = CreateWebHostBuilder(args).Build();
+
+        Console.WriteLine("Args: " + string.Join(',', args));
 
         if (!args.Contains("open-api-only"))
         {
