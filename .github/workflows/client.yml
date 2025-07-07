@@ -31,7 +31,7 @@ jobs:
           cd ${{ steps.package_name.outputs.directory }}
 
           dotnet build -c Release /p:version=${{ github.event.inputs.clientVersion }}
-          dotnet $(ls bin/Release/*/Player.Api.dll) --urls=http://localhost:5000 --no-db &
+          dotnet $(ls bin/Release/*/Player.Api.dll) --urls=http://localhost:5000 -- --open-api-only=true &
 
           # Store the process ID of the background job
           API_PID=$!

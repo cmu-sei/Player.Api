@@ -58,6 +58,8 @@ public class Startup
     // This method gets called by the runtime. Use this method to add services to the container.
     public void ConfigureServices(IServiceCollection services)
     {
+        var openApiOnly = Configuration.GetValue<bool>("open-api-only");
+
         // Add Azure Application Insights, if connection string is supplied
         string appInsights = Configuration["ApplicationInsights:ConnectionString"];
         if (!string.IsNullOrWhiteSpace(appInsights))
@@ -190,9 +192,14 @@ public class Startup
         services.AddScoped<IPrincipal>(p => p.GetService<IHttpContextAccessor>().HttpContext.User);
 
         services.AddSingleton<ConnectionCacheService>();
-        services.AddSingleton<BackgroundWebhookService>();
-        services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
-        services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
+
+        if (!openApiOnly)
+        {
+            services.AddSingleton<BackgroundWebhookService>();
+            services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
+            services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
+        }
+
         services.AddHttpClient();
         services.AddSingleton<TelemetryService>();
         var metricsBuilder = services.AddOpenTelemetry()
