@@ -59,6 +59,7 @@ public class Startup
     public void ConfigureServices(IServiceCollection services)
     {
         var openApiOnly = Configuration.GetValue<bool>("open-api-only");
+        Console.WriteLine("openApiOnly = " + openApiOnly);
 
         // Add Azure Application Insights, if connection string is supplied
         string appInsights = Configuration["ApplicationInsights:ConnectionString"];
@@ -199,6 +200,7 @@ public class Startup
 
         if (!openApiOnly)
         {
+            Console.WriteLine("Adding IHostedService");
             services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
         }
 
