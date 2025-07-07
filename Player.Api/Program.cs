@@ -18,7 +18,7 @@ public class Program
 
         Console.WriteLine("Args: " + string.Join(',', args));
 
-        if (!args.Contains("open-api-only"))
+        if (!args.Contains("--open-api-only"))
         {
             host = host.InitializeDatabase();
         }
