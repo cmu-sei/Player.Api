@@ -15,7 +15,7 @@ public class Program
     {
         var host = CreateWebHostBuilder(args).Build();
 
-        if (!args.Contains("--open-api-only"))
+        if (!args.Contains("open-api-only"))
         {
             host = host.InitializeDatabase();
         }

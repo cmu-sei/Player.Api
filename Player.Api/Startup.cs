@@ -193,11 +193,13 @@ public class Startup
 
         services.AddSingleton<ConnectionCacheService>();
 
+
+        services.AddSingleton<BackgroundWebhookService>();
+        services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
+
         if (!openApiOnly)
         {
-            services.AddSingleton<BackgroundWebhookService>();
             services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
-            services.AddSingleton<IBackgroundWebhookService>(x => x.GetService<BackgroundWebhookService>());
         }
 
         services.AddHttpClient();
