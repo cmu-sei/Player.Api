@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Player.Api.Data.Data.Models
 {
@@ -20,6 +22,8 @@ namespace Player.Api.Data.Data.Models
         public string Description { get; set; }
         public ViewStatus Status { get; set; }
         public bool IsTemplate { get; set; }
+        public Guid? DefaultTeamId { get; set; }
+        public virtual TeamEntity DefaultTeam { get; set; }
         public virtual ICollection<TeamEntity> Teams { get; set; } = new List<TeamEntity>();
         public virtual ICollection<ApplicationEntity> Applications { get; set; } = new List<ApplicationEntity>();
         public virtual ICollection<ViewMembershipEntity> Memberships { get; set; } = new List<ViewMembershipEntity>();
@@ -37,6 +41,17 @@ namespace Player.Api.Data.Data.Models
             entity.ParentView = this;
 
             return entity;
+        }
+    }
+
+    public class ViewConfiguration : IEntityTypeConfiguration<ViewEntity>
+    {
+        public void Configure(EntityTypeBuilder<ViewEntity> builder)
+        {
+            builder
+                .HasOne(x => x.DefaultTeam)
+                .WithMany()
+                .HasForeignKey(x => x.DefaultTeamId);
         }
     }
 

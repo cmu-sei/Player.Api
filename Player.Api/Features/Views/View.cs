@@ -14,5 +14,6 @@ namespace Player.Api.Features.Views
         public ViewStatus Status { get; set; }
         public Guid? ParentViewId { get; set; }
         public bool IsTemplate { get; set; }
+        public Guid? DefaultTeamId { get; set; }
     }
 }
