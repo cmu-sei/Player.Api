@@ -26,16 +26,25 @@ jobs:
 
       - uses: actions/checkout@v2
 
-      - name: Build Package
+      - name: Generate swagger.json
         run: |
           cd ${{ steps.package_name.outputs.directory }}
-          dotnet tool restore
-          dotnet build -c Release /p:version=${{ github.event.inputs.clientVersion }}
 
-      - name: Run Swagger
-        run: |
-          cd ${{ steps.package_name.outputs.directory }}
-          dotnet swagger tofile --output ../${{ steps.package_name.outputs.name }}/swagger.json bin/Release/*/${{ steps.package_name.outputs.dll_name }}.dll v1
+          dotnet build -c Release /p:version=${{ github.event.inputs.clientVersion }}
+          dotnet $(ls bin/Release/*/Player.Api.dll) --urls=http://localhost:5000 --open-api-only=true &
+
+          # Store the process ID of the background job
+          API_PID=$!
+
+          echo "Waiting for API to start..."
+          sleep 15
+
+          # Download the swagger.json from the running API
+          curl --insecure http://localhost:5000/swagger/v1/swagger.json --output ../${{ steps.package_name.outputs.name }}/swagger.json
+
+          # Stop the background API process
+          kill $API_PID
+        shell: bash
 
       - name: Run NSwag
         run: |
