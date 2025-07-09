@@ -32,6 +32,7 @@ public class Edit
         public string Description { get; set; }
         public ViewStatus Status { get; set; }
         public bool IsTemplate { get; set; }
+        public Guid? DefaultTeamId { get; set; }
     }
 
     public class Endpoint : IEndpoint
