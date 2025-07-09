@@ -31,6 +31,7 @@ public class Edit
         public string Name { get; set; }
         public string Description { get; set; }
         public ViewStatus Status { get; set; }
+        public bool IsTemplate { get; set; }
     }
 
     public class Endpoint : IEndpoint
