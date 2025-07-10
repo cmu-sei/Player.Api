@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
+using Player.Api.Features.Teams;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
 
@@ -150,6 +151,21 @@ public class Clone
                     if (application.Url != null && application.Url.Contains(file.Id.ToString()))
                     {
                         application.Url = application.Url.Replace(file.Id.ToString(), newFile.Id.ToString());
+                    }
+                }
+            }
+
+            if (view.DefaultTeamId.HasValue)
+            {
+                var defaultTeam = view.Teams.Where(x => x.Id == view.DefaultTeamId).FirstOrDefault();
+
+                if (defaultTeam != null)
+                {
+                    var newDefaultTeam = newView.Teams.Where(x => x.Name == defaultTeam.Name).FirstOrDefault();
+
+                    if (newDefaultTeam != null)
+                    {
+                        newView.DefaultTeamId = newDefaultTeam.Id;
                     }
                 }
             }
