@@ -15,6 +15,10 @@ namespace Player.Api.Features.Views
         public MappingProfile()
         {
             CreateMap<ViewEntity, View>();
+            CreateMap<ViewEntity, ViewExportDTO>();
+            CreateMap<ViewExportDTO, ViewExport>();
+            CreateMap<ViewExport, ViewEntity>();
+
             CreateMap<Create.Command, ViewEntity>();
             CreateMap<Edit.Command, ViewEntity>();
         }

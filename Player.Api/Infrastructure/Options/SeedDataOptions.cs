@@ -2,11 +2,13 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System.Security;
+using Player.Api.Features.Applications;
 using Player.Api.Features.Permissions;
 using Player.Api.Features.Roles;
 using Player.Api.Features.TeamPermissions;
 using Player.Api.Features.TeamRoles;
 using Player.Api.Features.Users;
+using Player.Api.Features.Views;
 using Player.Api.ViewModels.Webhooks;
 
 namespace Player.Api.Options
@@ -19,5 +21,7 @@ namespace Player.Api.Options
         public Features.TeamPermissions.Create.Command[] TeamPermissions { get; set; } = [];
         public SeedUser[] Users { get; set; } = [];
         public WebhookSubscription[] Subscriptions { get; set; } = [];
+        public ApplicationTemplate[] ApplicationTemplates { get; set; } = [];
+        public ViewExport[] Views { get; set; } = [];
     }
 }

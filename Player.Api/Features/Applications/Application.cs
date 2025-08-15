@@ -53,6 +53,11 @@ namespace Player.Api.Features.Applications
         public Guid? ApplicationTemplateId { get; set; }
     }
 
+    public class ApplicationExport : Application
+    {
+        public string ApplicationTemplateName { get; set; }
+    }
+
     public class ApplicationInstance
     {
         public Guid Id { get; set; }
@@ -77,5 +82,15 @@ namespace Player.Api.Features.Applications
         public bool LoadInBackground { get; set; }
 
         public Guid ViewId { get; set; }
+    }
+
+    public class ApplicationInstanceExport
+    {
+        public Guid Id { get; set; }
+
+        public Guid ApplicationId { get; set; }
+        public Guid TeamId { get; set; }
+
+        public float DisplayOrder { get; set; }
     }
 }

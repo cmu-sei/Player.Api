@@ -40,6 +40,7 @@
     <PackageReference Include="AspNetCore.HealthChecks.Sqlite" Version="8.1.0" />
     <PackageReference Include="MediatR" Version="12.4.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.8" />
+    <PackageReference Include="SharpZipLib" Version="1.4.2"/>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Player.Api.Data\Player.Api.Data.csproj" />

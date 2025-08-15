@@ -52,6 +52,9 @@ namespace Player.Api.Extensions
             else
                 policy.DisallowCredentials();
 
+            policy.WithExposedHeaders("content-disposition");
+            policy.WithExposedHeaders("x-archive-contains-errors");
+
             return policy.Build();
         }
     }

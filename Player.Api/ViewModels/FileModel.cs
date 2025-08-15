@@ -13,4 +13,9 @@ namespace Player.Api.ViewModels
         public Guid viewId { get; set; }
         public List<Guid> teamIds { get; set; }
     }
+
+    public class FileDTO : FileModel
+    {
+        public string Path { get; set; }
+    }
 }
