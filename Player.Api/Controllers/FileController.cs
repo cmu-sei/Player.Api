@@ -109,7 +109,7 @@ namespace Player.Api.Controllers
                 return File(stream, "image/" + ext, fileName);
             }
 
-            // If this is wrapped in an Ok, it throws an exception            
+            // If this is wrapped in an Ok, it throws an exception
             return File(stream, "application/octet-stream", fileName);
         }
 

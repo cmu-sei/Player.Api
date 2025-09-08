@@ -19,6 +19,9 @@ using Player.Api.Data.Data.Models.Webhooks;
 using AutoMapper;
 using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Player.Api.Features.Views;
+using System.Threading;
+using System.Text.Json;
 
 namespace Player.Api.Extensions
 {
@@ -36,6 +39,7 @@ namespace Player.Api.Extensions
                     var ctx = services.GetRequiredService<PlayerContext>();
                     var seedDataOptions = services.GetService<SeedDataOptions>();
                     var mapper = services.GetRequiredService<IMapper>();
+                    var viewImporter = services.GetRequiredService<ViewImporter>();
 
                     if (ctx != null)
                     {
@@ -53,7 +57,7 @@ namespace Player.Api.Extensions
                             ctx.Database.EnsureCreated();
                         }
 
-                        ProcessSeedDataOptions(seedDataOptions, ctx, mapper);
+                        ProcessSeedDataOptions(seedDataOptions, ctx, mapper, viewImporter);
                     }
 
                 }
@@ -70,7 +74,7 @@ namespace Player.Api.Extensions
             return webHost;
         }
 
-        private static void ProcessSeedDataOptions(SeedDataOptions options, PlayerContext context, IMapper mapper)
+        private static void ProcessSeedDataOptions(SeedDataOptions options, PlayerContext context, IMapper mapper, ViewImporter viewImporter)
         {
             if (options.Permissions.Any())
             {
@@ -204,6 +208,36 @@ namespace Player.Api.Extensions
                 }
 
                 context.SaveChanges();
+            }
+
+            if (options.ApplicationTemplates.Any())
+            {
+                var dbTemplates = context.ApplicationTemplates
+                    .Where(x => options.ApplicationTemplates.Select(y => y.Id).Contains(x.Id))
+                    .ToList();
+
+                foreach (var applicationTemplate in options.ApplicationTemplates)
+                {
+                    var dbTemplate = dbTemplates.SingleOrDefault(x => x.Id == applicationTemplate.Id);
+
+                    if (dbTemplate == null)
+                    {
+                        var applicationTemplateEntity = mapper.Map<ApplicationTemplateEntity>(applicationTemplate);
+                        context.ApplicationTemplates.Add(applicationTemplateEntity);
+                    }
+                }
+
+                context.SaveChanges();
+            }
+
+            if (options.Views.Any())
+            {
+                var failures = viewImporter.Import(options.Views, [], true, true, default(CancellationToken)).Result;
+
+                if (failures.Where(x => x.FailureType != ImportViewFailureType.ViewExists).Any())
+                {
+                    throw new Exception(JsonSerializer.Serialize(failures));
+                }
             }
         }
 

@@ -34,6 +34,8 @@ using Player.Api.Infrastructure.Exceptions.Middleware;
 using Microsoft.AspNetCore.Http.Json;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
+using Player.Api.Features.Applications;
+using Player.Api.Features.Views;
 
 namespace Player.Api;
 
@@ -118,7 +120,10 @@ public class Startup
                 .AddSingleton(config => config.GetService<IOptionsMonitor<Player.Api.Options.AuthorizationOptions>>().CurrentValue)
 
             .Configure<RoleOptions>(Configuration.GetSection("Roles"))
-                .AddScoped(config => config.GetService<IOptionsMonitor<RoleOptions>>().CurrentValue);
+                .AddScoped(config => config.GetService<IOptionsMonitor<RoleOptions>>().CurrentValue)
+
+            .Configure<AppOptions>(Configuration.GetSection("Applications"))
+                .AddScoped(config => config.GetService<IOptionsMonitor<AppOptions>>().CurrentValue);
 
         services.AddCors(options => options.UseConfiguredCors(Configuration.GetSection("CorsPolicy")));
 
@@ -184,12 +189,14 @@ public class Startup
         services.AddScoped<IPresenceService, PresenceService>();
         services.AddScoped<IPlayerAuthorizationService, AuthorizationService>();
         services.AddScoped<IIdentityResolver, IdentityResolver>();
+        services.AddScoped<IArchiveService, ArchiveService>();
+        services.AddScoped<ViewImporter>();
 
         services.AddScoped<IClaimsTransformation, AuthorizationClaimsTransformer>();
         services.AddScoped<IUserClaimsService, UserClaimsService>();
 
         services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
-        services.AddScoped<IPrincipal>(p => p.GetService<IHttpContextAccessor>().HttpContext.User);
+        services.AddScoped<IPrincipal>(p => p.GetService<IHttpContextAccessor>()?.HttpContext?.User);
 
         services.AddSingleton<ConnectionCacheService>();
 
@@ -366,7 +373,12 @@ public class Startup
                     }
 
                     var routeGroup = endpoints.MapGroup($"/api/");
+                    routeGroup.AddEndpointFilter<ApplicationInstanceFilter>();
                     routeGroup.RequireAuthorization();
+
+                    // Not needed since we're not using MCV/Razer Pages or cookie auth
+                    // Causes error with file upload endpoints
+                    routeGroup.DisableAntiforgery();
 
                     foreach (var endpoint in group)
                     {

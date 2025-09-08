@@ -3,6 +3,7 @@
 
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.Configuration;
+using Player.Api.Infrastructure.Constants;
 
 namespace Player.Api.Extensions
 {
@@ -51,6 +52,9 @@ namespace Player.Api.Extensions
                 policy.AllowCredentials();
             else
                 policy.DisallowCredentials();
+
+            policy.WithExposedHeaders(HttpConstants.ContentDispositionHeader);
+            policy.WithExposedHeaders(HttpConstants.ArchiveErrorsHeader);
 
             return policy.Build();
         }

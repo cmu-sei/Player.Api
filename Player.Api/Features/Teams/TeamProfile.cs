@@ -25,6 +25,12 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role.Name))
             .ForMember(dest => dest.Permissions, opt => opt.MapFrom(src => src.Permissions.Select(x => x.Permission)));
 
+        CreateMap<TeamEntity, TeamExport>()
+            .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role.Name))
+            .ForMember(dest => dest.Permissions, opt => opt.MapFrom(src => src.Permissions.Select(x => x.Permission)));
+
+        CreateMap<TeamDTO, TeamEntity>();
+        CreateMap<TeamExport, TeamEntity>();
         CreateMap<TeamDTO, Team>()
             .ForMember(dest => dest.IsMember, opt => opt.MapFrom<TeamMemberResolver>())
             .ForMember(dest => dest.IsPrimary, opt => opt.MapFrom<PrimaryTeamResolver>());

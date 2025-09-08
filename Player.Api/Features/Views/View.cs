@@ -3,6 +3,9 @@
 
 using System;
 using Player.Api.Data.Data.Models;
+using Player.Api.Features.Applications;
+using Player.Api.Features.Teams;
+using Player.Api.ViewModels;
 
 namespace Player.Api.Features.Views
 {
@@ -15,5 +18,19 @@ namespace Player.Api.Features.Views
         public Guid? ParentViewId { get; set; }
         public bool IsTemplate { get; set; }
         public Guid? DefaultTeamId { get; set; }
+    }
+
+    public class ViewExportDTO : View
+    {
+        public TeamExport[] Teams { get; set; }
+        public ApplicationExport[] Applications { get; set; }
+        public FileDTO[] Files { get; set; }
+    }
+
+    public class ViewExport : View
+    {
+        public TeamExport[] Teams { get; set; }
+        public ApplicationExport[] Applications { get; set; }
+        public FileModel[] Files { get; set; }
     }
 }

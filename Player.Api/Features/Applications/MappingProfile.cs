@@ -11,11 +11,15 @@ namespace Player.Api.Features.Applications
     {
         public MappingProfile()
         {
-            CreateMap<ApplicationTemplateEntity, ApplicationTemplate>();
+            CreateMap<ApplicationTemplateEntity, ApplicationTemplate>().ReverseMap();
             CreateMap<CreateApplicationTemplate.Command, ApplicationTemplateEntity>();
             CreateMap<EditApplicationTemplate.Command, ApplicationTemplateEntity>();
 
             CreateMap<ApplicationEntity, Application>();
+            CreateMap<ApplicationExport, ApplicationEntity>();
+            CreateMap<ApplicationEntity, ApplicationExport>()
+                .ForMember(dest => dest.ApplicationTemplateName, opt => opt.MapFrom(src => src.Template != null ? src.Template.Name : null));
+
             CreateMap<Create.Command, ApplicationEntity>();
             CreateMap<Edit.Command, ApplicationEntity>();
 
@@ -48,6 +52,8 @@ namespace Player.Api.Features.Applications
 
                 .ForMember(dest => dest.ViewId, opt => opt.MapFrom(src =>
                     src.Application.ViewId));
+
+            CreateMap<ApplicationInstanceExport, ApplicationInstanceEntity>().ReverseMap();
         }
     }
 }

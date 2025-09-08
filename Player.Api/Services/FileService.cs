@@ -33,6 +33,7 @@ namespace Player.Api.Services
         Task<Tuple<FileStream, string>> DownloadAsync(Guid fileId, CancellationToken ct);
         Task<FileModel> UpdateAsync(Guid fileId, FileUpdateForm form, CancellationToken ct);
         Task<bool> DeleteAsync(Guid fileId, CancellationToken ct);
+        Task<string> SaveFile(FileEntity file, byte[] fileData, CancellationToken ct);
     }
 
     public class FileService : IFileService
@@ -238,12 +239,23 @@ namespace Player.Api.Services
                 throw new ForbiddenException();
 
             // If this is the last pointer to the file, the file should be deleted. Else, just delete the pointer
-            if (await lastPointer(toDelete.Path, ct))
+            if (toDelete.Path is not null && await lastPointer(toDelete.Path, ct))
                 File.Delete(toDelete.Path);
 
             _context.Files.Remove(toDelete);
             await _context.SaveChangesAsync(ct);
             return true;
+        }
+
+        public async Task<string> SaveFile(FileEntity file, byte[] fileData, CancellationToken ct)
+        {
+            if (!ValidateFileExtension(file.Name))
+                throw new ForbiddenException("Invalid file extension");
+
+            var name = SanitizeFileName(file.Name);
+
+            var filePath = await uploadFile(fileData, file.View.Id, name);
+            return filePath;
         }
 
         private string SanitizeFileName(string name)
@@ -281,11 +293,9 @@ namespace Player.Api.Services
             return pointerCount == 1;
         }
 
-        private async Task<string> uploadFile(IFormFile file, Guid viewId, string name)
+        private async Task<string> uploadFile(Stream stream, Guid viewId, string name)
         {
-            var size = file.Length;
-
-            if (size > _fileUploadOptions.maxSize)
+            if (stream.Length > _fileUploadOptions.maxSize)
                 throw new InvalidOperationException($"File size exceeds the {_fileUploadOptions.maxSize} limit");
 
             if (!await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], default))
@@ -296,10 +306,22 @@ namespace Player.Api.Services
 
             Directory.CreateDirectory(folderPath);
 
-            using (var stream = File.Create(filepath))
-                await file.CopyToAsync(stream);
+            await using (var fileStream = File.Create(filepath))
+                await stream.CopyToAsync(fileStream);
 
             return filepath;
+        }
+
+        private async Task<string> uploadFile(IFormFile file, Guid viewId, string name)
+        {
+            await using var stream = file.OpenReadStream();
+            return await uploadFile(stream, viewId, name);
+        }
+
+        private async Task<string> uploadFile(byte[] data, Guid viewId, string name)
+        {
+            await using var stream = new MemoryStream(data);
+            return await uploadFile(stream, viewId, name);
         }
 
         private string GetNameToStore(string originalName)
