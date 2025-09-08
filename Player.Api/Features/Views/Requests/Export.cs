@@ -20,10 +20,12 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.VisualBasic;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Data.Models;
 using Player.Api.Infrastructure.Authorization;
+using Player.Api.Infrastructure.Constants;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Options;
 using Player.Api.Services;
@@ -60,7 +62,7 @@ public class Export
 
             if (result.HasErrors)
             {
-                httpContext.Response.Headers.Append("X-Archive-Contains-Errors", "true");
+                httpContext.Response.Headers.Append(HttpConstants.ArchiveErrorsHeader, "true");
             }
 
             return TypedResults.File(result.Data, result.Type, result.Name);

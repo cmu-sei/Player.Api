@@ -3,6 +3,7 @@
 
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.Configuration;
+using Player.Api.Infrastructure.Constants;
 
 namespace Player.Api.Extensions
 {
@@ -52,8 +53,8 @@ namespace Player.Api.Extensions
             else
                 policy.DisallowCredentials();
 
-            policy.WithExposedHeaders("content-disposition");
-            policy.WithExposedHeaders("x-archive-contains-errors");
+            policy.WithExposedHeaders(HttpConstants.ContentDispositionHeader);
+            policy.WithExposedHeaders(HttpConstants.ArchiveErrorsHeader);
 
             return policy.Build();
         }

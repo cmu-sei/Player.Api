@@ -26,6 +26,7 @@ using Player.Api.Data.Data.Models;
 using Player.Api.Data.Models;
 using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
+using Player.Api.Infrastructure.Constants;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Services;
 
@@ -61,7 +62,7 @@ public class ExportApplicationTemplates
 
             if (result.HasErrors)
             {
-                httpContext.Response.Headers.Append("X-Archive-Contains-Errors", "true");
+                httpContext.Response.Headers.Append(HttpConstants.ArchiveErrorsHeader, "true");
             }
 
             return TypedResults.File(result.Data, result.Type, result.Name);
