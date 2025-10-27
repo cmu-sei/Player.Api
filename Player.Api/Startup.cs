@@ -36,6 +36,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using Player.Api.Features.Applications;
 using Player.Api.Features.Views;
+using Crucible.Common.ServiceDefaults.OpenTelemetry;
 
 namespace Player.Api;
 
@@ -47,9 +48,11 @@ public class Startup
     private const string _routePrefix = "api";
     private string _pathbase;
     private readonly TelemetryOptions _telemetryOptions = new();
+    private readonly IWebHostEnvironment _env;
 
-    public Startup(IConfiguration configuration)
+    public Startup(IConfiguration configuration, IWebHostEnvironment env)
     {
+        _env = env;
         Configuration = configuration;
         Configuration.GetSection("Authorization").Bind(_authOptions);
         Configuration.GetSection("SignalR").Bind(_signalROptions);
@@ -275,6 +278,7 @@ public class Startup
 
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen();
+        services.AddCrucibleOpenTelemetryServices(_env, Configuration);
     }
 
     // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
