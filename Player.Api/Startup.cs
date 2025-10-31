@@ -47,7 +47,6 @@ public class Startup
     private IConfiguration Configuration { get; }
     private const string _routePrefix = "api";
     private string _pathbase;
-    private readonly TelemetryOptions _telemetryOptions = new();
     private readonly IWebHostEnvironment _env;
 
     public Startup(IConfiguration configuration, IWebHostEnvironment env)
@@ -56,7 +55,6 @@ public class Startup
         Configuration = configuration;
         Configuration.GetSection("Authorization").Bind(_authOptions);
         Configuration.GetSection("SignalR").Bind(_signalROptions);
-        Configuration.GetSection("Telemetry").Bind(_telemetryOptions);
         _pathbase = Configuration["PathBase"];
     }
 
@@ -224,40 +222,13 @@ public class Startup
                         TelemetryService.ViewUsersMeterName
                     )
                     .AddPrometheusExporter();
-                if (_telemetryOptions.AddRuntimeInstrumentation)
-                {
-                    builder.AddRuntimeInstrumentation();
-                }
-                if (_telemetryOptions.AddProcessInstrumentation)
-                {
-                    builder.AddProcessInstrumentation();
-                }
-                if (_telemetryOptions.AddAspNetCoreInstrumentation)
-                {
-                    builder.AddAspNetCoreInstrumentation();
-                }
-                if (_telemetryOptions.AddHttpClientInstrumentation)
-                {
-                    builder.AddHttpClientInstrumentation();
-                }
-                if (_telemetryOptions.UseMeterMicrosoftAspNetCoreHosting)
-                {
-                    builder.AddMeter("Microsoft.AspNetCore.Hosting");
-                }
-                if (_telemetryOptions.UseMeterMicrosoftAspNetCoreServerKestrel)
-                {
-                    builder.AddMeter("Microsoft.AspNetCore.Server.Kestrel");
-                }
-                if (_telemetryOptions.UseMeterSystemNetHttp)
-                {
-                    builder.AddMeter("System.Net.Http");
-                }
-                if (_telemetryOptions.UseMeterSystemNetNameResolution)
-                {
-                    builder.AddMeter("System.Net.NameResolution");
-                }
             }
         );
+
+        services.AddCrucibleOpenTelemetryServices(_env, Configuration, options =>
+        {
+            options.CustomMeters = options.CustomMeters.Append(TelemetryService.ViewUsersMeterName);
+        });
 
         ApplyPolicies(services);
 
@@ -278,7 +249,6 @@ public class Startup
 
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen();
-        services.AddCrucibleOpenTelemetryServices(_env, Configuration);
     }
 
     // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
