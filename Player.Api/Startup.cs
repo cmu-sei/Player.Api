@@ -218,7 +218,7 @@ public class Startup
             .WithMetrics(builder =>
             {
                 builder
-                    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("TelemetryService"))
+                    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("player-api"))
                     .AddMeter
                     (
                         TelemetryService.ViewUsersMeterName
