@@ -228,9 +228,9 @@ public class Startup
         );
 
         // Add Crucible Common Service Defaults
-        services.AddServiceDefaults(_env, Configuration, options =>
+        services.AddServiceDefaults(_env, Configuration, openTelemetryOptions =>
         {
-            options.CustomMeters = options.CustomMeters.Append(TelemetryService.ViewUsersMeterName);
+            openTelemetryOptions.CustomMeters = openTelemetryOptions.CustomMeters.Append(TelemetryService.ViewUsersMeterName);
         });
 
         ApplyPolicies(services);
