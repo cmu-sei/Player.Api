@@ -1,7 +1,7 @@
 // Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Player.Api.Data.Data.Models;
 using Player.Api.ViewModels.Webhooks;
 using Swashbuckle.AspNetCore.SwaggerGen;
