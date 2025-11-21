@@ -15,7 +15,7 @@ namespace Player.Api.Infrastructure.OperationFilters
             operation.Responses.Add("default", new OpenApiResponse
             {
                 Description = "Problem response",
-                Content = new Dictionary<string, IOpenApiMediaType>
+                Content = new Dictionary<string, OpenApiMediaType>
                 {
                     ["application/json"] = new OpenApiMediaType
                     {
