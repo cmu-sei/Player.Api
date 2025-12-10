@@ -11,9 +11,9 @@ namespace Player.Api.Services
 
     public class TelemetryService : ITelemetryService
     {
-        public const string ViewUsersMeterName = "cmu_sei_player_view_users";
+        public const string ViewUsersMeterName = "player_view_users";
         public readonly Meter ViewUsersMeter = new Meter(ViewUsersMeterName, "1.0");
-        public  Gauge<int> ViewActiveUsers;
+        public Gauge<int> ViewActiveUsers;
 
         public TelemetryService()
         {
