@@ -53,7 +53,11 @@ public class Get
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken)
         {
-            if (await authorizationService.Authorize([SystemPermission.ViewUsers], [ViewPermission.ViewView], [TeamPermission.ManageTeam], cancellationToken))
+            if (authorizationService.IsCurrentUser(request.Id))
+            {
+                return true;
+            }
+            else if (await authorizationService.Authorize([SystemPermission.ViewUsers], [ViewPermission.ViewView], [TeamPermission.ManageTeam], cancellationToken))
             {
                 return true;
             }

@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
+using Player.Api.Extensions;
 
 namespace Player.Api.Infrastructure.Authorization;
 
@@ -37,6 +38,7 @@ public interface IPlayerAuthorizationService
     IEnumerable<Guid> GetAuthorizedViewIds();
     IEnumerable<string> GetSystemPermissions();
     IEnumerable<TeamPermissionsClaim> GetTeamPermissions();
+    bool IsCurrentUser(Guid userId);
 }
 
 public class AuthorizationService(
@@ -105,6 +107,13 @@ public class AuthorizationService(
         return succeeded;
     }
 
+    public bool IsCurrentUser(Guid userId)
+    {
+        var claimsPrincipal = identityResolver.GetClaimsPrincipal();
+        var currentUserId = claimsPrincipal.GetId();
+
+        return currentUserId == userId;
+    }
 
     public IEnumerable<Guid> GetAuthorizedViewIds()
     {
