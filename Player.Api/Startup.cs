@@ -36,6 +36,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using Player.Api.Features.Applications;
 using Player.Api.Features.Views;
+using Crucible.Common.ServiceDefaults;
 
 namespace Player.Api;
 
@@ -46,14 +47,14 @@ public class Startup
     private IConfiguration Configuration { get; }
     private const string _routePrefix = "api";
     private string _pathbase;
-    private readonly TelemetryOptions _telemetryOptions = new();
+    private readonly IWebHostEnvironment _env;
 
-    public Startup(IConfiguration configuration)
+    public Startup(IConfiguration configuration, IWebHostEnvironment env)
     {
+        _env = env;
         Configuration = configuration;
         Configuration.GetSection("Authorization").Bind(_authOptions);
         Configuration.GetSection("SignalR").Bind(_signalROptions);
-        Configuration.GetSection("Telemetry").Bind(_telemetryOptions);
         _pathbase = Configuration["PathBase"];
     }
 
@@ -210,51 +211,27 @@ public class Startup
         }
 
         services.AddHttpClient();
+
+        // Add Custom Open Telemetry Metric
         services.AddSingleton<TelemetryService>();
         var metricsBuilder = services.AddOpenTelemetry()
             .WithMetrics(builder =>
             {
                 builder
-                    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("TelemetryService"))
+                    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("player-api"))
                     .AddMeter
                     (
                         TelemetryService.ViewUsersMeterName
                     )
                     .AddPrometheusExporter();
-                if (_telemetryOptions.AddRuntimeInstrumentation)
-                {
-                    builder.AddRuntimeInstrumentation();
-                }
-                if (_telemetryOptions.AddProcessInstrumentation)
-                {
-                    builder.AddProcessInstrumentation();
-                }
-                if (_telemetryOptions.AddAspNetCoreInstrumentation)
-                {
-                    builder.AddAspNetCoreInstrumentation();
-                }
-                if (_telemetryOptions.AddHttpClientInstrumentation)
-                {
-                    builder.AddHttpClientInstrumentation();
-                }
-                if (_telemetryOptions.UseMeterMicrosoftAspNetCoreHosting)
-                {
-                    builder.AddMeter("Microsoft.AspNetCore.Hosting");
-                }
-                if (_telemetryOptions.UseMeterMicrosoftAspNetCoreServerKestrel)
-                {
-                    builder.AddMeter("Microsoft.AspNetCore.Server.Kestrel");
-                }
-                if (_telemetryOptions.UseMeterSystemNetHttp)
-                {
-                    builder.AddMeter("System.Net.Http");
-                }
-                if (_telemetryOptions.UseMeterSystemNetNameResolution)
-                {
-                    builder.AddMeter("System.Net.NameResolution");
-                }
             }
         );
+
+        // Add Crucible Common Service Defaults
+        services.AddServiceDefaults(_env, Configuration, openTelemetryOptions =>
+        {
+            openTelemetryOptions.CustomMeters = openTelemetryOptions.CustomMeters.Append(TelemetryService.ViewUsersMeterName);
+        });
 
         ApplyPolicies(services);
 
