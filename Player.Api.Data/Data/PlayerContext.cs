@@ -8,6 +8,10 @@ using Player.Api.Data.Data.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Player.Api.Data.Data
 {
@@ -15,6 +19,9 @@ namespace Player.Api.Data.Data
     {
         // Needed for EventInterceptor
         public IServiceProvider ServiceProvider;
+
+        // Entity Events collected by EventTransactionInterceptor and published in SaveChanges
+        public List<INotification> Events { get; } = [];
 
         public PlayerContext(DbContextOptions<PlayerContext> options) : base(options) { }
 
@@ -339,6 +346,36 @@ namespace Player.Api.Data.Data
                     PermissionId = teamPermissions.SingleOrDefault(x => x.Name == "UploadVmFiles").Id
                 }
             );
+        }
+
+        public override int SaveChanges()
+        {
+            var result = base.SaveChanges();
+            PublishEvents().Wait();
+            return result;
+        }
+
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            var result = await base.SaveChangesAsync(cancellationToken);
+            await PublishEvents(cancellationToken);
+            return result;
+        }
+
+        private async Task PublishEvents(CancellationToken cancellationToken = default)
+        {
+            // Publish deferred events after transaction is committed and cleared
+            if (Events.Count > 0 && ServiceProvider is not null)
+            {
+                var mediator = ServiceProvider.GetRequiredService<IMediator>();
+                var eventsToPublish = Events.ToArray();
+                Events.Clear();
+
+                foreach (var evt in eventsToPublish)
+                {
+                    await mediator.Publish(evt, cancellationToken);
+                }
+            }
         }
     }
 }
