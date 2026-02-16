@@ -212,7 +212,7 @@ public class Startup
 
         services.AddHttpClient();
 
-        // Add Custom Open Telemetry Metric
+        // Create Custom Open Telemetry Metric
         services.AddSingleton<TelemetryService>();
         var metricsBuilder = services.AddOpenTelemetry()
             .WithMetrics(builder =>
@@ -230,6 +230,14 @@ public class Startup
         // Add Crucible Common Service Defaults
         services.AddServiceDefaults(_env, Configuration, openTelemetryOptions =>
         {
+            // Bind configuration from appsettings.json "OpenTelemetry" section
+            var telemetrySection = Configuration.GetSection("OpenTelemetry");
+            if (telemetrySection.Exists())
+            {
+                telemetrySection.Bind(openTelemetryOptions);
+            }
+
+            // Add custom meter
             openTelemetryOptions.CustomMeters = openTelemetryOptions.CustomMeters.Append(TelemetryService.ViewUsersMeterName);
         });
 
