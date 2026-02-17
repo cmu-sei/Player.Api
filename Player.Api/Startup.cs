@@ -26,7 +26,6 @@ using Player.Api.Infrastructure.Filters;
 using Player.Api.Infrastructure.Mappings;
 using Player.Api.Options;
 using Player.Api.Services;
-using Player.Api.Infrastructure.DbInterceptors;
 using Microsoft.IdentityModel.JsonWebTokens;
 using AutoMapper.Internal;
 using Player.Api.Infrastructure.Endpoints;
@@ -37,6 +36,7 @@ using OpenTelemetry.Resources;
 using Player.Api.Features.Applications;
 using Player.Api.Features.Views;
 using Crucible.Common.ServiceDefaults;
+using Crucible.Common.EntityEvents.Extensions;
 
 namespace Player.Api;
 
@@ -74,16 +74,14 @@ public class Startup
         switch (provider)
         {
             case "InMemory":
-                services.AddPooledDbContextFactory<PlayerContext>((serviceProvider, opt) => opt
-                        .AddInterceptors(serviceProvider.GetRequiredService<EventInterceptor>())
-                        .UseInMemoryDatabase("api"));
+                services.AddEventPublishingDbContextFactory<PlayerContext>((sp, builder) =>
+                    builder.UseInMemoryDatabase("api"));
                 break;
             case "Sqlite":
             case "SqlServer":
             case "PostgreSQL":
-                services.AddPooledDbContextFactory<PlayerContext>((serviceProvider, builder) => builder
-                    .AddInterceptors(serviceProvider.GetRequiredService<EventInterceptor>())
-                    .UseConfiguredDatabase(Configuration));
+                services.AddEventPublishingDbContextFactory<PlayerContext>((sp, builder) =>
+                    builder.UseConfiguredDatabase(Configuration));
                 break;
         }
         var connectionString = Configuration.GetConnectionString(DatabaseExtensions.DbProvider(Configuration));
@@ -99,9 +97,6 @@ public class Startup
                 services.AddHealthChecks().AddNpgSql(connectionString, tags: new[] { "ready", "live" });
                 break;
         }
-
-        services.AddScoped<PlayerContextFactory>();
-        services.AddScoped(sp => sp.GetRequiredService<PlayerContextFactory>().CreateDbContext());
 
 
         services.AddOptions()
@@ -182,7 +177,6 @@ public class Startup
 
         services.AddMemoryCache();
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<Startup>());
-        services.AddTransient<EventInterceptor>();
 
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<INotificationService, NotificationService>();

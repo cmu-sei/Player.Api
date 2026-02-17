@@ -5,9 +5,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
+using Crucible.Common.EntityEvents.Events;
 using Microsoft.Extensions.Caching.Memory;
 using Player.Api.Data.Data.Models;
-using Player.Api.Events;
 
 namespace Player.Api.Features.Users.EventHandlers;
 
