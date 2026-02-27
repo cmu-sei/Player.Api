@@ -15,8 +15,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Npgsql;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Features.Views;
@@ -58,8 +56,7 @@ public class Create
         }
     }
 
-    public class Handler(ILogger<Create> logger,
-                         IIdentityResolver identityResolver,
+    public class Handler(IIdentityResolver identityResolver,
                          IPlayerAuthorizationService authorizationService,
                          PlayerContext db,
                          IMapper mapper,
@@ -104,45 +101,14 @@ public class Create
                 teamEntity.RoleId = defaultRoleId;
             }
 
-            try
-            {
-                viewEntity.Teams.Add(teamEntity);
-                await db.SaveChangesAsync(cancellationToken);
+            viewEntity.Teams.Add(teamEntity);
+            await db.SaveChangesAsync(cancellationToken);
 
-                var team = await db.Teams
-                    .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)
-                    .SingleOrDefaultAsync(o => o.Id == teamEntity.Id, cancellationToken);
+            var team = await db.Teams
+                .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)
+                .SingleOrDefaultAsync(o => o.Id == teamEntity.Id, cancellationToken);
 
-                return mapper.Map<Team>(team);
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx)
-            {
-                // Handle specific PostgreSQL errors
-                switch (pgEx.SqlState)
-                {
-                    case "23505": // unique_violation
-                        throw new InvalidOperationException($"A Team with the ID '{teamEntity.Id}' already exists.", ex);
-                    case "23503": // foreign_key_violation
-                        var constraintName = pgEx.ConstraintName ?? "unknown";
-                        if (constraintName.Contains("ViewId", StringComparison.OrdinalIgnoreCase))
-                        {
-                            throw new InvalidOperationException($"Invalid ViewId '{request.ViewId}'. The View does not exist.", ex);
-                        }
-                        if (constraintName.Contains("RoleId", StringComparison.OrdinalIgnoreCase))
-                        {
-                            throw new InvalidOperationException($"Invalid RoleId '{request.RoleId}'. The TeamRole does not exist.", ex);
-                        }
-                        throw new InvalidOperationException($"Foreign key constraint violated: {constraintName}. Please verify all referenced entities exist.", ex);
-                    case "23514": // check_violation
-                        throw new InvalidOperationException($"Data validation failed: {pgEx.MessageText}", ex);
-                    default:
-                        throw new InvalidOperationException($"Database error creating Team: {pgEx.MessageText}", ex);
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"An unexpected error occurred while creating the Team: {ex.Message}", ex);
-            }
+            return mapper.Map<Team>(team);
         }
     }
 }

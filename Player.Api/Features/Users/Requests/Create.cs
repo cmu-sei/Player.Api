@@ -13,8 +13,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Npgsql;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
@@ -51,7 +49,7 @@ public class Create
         }
     }
 
-    public class Handler(ILogger<Create> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, User>
+    public class Handler(IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, User>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ManageUsers], [], [], cancellationToken);
@@ -60,50 +58,19 @@ public class Create
         {
             // Validate required fields
             if (string.IsNullOrWhiteSpace(request.Name))
-            {
-                logger.LogWarning("CreateUser failed: Name is required");
                 throw new ArgumentException("User Name is required and cannot be empty.");
-            }
 
             if (request.Id == Guid.Empty)
-            {
-                logger.LogWarning("CreateUser failed: Id is required");
                 throw new ArgumentException("User Id is required and cannot be empty.");
-            }
 
             var userEntity = mapper.Map<UserEntity>(request);
 
-            try
-            {
-                db.Users.Add(userEntity);
-                await db.SaveChangesAsync(cancellationToken);
+            db.Users.Add(userEntity);
+            await db.SaveChangesAsync(cancellationToken);
 
-
-                return await db.Users
-                    .ProjectTo<User>(mapper.ConfigurationProvider)
-                    .SingleOrDefaultAsync(o => o.Id == userEntity.Id, cancellationToken);
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx)
-            {
-
-                // Handle specific PostgreSQL errors
-                switch (pgEx.SqlState)
-                {
-                    case "23505": // unique_violation
-                        throw new InvalidOperationException($"A User with the ID '{request.Id}' already exists.", ex);
-                    case "23503": // foreign_key_violation
-                        var constraintName = pgEx.ConstraintName ?? "unknown";
-                        throw new InvalidOperationException($"Foreign key constraint violated: {constraintName}. Please verify all referenced entities exist.", ex);
-                    case "23514": // check_violation
-                        throw new InvalidOperationException($"Data validation failed: {pgEx.MessageText}", ex);
-                    default:
-                        throw new InvalidOperationException($"Database error creating User: {pgEx.MessageText}", ex);
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"An unexpected error occurred while creating the User: {ex.Message}", ex);
-            }
+            return await db.Users
+                .ProjectTo<User>(mapper.ConfigurationProvider)
+                .SingleOrDefaultAsync(o => o.Id == userEntity.Id, cancellationToken);
         }
     }
 }

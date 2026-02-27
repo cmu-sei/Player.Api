@@ -12,6 +12,8 @@ using Microsoft.Extensions.Hosting;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Player.Api.Infrastructure.Exceptions.Middleware
 {
@@ -42,24 +44,13 @@ namespace Player.Api.Infrastructure.Exceptions.Middleware
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Unhandled Exception: {ex}");
+                // Transform PostgreSQL errors into clear messages
+                if (ex is DbUpdateException dbEx && dbEx.InnerException is PostgresException pgEx)
+                {
+                    ex = TransformPostgresException(pgEx);
+                }
 
-                // if (ex.GetType() == typeof(ValidationException))
-                // {
-                //     var error = new ValidationProblemDetails(((ValidationException)ex).Errors)
-                //     {
-                //         Type = _problemDetailsFactory.CreateValidationProblemDetails(httpContext, new ModelStateDictionary()).Type
-                //     };
-                //     var code = HttpStatusCode.BadRequest;
-                //     httpContext.Response.ContentType = "application/problem+json";
-                //     httpContext.Response.StatusCode = (int)code;
-                //     error.Status = (int)code;
-                //     await httpContext.Response.WriteAsync(JsonSerializer.Serialize(error));
-                // }
-                // else
-                // {
-                //     await HandleExceptionAsync(httpContext, ex);
-                // }
+                _logger.LogError($"Unhandled Exception: {ex}");
 
                 await HandleExceptionAsync(httpContext, ex);
             }
@@ -110,6 +101,29 @@ namespace Player.Api.Infrastructure.Exceptions.Middleware
             }
 
             return (int)statusCode;
+        }
+
+        /// <summary>
+        /// Transform PostgreSQL exceptions into user-friendly messages
+        /// </summary>
+        private Exception TransformPostgresException(PostgresException pgEx)
+        {
+            var constraintName = pgEx.ConstraintName ?? "unknown";
+            var tableName = pgEx.TableName ?? "unknown";
+
+            return pgEx.SqlState switch
+            {
+                "23505" => // unique_violation
+                    new InvalidOperationException($"A {tableName} with this identifier already exists."),
+
+                "23503" => // foreign_key_violation
+                    new InvalidOperationException($"Referenced entity does not exist. Constraint: {constraintName}. Please verify all referenced entities exist."),
+
+                "23514" => // check_violation
+                    new InvalidOperationException($"Data validation failed: {pgEx.MessageText}"),
+
+                _ => new InvalidOperationException($"Database error: {pgEx.MessageText}")
+            };
         }
     }
 }
