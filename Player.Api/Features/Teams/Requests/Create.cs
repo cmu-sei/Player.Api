@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Features.Views;
@@ -69,11 +70,27 @@ public class Create
 
         public override async Task<Team> HandleRequest(Command request, CancellationToken cancellationToken)
         {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("Team Name is required and cannot be empty.");
+
+            if (request.ViewId == Guid.Empty)
+                throw new ArgumentException("ViewId is required and cannot be empty.");
+
+            // Validate ViewId exists
             var viewEntity = await db.Views
                 .SingleOrDefaultAsync(e => e.Id == request.ViewId, cancellationToken);
 
             if (viewEntity == null)
-                throw new EntityNotFoundException<View>();
+                throw new EntityNotFoundException<View>($"Invalid ViewId '{request.ViewId}'. The View does not exist.");
+
+            // Validate RoleId if provided
+            if (request.RoleId.HasValue && request.RoleId.Value != Guid.Empty)
+            {
+                var roleExists = await db.TeamRoles.AnyAsync(r => r.Id == request.RoleId.Value, cancellationToken);
+                if (!roleExists)
+                    throw new ArgumentException($"Invalid RoleId '{request.RoleId.Value}'. The TeamRole does not exist.");
+            }
 
             var teamEntity = mapper.Map<TeamEntity>(request);
 
@@ -87,16 +104,45 @@ public class Create
                 teamEntity.RoleId = defaultRoleId;
             }
 
-            viewEntity.Teams.Add(teamEntity);
-            await db.SaveChangesAsync(cancellationToken);
+            try
+            {
+                viewEntity.Teams.Add(teamEntity);
+                await db.SaveChangesAsync(cancellationToken);
 
-            logger.LogWarning($"Team {teamEntity.Name} ({teamEntity.Id}) in View {teamEntity.ViewId} created by {identityResolver.GetId()}");
+                var team = await db.Teams
+                    .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)
+                    .SingleOrDefaultAsync(o => o.Id == teamEntity.Id, cancellationToken);
 
-            var team = await db.Teams
-                .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)
-                .SingleOrDefaultAsync(o => o.Id == teamEntity.Id, cancellationToken);
-
-            return mapper.Map<Team>(team);
+                return mapper.Map<Team>(team);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx)
+            {
+                // Handle specific PostgreSQL errors
+                switch (pgEx.SqlState)
+                {
+                    case "23505": // unique_violation
+                        throw new InvalidOperationException($"A Team with the ID '{teamEntity.Id}' already exists.", ex);
+                    case "23503": // foreign_key_violation
+                        var constraintName = pgEx.ConstraintName ?? "unknown";
+                        if (constraintName.Contains("ViewId", StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException($"Invalid ViewId '{request.ViewId}'. The View does not exist.", ex);
+                        }
+                        if (constraintName.Contains("RoleId", StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException($"Invalid RoleId '{request.RoleId}'. The TeamRole does not exist.", ex);
+                        }
+                        throw new InvalidOperationException($"Foreign key constraint violated: {constraintName}. Please verify all referenced entities exist.", ex);
+                    case "23514": // check_violation
+                        throw new InvalidOperationException($"Data validation failed: {pgEx.MessageText}", ex);
+                    default:
+                        throw new InvalidOperationException($"Database error creating Team: {pgEx.MessageText}", ex);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"An unexpected error occurred while creating the Team: {ex.Message}", ex);
+            }
         }
     }
 }

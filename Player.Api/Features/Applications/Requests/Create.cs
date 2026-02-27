@@ -14,6 +14,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Npgsql;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Features.Views;
@@ -64,25 +66,70 @@ public class Create
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, Application>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper, ILogger<Handler> logger) : BaseHandler<Command, Application>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ManageApplications], [ViewPermission.ManageView], [], cancellationToken);
 
         public override async Task<Application> HandleRequest(Command request, CancellationToken cancellationToken)
         {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                logger.LogWarning("CreateApplication failed: Name is required");
+                throw new ArgumentException("Application Name is required and cannot be empty.");
+            }
+
+            if (request.ViewId == Guid.Empty)
+            {
+                logger.LogWarning("CreateApplication failed: ViewId is required");
+                throw new ArgumentException("ViewId is required and cannot be empty.");
+            }
+
             var viewExists = await db.Views.Where(e => e.Id == request.ViewId).AnyAsync(cancellationToken);
 
             if (!viewExists)
-                throw new EntityNotFoundException<View>();
+            {
+                logger.LogWarning($"CreateApplication failed: View {request.ViewId} not found");
+                throw new EntityNotFoundException<View>($"Invalid ViewId '{request.ViewId}'. The View does not exist.");
+            }
 
             var applicationEntity = mapper.Map<ApplicationEntity>(request);
 
-            db.Applications.Add(applicationEntity);
-            await db.SaveChangesAsync(cancellationToken);
+            try
+            {
+                db.Applications.Add(applicationEntity);
+                await db.SaveChangesAsync(cancellationToken);
 
-            var application = mapper.Map<Application>(applicationEntity);
-            return application;
+
+                var application = mapper.Map<Application>(applicationEntity);
+                return application;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx)
+            {
+
+                // Handle specific PostgreSQL errors
+                switch (pgEx.SqlState)
+                {
+                    case "23505": // unique_violation
+                        throw new InvalidOperationException($"An Application with the ID '{applicationEntity.Id}' already exists.", ex);
+                    case "23503": // foreign_key_violation
+                        var constraintName = pgEx.ConstraintName ?? "unknown";
+                        if (constraintName.Contains("ViewId", StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException($"Invalid ViewId '{request.ViewId}'. The View does not exist.", ex);
+                        }
+                        throw new InvalidOperationException($"Foreign key constraint violated: {constraintName}. Please verify all referenced entities exist.", ex);
+                    case "23514": // check_violation
+                        throw new InvalidOperationException($"Data validation failed: {pgEx.MessageText}", ex);
+                    default:
+                        throw new InvalidOperationException($"Database error creating Application: {pgEx.MessageText}", ex);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"An unexpected error occurred while creating the Application: {ex.Message}", ex);
+            }
         }
     }
 }
