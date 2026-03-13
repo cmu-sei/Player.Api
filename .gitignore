@@ -316,3 +316,6 @@ Version.cpp
 *.db
 Player.Api/player/
 **/appsettings.*.json
+
+# Claude Code artifacts
+.claude/
