@@ -37,6 +37,8 @@ using Player.Api.Features.Applications;
 using Player.Api.Features.Views;
 using Crucible.Common.ServiceDefaults;
 using Crucible.Common.EntityEvents.Extensions;
+using Player.Api.Infrastructure.ApiClients;
+using Crucible.Common.Authentication.ServiceAccounts;
 
 namespace Player.Api;
 
@@ -119,7 +121,16 @@ public class Startup
                 .AddScoped(config => config.GetService<IOptionsMonitor<RoleOptions>>().CurrentValue)
 
             .Configure<AppOptions>(Configuration.GetSection("Applications"))
-                .AddScoped(config => config.GetService<IOptionsMonitor<AppOptions>>().CurrentValue);
+                .AddScoped(config => config.GetService<IOptionsMonitor<AppOptions>>().CurrentValue)
+
+            .Configure<CrucibleApplicationOptions>(Configuration.GetSection("CrucibleApplications"))
+                .AddScoped(config => config.GetService<IOptionsMonitor<CrucibleApplicationOptions>>().CurrentValue)
+
+            .Configure<KeycloakAdminOptions>(Configuration.GetSection("KeycloakAdmin"))
+                .AddScoped(config => config.GetService<IOptionsMonitor<KeycloakAdminOptions>>().CurrentValue)
+
+            .Configure<UserDeletionSettings>(Configuration.GetSection("UserDeletionSettings"))
+                .AddScoped(config => config.GetService<IOptionsMonitor<UserDeletionSettings>>().CurrentValue);
 
         services.AddCors(options => options.UseConfiguredCors(Configuration.GetSection("CorsPolicy")));
 
@@ -192,6 +203,28 @@ public class Startup
 
         services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
         services.AddScoped<IPrincipal>(p => p.GetService<IHttpContextAccessor>()?.HttpContext?.User);
+
+        // Cascade User Deletion Services
+        services.AddScoped<Player.Api.Features.Users.Services.IValidationService, Player.Api.Features.Users.Services.ValidationService>();
+        services.AddScoped<Player.Api.Features.Users.Services.IUserDeletionService, Player.Api.Features.Users.Services.UserDeletionService>();
+        services.AddScoped<Player.Api.Features.Users.Services.IConfirmationCodeService, Player.Api.Features.Users.Services.ConfirmationCodeService>();
+        services.AddScoped<Player.Api.Features.Users.Services.IKeycloakAdminService, Player.Api.Features.Users.Services.KeycloakAdminService>();
+
+        // Crucible Service Account Authentication (for cross-app API calls)
+        var serviceAccountConfig = Configuration.GetSection("CrucibleServiceAccount").Get<Crucible.Common.Authentication.ServiceAccounts.CrucibleServiceAccountAuthenticationConfig>();
+        if (serviceAccountConfig != null)
+        {
+            services.AddCrucibleServiceAccountAuthentication(serviceAccountConfig);
+
+            // Register API clients for other Crucible applications
+            services.AddHttpClient<Player.Api.Features.Users.Services.IKeycloakAdminService, Player.Api.Features.Users.Services.KeycloakAdminService>();
+            services.AddCasterApiClient();
+            services.AddBlueprintApiClient();
+            services.AddGalleryApiClient();
+            services.AddCiteApiClient();
+            services.AddSteamfitterApiClient();
+            services.AddAlloyApiClient();
+        }
 
         services.AddSingleton<ConnectionCacheService>();
 

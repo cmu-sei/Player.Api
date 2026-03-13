@@ -42,6 +42,7 @@ namespace Player.Api.Data.Data
         public DbSet<WebhookSubscriptionEntity> Webhooks { get; set; }
         public DbSet<WebhookSubscriptionEventTypeEntity> WebhookSubscriptionEventTypes { get; set; }
         public DbSet<PendingEventEntity> PendingEvents { get; set; }
+        public DbSet<UserDeletionAuditLogEntity> UserDeletionAuditLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
