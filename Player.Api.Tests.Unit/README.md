@@ -110,12 +110,12 @@ All tests use constructor-based setup with:
 
 ### Assertion Library
 
-Tests use **Shouldly** for fluent assertions:
+Tests use **TUnit assertions** for fluent assertions:
 
 ```csharp
-result.ShouldNotBeNull();
-result.Count().ShouldBe(2);
-await Should.ThrowAsync<ForbiddenException>(() => _sut.MethodAsync());
+await Assert.That(result).IsNotNull();
+await Assert.That(result.Count()).IsEqualTo(2);
+await Assert.That(() => _sut.MethodAsync()).ThrowsException<ForbiddenException>();
 ```
 
 ### Authorization Testing
@@ -137,8 +137,7 @@ A.CallTo(() => _authorizationService.Authorize<ViewEntity>(
 - AutoFixture 4.18.1 + AutoFakeItEasy
 - FakeItEasy 8.3.0
 - Microsoft.EntityFrameworkCore.InMemory 10.0.1
-- Shouldly 4.2.1
-- xUnit 2.9.3
+- TUnit 1.19.22
 - MockQueryable.FakeItEasy 7.0.3
 - Player.Api
 - Player.Api.Data

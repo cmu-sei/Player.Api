@@ -50,6 +50,8 @@ var fixture = new Fixture().Customize(new PlayerCustomization());
 var view = fixture.Create<ViewEntity>(); // No circular reference issues
 ```
 
+This customization is used across both unit and integration tests to generate test data with AutoFixture.
+
 ## Dependencies
 
 - Player.Api

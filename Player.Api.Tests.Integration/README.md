@@ -34,7 +34,7 @@ This project tests Player API endpoints end-to-end using a real web server and P
 ["open-api-only"] = "true"  // Disables background services
 ```
 
-Implements `IAsyncLifetime` for xUnit test collection lifecycle:
+Implements `IAsyncInitializer` and `IAsyncDisposable` for TUnit test collection lifecycle:
 - `InitializeAsync()` - Starts PostgreSQL container
 - `DisposeAsync()` - Stops and removes container
 
@@ -116,23 +116,18 @@ macOS/Windows:
 
 ### Test Class Setup
 
-All integration test classes use `IClassFixture<PlayerTestContext>` to share a single web server and database across all tests in the class:
+All integration test classes use `[ClassDataSource<PlayerTestContext>(Shared = SharedType.PerTestSession)]` to share a single web server and database across all tests in the class:
 
 ```csharp
-public class FileControllerTests : IClassFixture<PlayerTestContext>
+public class FileControllerTests(PlayerTestContext factory)
 {
-    private readonly HttpClient _client;
+    private readonly HttpClient _client = factory.CreateClient();
 
-    public FileControllerTests(PlayerTestContext factory)
-    {
-        _client = factory.CreateClient();
-    }
-
-    [Fact]
+    [Test]
     public async Task GetAllFiles_Unauthorized_ReturnsForbiddenOrUnauthorized()
     {
         var response = await _client.GetAsync("/api/files");
-        response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
+        await Assert.That(response.StatusCode).IsNotEqualTo(HttpStatusCode.OK);
     }
 }
 ```
@@ -143,12 +138,12 @@ public class FileControllerTests : IClassFixture<PlayerTestContext>
 
 ### Assertion Library
 
-Tests use **Shouldly** for fluent assertions:
+Tests use **TUnit assertions** for fluent assertions:
 
 ```csharp
-response.StatusCode.ShouldBe(HttpStatusCode.OK);
-(status == HttpStatusCode.NotFound || status == HttpStatusCode.Forbidden)
-    .ShouldBeTrue($"Expected 404 or 403 but got {status}");
+await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+await Assert.That(status == HttpStatusCode.NotFound || status == HttpStatusCode.Forbidden)
+    .IsTrue($"Expected 404 or 403 but got {status}");
 ```
 
 ### Authentication
@@ -157,9 +152,9 @@ All requests automatically include the test user identity from `TestAuthHandler`
 
 ## Test Isolation
 
-Each test class gets a fresh database via `db.Database.EnsureCreated()`. However, tests within a class **share the same database instance** for performance. If test isolation is needed, either:
+Each test session gets a fresh database via `db.Database.EnsureCreated()`. Tests within a session **share the same database instance** for performance. If test isolation is needed, either:
 
-1. Use separate test classes (each gets its own container)
+1. Use separate test classes with `SharedType.Keyed` (each gets its own container)
 2. Manually reset database state in test setup
 3. Use transactions and rollback (requires additional setup)
 
@@ -170,8 +165,7 @@ Each test class gets a fresh database via `db.Database.EnsureCreated()`. However
 - Npgsql.EntityFrameworkCore.PostgreSQL 10.0.0
 - AutoFixture 4.18.1 + AutoFakeItEasy
 - FakeItEasy 8.3.0
-- Shouldly 4.2.1
-- xUnit 2.9.3
+- TUnit 1.19.22
 - Player.Api
 - Player.Api.Data
 - Player.Api.Tests.Shared

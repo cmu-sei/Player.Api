@@ -75,6 +75,31 @@ configs:
 
 The official microsoft docker image is based on Debian. SSL CA trusts and their entry scripts need to be updated to use `update-ca-certificates` please see [update-trusts.sh](entry.d/update-trusts.sh).
 
+## Testing
+
+This project uses [TUnit](https://tunit.dev/) as its test framework with FakeItEasy for mocking.
+
+### Test Projects
+
+| Project | Description |
+|---------|-------------|
+| `Player.Api.Tests.Unit` | Unit tests for services using in-memory EF Core and FakeItEasy |
+| `Player.Api.Tests.Integration` | Integration tests with WebApplicationFactory and Testcontainers PostgreSQL |
+| `Player.Api.Tests.Shared` | Shared AutoFixture customizations for entity types |
+
+### Running Tests
+
+```bash
+# Run all tests
+dotnet test
+
+# Run unit tests only
+dotnet test Player.Api.Tests.Unit
+
+# Run integration tests (requires Docker)
+dotnet test Player.Api.Tests.Integration
+```
+
 ## Reporting bugs and requesting features
 
 Think you found a bug? Please report all Crucible bugs - including bugs for the individual Crucible apps - in the [cmu-sei/crucible issue tracker](https://github.com/cmu-sei/crucible/issues).
