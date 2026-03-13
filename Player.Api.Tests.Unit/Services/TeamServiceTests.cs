@@ -22,6 +22,7 @@ using Xunit;
 
 namespace Player.Api.Tests.Unit.Services;
 
+[Trait("Category", "Unit")]
 public class TeamServiceTests
 {
     private readonly IFixture _fixture;
@@ -79,7 +80,7 @@ public class TeamServiceTests
     }
 
     [Fact]
-    public async Task GetByViewIdForCurrentUserAsync_ViewDoesNotExist_ThrowsEntityNotFoundException()
+    public async Task GetByViewIdForCurrentUserAsync_WhenViewDoesNotExist_ThrowsEntityNotFoundException()
     {
         // Arrange
         var viewId = Guid.NewGuid();
@@ -91,7 +92,7 @@ public class TeamServiceTests
     }
 
     [Fact]
-    public async Task GetByViewIdForCurrentUserAsync_UserDoesNotExist_ThrowsEntityNotFoundException()
+    public async Task GetByViewIdForCurrentUserAsync_WhenUserDoesNotExist_ThrowsEntityNotFoundException()
     {
         // Arrange
         var viewId = Guid.NewGuid();
@@ -110,7 +111,7 @@ public class TeamServiceTests
     }
 
     [Fact]
-    public async Task GetByViewIdForCurrentUserAsync_AuthorizedUser_ReturnsAllTeamsInView()
+    public async Task GetByViewIdForCurrentUserAsync_WhenUserAuthorized_ReturnsAllTeamsInView()
     {
         // Arrange
         var viewId = Guid.NewGuid();

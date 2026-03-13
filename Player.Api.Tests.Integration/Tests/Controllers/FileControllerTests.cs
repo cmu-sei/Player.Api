@@ -10,6 +10,7 @@ using Xunit;
 
 namespace Player.Api.Tests.Integration.Tests.Controllers;
 
+[Trait("Category", "Integration")]
 public class FileControllerTests : IClassFixture<PlayerTestContext>
 {
     private readonly HttpClient _client;
@@ -20,7 +21,7 @@ public class FileControllerTests : IClassFixture<PlayerTestContext>
     }
 
     [Fact]
-    public async Task GetAllFiles_Unauthorized_ReturnsForbiddenOrUnauthorized()
+    public async Task GetAllFiles_WhenUnauthorized_ReturnsForbiddenOrUnauthorized()
     {
         // The test auth handler always authenticates, but the user has no system permissions.
         // The FileService.GetAsync checks for SystemPermission.ViewViews.
@@ -34,7 +35,7 @@ public class FileControllerTests : IClassFixture<PlayerTestContext>
     }
 
     [Fact]
-    public async Task GetFileById_NonExistentFile_ReturnsNotFound()
+    public async Task GetFileById_WhenFileNonExistent_ReturnsNotFound()
     {
         // Arrange
         var nonExistentId = Guid.NewGuid();
@@ -49,7 +50,7 @@ public class FileControllerTests : IClassFixture<PlayerTestContext>
     }
 
     [Fact]
-    public async Task DeleteFile_NonExistentFile_ReturnsNotFoundOrForbidden()
+    public async Task DeleteFile_WhenFileNonExistent_ReturnsNotFoundOrForbidden()
     {
         // Arrange
         var nonExistentId = Guid.NewGuid();
@@ -64,7 +65,7 @@ public class FileControllerTests : IClassFixture<PlayerTestContext>
     }
 
     [Fact]
-    public async Task GetViewFiles_NonExistentView_ReturnsNotFoundOrForbidden()
+    public async Task GetViewFiles_WhenViewNonExistent_ReturnsNotFoundOrForbidden()
     {
         // Arrange
         var nonExistentViewId = Guid.NewGuid();

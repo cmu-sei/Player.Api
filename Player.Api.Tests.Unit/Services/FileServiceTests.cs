@@ -21,6 +21,7 @@ using Xunit;
 
 namespace Player.Api.Tests.Unit.Services;
 
+[Trait("Category", "Unit")]
 public class FileServiceTests
 {
     private readonly IFixture _fixture;
@@ -60,7 +61,7 @@ public class FileServiceTests
     }
 
     [Fact]
-    public async Task UploadAsync_NullTeamIds_ThrowsForbiddenException()
+    public async Task UploadAsync_WhenTeamIdsNull_ThrowsForbiddenException()
     {
         // Arrange
         var form = new FileForm
@@ -76,7 +77,7 @@ public class FileServiceTests
     }
 
     [Fact]
-    public async Task GetAsync_UnauthorizedUser_ThrowsForbiddenException()
+    public async Task GetAsync_WhenUserUnauthorized_ThrowsForbiddenException()
     {
         // Arrange
         A.CallTo(() => _authorizationService.Authorize(
@@ -90,7 +91,7 @@ public class FileServiceTests
     }
 
     [Fact]
-    public async Task GetAsync_AuthorizedUser_ReturnsFiles()
+    public async Task GetAsync_WhenUserAuthorized_ReturnsFiles()
     {
         // Arrange
         A.CallTo(() => _authorizationService.Authorize(
@@ -121,7 +122,7 @@ public class FileServiceTests
     }
 
     [Fact]
-    public async Task GetByIdAsync_FileNotFound_ThrowsEntityNotFoundException()
+    public async Task GetByIdAsync_WhenFileNotFound_ThrowsEntityNotFoundException()
     {
         // Arrange
         var fileId = Guid.NewGuid();
@@ -133,7 +134,7 @@ public class FileServiceTests
     }
 
     [Fact]
-    public async Task DeleteAsync_FileNotFound_ThrowsEntityNotFoundException()
+    public async Task DeleteAsync_WhenFileNotFound_ThrowsEntityNotFoundException()
     {
         // Arrange
         var fileId = Guid.NewGuid();
@@ -145,7 +146,7 @@ public class FileServiceTests
     }
 
     [Fact]
-    public async Task DeleteAsync_UnauthorizedUser_ThrowsForbiddenException()
+    public async Task DeleteAsync_WhenUserUnauthorized_ThrowsForbiddenException()
     {
         // Arrange
         var viewId = Guid.NewGuid();

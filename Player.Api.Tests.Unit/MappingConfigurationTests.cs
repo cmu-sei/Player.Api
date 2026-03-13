@@ -12,10 +12,11 @@ using Xunit;
 
 namespace Player.Api.Tests.Unit;
 
+[Trait("Category", "Unit")]
 public class MappingConfigurationTests
 {
     [Fact]
-    public void AutoMapper_Configuration_IsValid()
+    public void CreateMapper_WithAllProfiles_ShouldSucceed()
     {
         // Arrange
         var authorizationService = A.Fake<IAuthorizationService>();
@@ -50,7 +51,7 @@ public class MappingConfigurationTests
     }
 
     [Fact]
-    public void AutoMapper_AllProfiles_AreRegistered()
+    public void GetProfiles_FromAssembly_FindsExpectedCount()
     {
         // Arrange
         var assembly = typeof(Player.Api.Startup).Assembly;

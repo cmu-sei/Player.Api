@@ -8,6 +8,7 @@ using Xunit;
 
 namespace Player.Api.Tests.Integration.Tests.Controllers;
 
+[Trait("Category", "Integration")]
 public class HealthCheckTests : IClassFixture<PlayerTestContext>
 {
     private readonly HttpClient _client;
@@ -18,7 +19,7 @@ public class HealthCheckTests : IClassFixture<PlayerTestContext>
     }
 
     [Fact]
-    public async Task Health_Live_ReturnsOk()
+    public async Task GetLive_WhenHealthy_ReturnsOk()
     {
         // Act
         var response = await _client.GetAsync("/api/health/live");
@@ -28,7 +29,7 @@ public class HealthCheckTests : IClassFixture<PlayerTestContext>
     }
 
     [Fact]
-    public async Task Health_Ready_ReturnsOk()
+    public async Task GetReady_WhenHealthy_ReturnsOk()
     {
         // Act
         var response = await _client.GetAsync("/api/health/ready");
