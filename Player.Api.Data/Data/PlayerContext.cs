@@ -88,85 +88,101 @@ namespace Player.Api.Data.Data
                 {
                     Id = createViewsPermissionId,
                     Name = SystemPermission.CreateViews.ToString(),
-                    Description = "",
+                    Description = "Allows creating new Views",
                     Immutable = true
                 },
                 new PermissionEntity
                 {
                     Id = new("06da87d8-7636-4a50-929a-bbff2fbad548"),
                     Name = SystemPermission.ViewViews.ToString(),
-                    Description = "",
+                    Description = "Allows viewing all Views in the system",
                     Immutable = true
                 },
                 new PermissionEntity
                 {
                     Id = new("6c407f81-ab2e-4b24-911b-78b7f424b965"),
                     Name = SystemPermission.EditViews.ToString(),
-                    Description = "",
+                    Description = "Allows editing View properties across the system",
                     Immutable = true
                 },
                 new PermissionEntity
                 {
                     Id = new("5597959a-ff30-4b73-9122-f21d17c19382"),
                     Name = SystemPermission.ManageViews.ToString(),
-                    Description = "",
+                    Description = "Allows full management of Views, including modifying and deleting any View in the system",
                     Immutable = true
                 },
                 new PermissionEntity
                 {
                     Id = new("70f3e368-7e7a-4166-9698-5c96dbb19ceb"),
                     Name = SystemPermission.ViewUsers.ToString(),
-                    Description = "",
+                    Description = "Allows viewing all Users in the system",
                     Immutable = true
                 },
                 new PermissionEntity
                 {
                     Id = new("5cc1e12e-7440-4bd8-9a54-ccb5bb0f3f1e"),
                     Name = SystemPermission.ManageUsers.ToString(),
-                    Description = "",
+                    Description = "Allows creating and managing User accounts",
                     Immutable = true
                 },
                 new PermissionEntity
                 {
                     Id = new("0ef125ff-c493-476d-a041-0b6af54f4d36"),
                     Name = SystemPermission.ViewApplications.ToString(),
-                    Description = "",
+                    Description = "Allows viewing Applications and ApplicationTemplates across all Views",
                     Immutable = true
                 },
                 new PermissionEntity
                 {
                     Id = new("8dc72622-565d-4b86-b6d7-1692dc803815"),
                     Name = SystemPermission.ManageApplications.ToString(),
-                    Description = "",
+                    Description = "Allows creating and managing system ApplicationTemplates and Applications within Views",
                     Immutable = true
                 },
                 new PermissionEntity
                 {
                     Id = new("cfcc8ac3-6591-41b8-abe1-0456616b3798"),
                     Name = SystemPermission.ViewRoles.ToString(),
-                    Description = "",
+                    Description = "Allows viewing all Roles in the system",
                     Immutable = true
                 },
                 new PermissionEntity
                 {
                     Id = new("f1416f76-aa64-4edc-bfa8-6f234da85060"),
                     Name = SystemPermission.ManageRoles.ToString(),
-                    Description = "",
+                    Description = "Allows creating and managing system Roles",
                     Immutable = true
                 },
                 new PermissionEntity
                 {
                     Id = new("e15b0177-5250-4886-b062-4029a9371a99"),
                     Name = SystemPermission.ViewWebhookSubscriptions.ToString(),
-                    Description = "",
+                    Description = "Allows viewing all Webhook Subscriptions in the system",
                     Immutable = true
                 },
                 new PermissionEntity
                 {
                     Id = new("e1772ce2-eacb-478f-bac8-2e77d49c608a"),
                     Name = SystemPermission.ManageWebhookSubscriptions.ToString(),
-                    Description = "",
+                    Description = "Allows creating and managing Webhook Subscriptions",
                     Immutable = true
+                },
+
+                // Vm.Api Permissions
+                new PermissionEntity
+                {
+                    Id = new("df487ab3-e4d2-4879-8ba6-be626b5df5bc"),
+                    Name = "ViewNetworks",
+                    Description = "Allows viewing Network access across all Views",
+                    Immutable = false
+                },
+                new PermissionEntity
+                {
+                    Id = new("0c812be8-5a2a-4e61-b475-802efcc10fa2"),
+                    Name = "ManageNetworks",
+                    Description = "Allows creating, updating, and deleting Network access across all Views",
+                    Immutable = false
                 }
             );
 
@@ -222,14 +238,14 @@ namespace Player.Api.Data.Data
                 {
                     Id = new("fbabccc8-48c7-478a-bc30-d4bd8950e3d5"),
                     Name = TeamPermission.EditTeam.ToString(),
-                    Description = "Allows editing basic Team resources, including making changes within Virtual Machines, if applicable.",
+                    Description = "Allows editing basic Team resources, including making changes within Virtual Machines, if applicable",
                     Immutable = true
                 },
                 new TeamPermissionEntity
                 {
                     Id = new("83e41563-8b7f-4f43-b9d0-2d8dc12fc0bf"),
                     Name = TeamPermission.ManageTeam.ToString(),
-                    Description = "Allows managing all Team resources, including adding and removing Users.",
+                    Description = "Allows managing all Team resources, including adding and removing Users",
                     Immutable = true
                 },
                 new TeamPermissionEntity
@@ -250,7 +266,7 @@ namespace Player.Api.Data.Data
                 {
                     Id = new("5ae96619-b40b-4fdb-bbef-ad476c21553d"),
                     Name = ViewPermission.EditView.ToString(),
-                    Description = "Allows editing all basic resources in the View, including making changes within Virtual Machines, if applicable.",
+                    Description = "Allows editing all basic resources in the View, including making changes within Virtual Machines, if applicable",
                     Immutable = true
                 },
 
@@ -287,7 +303,21 @@ namespace Player.Api.Data.Data
                 {
                     Id = new("42da22ae-ca0f-440f-87e0-5742799f60e1"),
                     Name = "RevertVms",
-                    Description = "Allows reverting a Vm to it's current snapshot",
+                    Description = "Allows reverting a Vm to a snapshot",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("fbe821b7-4e5c-46f8-8c90-13fef17a680c"),
+                    Name = "ViewNetworks",
+                    Description = "Allows viewing Network access for the View",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("43aee79a-a73a-4aa9-8928-256c86d82f6d"),
+                    Name = "ManageNetworks",
+                    Description = "Allows creating, updating, and deleting Network access for the View",
                     Immutable = false
                 }
             };
