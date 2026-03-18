@@ -347,6 +347,12 @@ namespace Player.Api.Data.Data
                     RoleId = observerRoleId,
                     PermissionId = teamPermissions.SingleOrDefault(x => x.Name == ViewPermission.ViewView.ToString()).Id
                 },
+                new TeamRolePermissionEntity
+                {
+                    Id = new("73c34ba3-bb8c-4c61-860c-e535be7d69b1"),
+                    RoleId = observerRoleId,
+                    PermissionId = teamPermissions.SingleOrDefault(x => x.Name == "ViewNetworks").Id
+                },
 
                 // View Member Permissions
                 new TeamRolePermissionEntity
