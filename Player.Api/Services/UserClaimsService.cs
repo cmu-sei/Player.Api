@@ -181,6 +181,8 @@ public class UserClaimsService : IUserClaimsService
 
         var roles = await _context.Roles
             .Where(x => tokenRoleNames.Contains(x.Name.ToLower()))
+            .Include(x => x.Permissions)
+                .ThenInclude(x => x.Permission)
             .ToListAsync();
 
         var userRole = await _context.Users
