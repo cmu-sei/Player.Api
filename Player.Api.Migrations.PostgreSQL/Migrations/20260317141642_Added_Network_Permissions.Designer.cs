@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Player.Api.Data.Data;
@@ -15,9 +16,11 @@ using Player.Api.Data.Data;
 namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(PlayerContext))]
-    partial class PlayerContextModelSnapshot : ModelSnapshot
+    [Migration("20260317141642_Added_Network_Permissions")]
+    partial class Added_Network_Permissions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -734,12 +737,6 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         {
                             Id = new Guid("5939d9cf-6f4b-4136-907c-0e878da2241b"),
                             PermissionId = new Guid("7be07cd5-104e-4770-800b-80ac26cda6d5"),
-                            RoleId = new Guid("c875dcce-2488-4e73-8585-8375b4730151")
-                        },
-                        new
-                        {
-                            Id = new Guid("73c34ba3-bb8c-4c61-860c-e535be7d69b1"),
-                            PermissionId = new Guid("fbe821b7-4e5c-46f8-8c90-13fef17a680c"),
                             RoleId = new Guid("c875dcce-2488-4e73-8585-8375b4730151")
                         },
                         new
