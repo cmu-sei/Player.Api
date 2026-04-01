@@ -11,7 +11,7 @@
     <Folder Include="wwwroot\" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="AutoMapper" Version="13.0.1" /> <!-- DO NOT UPDATE. Version 15+ requires a license. Plan to migrate to something else. -->
+    <PackageReference Include="AutoMapper" Version="15.1.1" /> <!-- DO NOT UPDATE. Version 15+ requires a license. Plan to migrate to something else. -->
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.1">
