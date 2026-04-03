@@ -15,7 +15,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Features.Views;
@@ -57,8 +56,7 @@ public class Create
         }
     }
 
-    public class Handler(ILogger<Create> logger,
-                         IIdentityResolver identityResolver,
+    public class Handler(IIdentityResolver identityResolver,
                          IPlayerAuthorizationService authorizationService,
                          PlayerContext db,
                          IMapper mapper,
@@ -69,11 +67,27 @@ public class Create
 
         public override async Task<Team> HandleRequest(Command request, CancellationToken cancellationToken)
         {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("Team Name is required and cannot be empty.");
+
+            if (request.ViewId == Guid.Empty)
+                throw new ArgumentException("ViewId is required and cannot be empty.");
+
+            // Validate ViewId exists
             var viewEntity = await db.Views
                 .SingleOrDefaultAsync(e => e.Id == request.ViewId, cancellationToken);
 
             if (viewEntity == null)
-                throw new EntityNotFoundException<View>();
+                throw new EntityNotFoundException<View>($"Invalid ViewId '{request.ViewId}'. The View does not exist.");
+
+            // Validate RoleId if provided
+            if (request.RoleId.HasValue && request.RoleId.Value != Guid.Empty)
+            {
+                var roleExists = await db.TeamRoles.AnyAsync(r => r.Id == request.RoleId.Value, cancellationToken);
+                if (!roleExists)
+                    throw new ArgumentException($"Invalid RoleId '{request.RoleId.Value}'. The TeamRole does not exist.");
+            }
 
             var teamEntity = mapper.Map<TeamEntity>(request);
 
@@ -89,8 +103,6 @@ public class Create
 
             viewEntity.Teams.Add(teamEntity);
             await db.SaveChangesAsync(cancellationToken);
-
-            logger.LogWarning($"Team {teamEntity.Name} ({teamEntity.Id}) in View {teamEntity.ViewId} created by {identityResolver.GetId()}");
 
             var team = await db.Teams
                 .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)

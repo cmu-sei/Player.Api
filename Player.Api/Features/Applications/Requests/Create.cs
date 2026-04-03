@@ -71,10 +71,17 @@ public class Create
 
         public override async Task<Application> HandleRequest(Command request, CancellationToken cancellationToken)
         {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("Application Name is required and cannot be empty.");
+
+            if (request.ViewId == Guid.Empty)
+                throw new ArgumentException("ViewId is required and cannot be empty.");
+
             var viewExists = await db.Views.Where(e => e.Id == request.ViewId).AnyAsync(cancellationToken);
 
             if (!viewExists)
-                throw new EntityNotFoundException<View>();
+                throw new EntityNotFoundException<View>($"Invalid ViewId '{request.ViewId}'. The View does not exist.");
 
             var applicationEntity = mapper.Map<ApplicationEntity>(request);
 

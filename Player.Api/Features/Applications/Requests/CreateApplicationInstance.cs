@@ -15,6 +15,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Npgsql;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Features.Teams;
@@ -58,28 +60,85 @@ public class CreateApplicationInstance
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, ApplicationInstance>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper, ILogger<Handler> logger) : BaseHandler<Command, ApplicationInstance>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<TeamEntity>(request.TeamId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
 
         public override async Task<ApplicationInstance> HandleRequest(Command request, CancellationToken cancellationToken)
         {
+            // Validate required fields
+            if (request.TeamId == Guid.Empty)
+            {
+                logger.LogWarning("CreateApplicationInstance failed: TeamId is required");
+                throw new ArgumentException("TeamId is required and cannot be empty.");
+            }
+
+            if (request.ApplicationId == Guid.Empty)
+            {
+                logger.LogWarning("CreateApplicationInstance failed: ApplicationId is required");
+                throw new ArgumentException("ApplicationId is required and cannot be empty.");
+            }
+
             var team = await db.Teams.Where(e => e.Id == request.TeamId).SingleOrDefaultAsync(cancellationToken);
 
             if (team == null)
-                throw new EntityNotFoundException<Team>();
+            {
+                logger.LogWarning($"CreateApplicationInstance failed: Team {request.TeamId} not found");
+                throw new EntityNotFoundException<Team>($"Invalid TeamId '{request.TeamId}'. The Team does not exist.");
+            }
+
+            // Validate ApplicationId exists
+            var applicationExists = await db.Applications.AnyAsync(a => a.Id == request.ApplicationId, cancellationToken);
+            if (!applicationExists)
+            {
+                logger.LogWarning($"CreateApplicationInstance failed: Application {request.ApplicationId} not found");
+                throw new ArgumentException($"Invalid ApplicationId '{request.ApplicationId}'. The Application does not exist.");
+            }
 
             var instanceEntity = mapper.Map<ApplicationInstanceEntity>(request);
 
-            db.ApplicationInstances.Add(instanceEntity);
-            await db.SaveChangesAsync(cancellationToken);
+            try
+            {
+                db.ApplicationInstances.Add(instanceEntity);
+                await db.SaveChangesAsync(cancellationToken);
 
-            var instance = await db.ApplicationInstances
-                .ProjectTo<ApplicationInstance>(mapper.ConfigurationProvider)
-                .SingleOrDefaultAsync(i => i.Id == instanceEntity.Id, cancellationToken);
 
-            return instance;
+                var instance = await db.ApplicationInstances
+                    .ProjectTo<ApplicationInstance>(mapper.ConfigurationProvider)
+                    .SingleOrDefaultAsync(i => i.Id == instanceEntity.Id, cancellationToken);
+
+                return instance;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx)
+            {
+
+                // Handle specific PostgreSQL errors
+                switch (pgEx.SqlState)
+                {
+                    case "23505": // unique_violation
+                        throw new InvalidOperationException($"An ApplicationInstance for Application '{request.ApplicationId}' and Team '{request.TeamId}' already exists.", ex);
+                    case "23503": // foreign_key_violation
+                        var constraintName = pgEx.ConstraintName ?? "unknown";
+                        if (constraintName.Contains("TeamId", StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException($"Invalid TeamId '{request.TeamId}'. The Team does not exist.", ex);
+                        }
+                        if (constraintName.Contains("ApplicationId", StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException($"Invalid ApplicationId '{request.ApplicationId}'. The Application does not exist.", ex);
+                        }
+                        throw new InvalidOperationException($"Foreign key constraint violated: {constraintName}. Please verify all referenced entities exist.", ex);
+                    case "23514": // check_violation
+                        throw new InvalidOperationException($"Data validation failed: {pgEx.MessageText}", ex);
+                    default:
+                        throw new InvalidOperationException($"Database error creating ApplicationInstance: {pgEx.MessageText}", ex);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"An unexpected error occurred while creating the ApplicationInstance: {ex.Message}", ex);
+            }
         }
     }
 }
