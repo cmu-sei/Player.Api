@@ -1,6 +1,7 @@
 // Copyright 2025 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
+using System;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
@@ -61,6 +62,10 @@ public class Create
 
         public override async Task<View> HandleRequest(Command request, CancellationToken cancellationToken)
         {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("View Name is required and cannot be empty.");
+
             var viewEntity = mapper.Map<ViewEntity>(request);
 
             var viewAdminRole = await db.TeamRoles

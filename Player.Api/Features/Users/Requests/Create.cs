@@ -13,7 +13,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
@@ -50,19 +49,24 @@ public class Create
         }
     }
 
-    public class Handler(ILogger<Create> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, User>
+    public class Handler(IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, User>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ManageUsers], [], [], cancellationToken);
 
         public override async Task<User> HandleRequest(Command request, CancellationToken cancellationToken)
         {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Name))
+                throw new ArgumentException("User Name is required and cannot be empty.");
+
+            if (request.Id == Guid.Empty)
+                throw new ArgumentException("User Id is required and cannot be empty.");
+
             var userEntity = mapper.Map<UserEntity>(request);
 
             db.Users.Add(userEntity);
             await db.SaveChangesAsync(cancellationToken);
-
-            logger.LogWarning($"User {request.Name} ({userEntity.Id}) created by {identityResolver.GetId()}");
 
             return await db.Users
                 .ProjectTo<User>(mapper.ConfigurationProvider)
