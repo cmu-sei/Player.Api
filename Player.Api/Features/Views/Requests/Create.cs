@@ -1,6 +1,7 @@
 // Copyright 2025 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
+using System;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
@@ -25,6 +26,7 @@ public class Create
     [DataContract(Name = "CreateViewCommand")]
     public record Command : IRequest<View>
     {
+        public Guid? Id { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
         public ViewStatus Status { get; set; }
@@ -62,6 +64,9 @@ public class Create
         public override async Task<View> HandleRequest(Command request, CancellationToken cancellationToken)
         {
             var viewEntity = mapper.Map<ViewEntity>(request);
+
+            if (request.Id.HasValue && request.Id.Value != Guid.Empty)
+                viewEntity.Id = request.Id.Value;
 
             var viewAdminRole = await db.TeamRoles
                 .Where(p => p.Name == roleOptions.DefaultViewCreatorRole)

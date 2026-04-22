@@ -31,6 +31,7 @@ public class Create
     [DataContract(Name = "CreateTeamCommand")]
     public record Command : IRequest<Team>
     {
+        public Guid? Id { get; set; }
         [JsonIgnore]
         public Guid ViewId { get; set; }
         public string Name { get; set; }
@@ -76,6 +77,10 @@ public class Create
                 throw new EntityNotFoundException<View>();
 
             var teamEntity = mapper.Map<TeamEntity>(request);
+            teamEntity.ViewId = viewEntity.Id;
+
+            if (request.Id.HasValue && request.Id.Value != Guid.Empty)
+                teamEntity.Id = request.Id.Value;
 
             if (!request.RoleId.HasValue)
             {
@@ -87,7 +92,7 @@ public class Create
                 teamEntity.RoleId = defaultRoleId;
             }
 
-            viewEntity.Teams.Add(teamEntity);
+            db.Teams.Add(teamEntity);
             await db.SaveChangesAsync(cancellationToken);
 
             logger.LogWarning($"Team {teamEntity.Name} ({teamEntity.Id}) in View {teamEntity.ViewId} created by {identityResolver.GetId()}");
