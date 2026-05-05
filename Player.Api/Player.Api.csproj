@@ -35,6 +35,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.1" />
     <PackageReference Include="SharpZipLib" Version="1.4.2"/>
     <PackageReference Include="Crucible.Common.ServiceDefaults" Version="0.0.2"/>
+    <PackageReference Include="TinCan" Version="1.3.0"/>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Player.Api.Data\Player.Api.Data.csproj" />
