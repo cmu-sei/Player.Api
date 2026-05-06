@@ -48,7 +48,7 @@ public class Get
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper, IXApiService xApiService) : BaseHandler<Query, View>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, View>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ViewViews], [], [], cancellationToken) ||
@@ -61,9 +61,6 @@ public class Get
 
             if (item == null)
                 throw new EntityNotFoundException<View>();
-
-            // Emit xAPI ViewViewed statement
-            await xApiService.EmitViewViewedAsync(request.Id, cancellationToken);
 
             return mapper.Map<View>(item);
         }

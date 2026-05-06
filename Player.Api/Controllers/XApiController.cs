@@ -25,6 +25,26 @@ public class XApiController : ControllerBase
     }
 
     /// <summary>
+    /// Logs xAPI viewed statement when user enters a view
+    /// </summary>
+    /// <param name="viewId">The id of the View</param>
+    /// <param name="ct"></param>
+    /// <returns></returns>
+    [HttpPost("viewed/view/{viewId}")]
+    [ProducesResponseType((int)HttpStatusCode.OK)]
+    [SwaggerOperation(OperationId = "viewViewed")]
+    public async Task<IActionResult> ViewViewed(
+        Guid viewId,
+        CancellationToken ct)
+    {
+        if (!_xApiService.IsConfigured())
+            return Ok();
+
+        await _xApiService.EmitViewViewedAsync(viewId, ct);
+        return Ok();
+    }
+
+    /// <summary>
     /// Logs xAPI experienced statement for switching to an application
     /// </summary>
     /// <param name="viewId">The id of the View</param>
