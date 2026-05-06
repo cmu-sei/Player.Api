@@ -47,7 +47,7 @@ public class XApiQueueService : IXApiQueueService
         statement.RetryCount = 0;
 
         _context.XApiQueuedStatements.Add(statement);
-        await context.SaveChangesAsync(ct);
+        await _context.SaveChangesAsync(ct);
 
         _logger.LogDebug("Enqueued xAPI statement {StatementId} for verb {Verb}", statement.Id, statement.Verb);
     }
@@ -56,7 +56,7 @@ public class XApiQueueService : IXApiQueueService
     {
         
         // Get pending statements (no retry count limit - transient errors retry indefinitely)
-        var statements = await context.XApiQueuedStatements
+        var statements = await _context.XApiQueuedStatements
             .Where(s => s.Status == XApiQueueStatus.Pending)
             .OrderBy(s => s.QueuedAt)
             .Take(batchSize)
@@ -72,7 +72,7 @@ public class XApiQueueService : IXApiQueueService
 
         if (statements.Any())
         {
-            await context.SaveChangesAsync(ct);
+            await _context.SaveChangesAsync(ct);
             _logger.LogInformation("Dequeued {Count} xAPI statements for processing", statements.Count);
         }
 
@@ -82,7 +82,7 @@ public class XApiQueueService : IXApiQueueService
     public async Task MarkCompletedAsync(Guid statementId, CancellationToken ct = default)
     {
         
-        var statement = await context.XApiQueuedStatements.FindAsync(new object[] { statementId }, ct);
+        var statement = await _context.XApiQueuedStatements.FindAsync(new object[] { statementId }, ct);
         if (statement == null)
         {
             _logger.LogWarning("Attempted to mark non-existent statement {StatementId} as completed", statementId);
@@ -90,7 +90,7 @@ public class XApiQueueService : IXApiQueueService
         }
 
         statement.Status = XApiQueueStatus.Completed;
-        await context.SaveChangesAsync(ct);
+        await _context.SaveChangesAsync(ct);
 
         _logger.LogDebug("Marked xAPI statement {StatementId} as completed", statementId);
     }
@@ -98,7 +98,7 @@ public class XApiQueueService : IXApiQueueService
     public async Task MarkFailedAsync(Guid statementId, string errorMessage, bool isTransientError, CancellationToken ct = default)
     {
         
-        var statement = await context.XApiQueuedStatements.FindAsync(new object[] { statementId }, ct);
+        var statement = await _context.XApiQueuedStatements.FindAsync(new object[] { statementId }, ct);
         if (statement == null)
         {
             _logger.LogWarning("Attempted to mark non-existent statement {StatementId} as failed", statementId);
@@ -111,7 +111,7 @@ public class XApiQueueService : IXApiQueueService
             statement.Status = XApiQueueStatus.Pending;
             statement.ErrorMessage = $"[TRANSIENT] {errorMessage}";
 
-            await context.SaveChangesAsync(ct);
+            await _context.SaveChangesAsync(ct);
 
             _logger.LogWarning(
                 "xAPI statement {StatementId} encountered transient error on attempt {RetryCount}, will retry: {Error}",
@@ -123,7 +123,7 @@ public class XApiQueueService : IXApiQueueService
             statement.Status = XApiQueueStatus.Failed;
             statement.ErrorMessage = $"[PERMANENT] {errorMessage}";
 
-            await context.SaveChangesAsync(ct);
+            await _context.SaveChangesAsync(ct);
 
             _logger.LogError(
                 "xAPI statement {StatementId} encountered permanent error after {RetryCount} attempts: {Error}",
@@ -134,14 +134,14 @@ public class XApiQueueService : IXApiQueueService
     public async Task<int> GetQueueDepthAsync(CancellationToken ct = default)
     {
         
-        return await context.XApiQueuedStatements
+        return await _context.XApiQueuedStatements
             .CountAsync(s => s.Status == XApiQueueStatus.Pending || s.Status == XApiQueueStatus.Processing, ct);
     }
 
     public async Task<List<XApiQueuedStatementEntity>> GetOldCompletedStatementsAsync(DateTime cutoffDate, CancellationToken ct = default)
     {
         
-        return await context.XApiQueuedStatements
+        return await _context.XApiQueuedStatements
             .Where(s => s.Status == XApiQueueStatus.Completed && s.QueuedAt < cutoffDate)
             .ToListAsync(ct);
     }
@@ -149,7 +149,7 @@ public class XApiQueueService : IXApiQueueService
     public async Task<List<XApiQueuedStatementEntity>> GetOldFailedStatementsAsync(DateTime cutoffDate, CancellationToken ct = default)
     {
         
-        return await context.XApiQueuedStatements
+        return await _context.XApiQueuedStatements
             .Where(s => s.Status == XApiQueueStatus.Failed && s.QueuedAt < cutoffDate)
             .ToListAsync(ct);
     }
@@ -157,7 +157,7 @@ public class XApiQueueService : IXApiQueueService
     public async Task<List<XApiQueuedStatementEntity>> GetStuckProcessingStatementsAsync(DateTime stuckThreshold, CancellationToken ct = default)
     {
         
-        return await context.XApiQueuedStatements
+        return await _context.XApiQueuedStatements
             .Where(s => s.Status == XApiQueueStatus.Processing
                      && s.LastAttemptAt.HasValue
                      && s.LastAttemptAt.Value < stuckThreshold)
@@ -167,11 +167,11 @@ public class XApiQueueService : IXApiQueueService
     public async Task DeleteStatementsAsync(List<Guid> statementIds, CancellationToken ct = default)
     {
         
-        var statements = await context.XApiQueuedStatements
+        var statements = await _context.XApiQueuedStatements
             .Where(s => statementIds.Contains(s.Id))
             .ToListAsync(ct);
 
         _context.XApiQueuedStatements.RemoveRange(statements);
-        await context.SaveChangesAsync(ct);
+        await _context.SaveChangesAsync(ct);
     }
 }

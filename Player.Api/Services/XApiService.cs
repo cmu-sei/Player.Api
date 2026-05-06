@@ -279,7 +279,6 @@ public class XApiService : IXApiService
         {
             await EnsureAgentInitializedAsync(ct);
 
-            using var context = await _contextFactory.CreateDbContextAsync(ct);
             var team = await _context.Teams.FindAsync(new object[] { teamId }, ct);
             if (team == null)
             {
@@ -384,7 +383,6 @@ public class XApiService : IXApiService
         {
             await EnsureAgentInitializedAsync(ct);
 
-            using var context = await _contextFactory.CreateDbContextAsync(ct);
             var team = await _context.Teams.FindAsync(new object[] { teamId }, ct);
             if (team == null)
             {
