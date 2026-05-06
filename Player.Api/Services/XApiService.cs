@@ -228,9 +228,9 @@ public class XApiService : IXApiService
                 ? appDisplayNames[applicationName.ToLower()]
                 : applicationName ?? "Unknown Application";
 
-            var verb = new Verb { id = new Uri("http://id.tincanapi.com/verb/experienced") };
+            var verb = new Verb { id = new Uri("http://activitystrea.ms/schema/1.0/access") };
             verb.display = new LanguageMap();
-            verb.display.Add("en-US", "experienced");
+            verb.display.Add("en-US", "accessed");
 
             var activity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}/apps/{applicationName?.ToLower() ?? "unknown"}" };
             activity.definition = new ActivityDefinition
@@ -261,7 +261,7 @@ public class XApiService : IXApiService
             await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
             {
                 StatementJson = statement.ToJSON(true),
-                Verb = "experienced",
+                Verb = "accessed",
                 ActivityId = activity.id,
                 ViewId = viewId
             }, ct);
