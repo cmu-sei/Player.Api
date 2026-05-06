@@ -24,6 +24,7 @@ public interface IXApiService
     Task EmitViewViewedAsync(Guid viewId, CancellationToken ct = default);
     Task EmitApplicationSwitchedAsync(Guid viewId, string applicationName, string applicationUrl, CancellationToken ct = default);
     Task EmitTeamJoinedAsync(Guid teamId, Guid viewId, CancellationToken ct = default);
+    Task EmitTeamSwitchedAsync(Guid viewId, Guid teamId, CancellationToken ct = default);
     Task EmitViewTerminatedAsync(Guid viewId, TimeSpan duration, CancellationToken ct = default);
 }
 
@@ -93,7 +94,7 @@ public class XApiService : IXApiService
         return !string.IsNullOrWhiteSpace(_xApiOptions.Username);
     }
 
-    private Context BuildContext(Guid viewId)
+    private Context BuildContext(Guid viewId, Guid? teamId = null)
     {
         var context = new Context
         {
@@ -114,6 +115,17 @@ public class XApiService : IXApiService
         };
 
         context.contextActivities = contextActivities;
+
+        // Add team context extension if teamId provided
+        if (teamId.HasValue)
+        {
+            context.extensions = new TinCan.Extensions(
+                new Newtonsoft.Json.Linq.JObject
+                {
+                    ["https://crucible.sei.cmu.edu/xapi/extensions/team"] = teamId.Value.ToString()
+                });
+        }
+
         return context;
     }
 
@@ -139,6 +151,13 @@ public class XApiService : IXApiService
                 return;
             }
 
+            // Get user's active team for this view
+            var userId = _user.GetId();
+            var viewMembership = await context.ViewMemberships
+                .Include(vm => vm.PrimaryTeamMembership)
+                .FirstOrDefaultAsync(vm => vm.ViewId == viewId && vm.UserId == userId, ct);
+            var teamId = viewMembership?.PrimaryTeamMembership?.TeamId;
+
             var verb = new Verb { id = new Uri("http://id.tincanapi.com/verb/viewed") };
             verb.display = new LanguageMap();
             verb.display.Add("en-US", "viewed");
@@ -158,7 +177,7 @@ public class XApiService : IXApiService
                 actor = _agent,
                 verb = verb,
                 target = activity,
-                context = BuildContext(viewId)
+                context = BuildContext(viewId, teamId)
             };
 
             await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
@@ -169,7 +188,7 @@ public class XApiService : IXApiService
                 ViewId = viewId
             }, ct);
 
-            _logger.LogInformation("Queued ViewViewed statement for View {ViewId}", viewId);
+            _logger.LogInformation("Queued ViewViewed statement for View {ViewId}, Team {TeamId}", viewId, teamId);
         }
         catch (Exception ex)
         {
@@ -184,6 +203,15 @@ public class XApiService : IXApiService
         try
         {
             await EnsureAgentInitializedAsync(ct);
+
+            using var context = await _contextFactory.CreateDbContextAsync(ct);
+
+            // Get user's active team for this view
+            var userId = _user.GetId();
+            var viewMembership = await context.ViewMemberships
+                .Include(vm => vm.PrimaryTeamMembership)
+                .FirstOrDefaultAsync(vm => vm.ViewId == viewId && vm.UserId == userId, ct);
+            var teamId = viewMembership?.PrimaryTeamMembership?.TeamId;
 
             var appDisplayNames = new Dictionary<string, string>
             {
@@ -212,7 +240,7 @@ public class XApiService : IXApiService
             activity.definition.name = new LanguageMap();
             activity.definition.name.Add("en-US", displayName);
 
-            var contextObj = BuildContext(viewId);
+            var contextObj = BuildContext(viewId, teamId);
 
             // Add parent context activity (the View)
             var parentActivity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
@@ -238,7 +266,7 @@ public class XApiService : IXApiService
                 ViewId = viewId
             }, ct);
 
-            _logger.LogInformation("Queued ApplicationSwitched statement for View {ViewId}, App {ApplicationName}", viewId, applicationName);
+            _logger.LogInformation("Queued ApplicationSwitched statement for View {ViewId}, App {ApplicationName}, Team {TeamId}", viewId, applicationName, teamId);
         }
         catch (Exception ex)
         {
@@ -306,6 +334,15 @@ public class XApiService : IXApiService
         {
             await EnsureAgentInitializedAsync(ct);
 
+            using var context = await _contextFactory.CreateDbContextAsync(ct);
+
+            // Get user's active team for this view
+            var userId = _user.GetId();
+            var viewMembership = await context.ViewMemberships
+                .Include(vm => vm.PrimaryTeamMembership)
+                .FirstOrDefaultAsync(vm => vm.ViewId == viewId && vm.UserId == userId, ct);
+            var teamId = viewMembership?.PrimaryTeamMembership?.TeamId;
+
             var verb = new Verb { id = new Uri("http://adlnet.gov/expapi/verbs/terminated") };
             verb.display = new LanguageMap();
             verb.display.Add("en-US", "terminated");
@@ -325,7 +362,7 @@ public class XApiService : IXApiService
                 {
                     duration = duration
                 },
-                context = BuildContext(viewId)
+                context = BuildContext(viewId, teamId)
             };
 
             await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
@@ -336,11 +373,73 @@ public class XApiService : IXApiService
                 ViewId = viewId
             }, ct);
 
-            _logger.LogInformation("Queued ViewTerminated statement for View {ViewId}, Duration {Duration}", viewId, duration);
+            _logger.LogInformation("Queued ViewTerminated statement for View {ViewId}, Duration {Duration}, Team {TeamId}", viewId, duration, teamId);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to emit ViewTerminated for View {ViewId}", viewId);
+        }
+    }
+
+    public async Task EmitTeamSwitchedAsync(Guid viewId, Guid teamId, CancellationToken ct = default)
+    {
+        if (!IsConfigured()) return;
+
+        try
+        {
+            await EnsureAgentInitializedAsync(ct);
+
+            using var context = await _contextFactory.CreateDbContextAsync(ct);
+            var team = await context.Teams.FindAsync(new object[] { teamId }, ct);
+            if (team == null)
+            {
+                _logger.LogWarning("Cannot emit TeamSwitched: Team {TeamId} not found", teamId);
+                return;
+            }
+
+            var verb = new Verb { id = new Uri("https://w3id.org/xapi/verbs/switched") };
+            verb.display = new LanguageMap();
+            verb.display.Add("en-US", "switched");
+
+            var activity = new Activity { id = $"{_xApiOptions.ApiUrl}/teams/{teamId}" };
+            activity.definition = new ActivityDefinition
+            {
+                type = new Uri("http://id.tincanapi.com/activitytype/team")
+            };
+            activity.definition.name = new LanguageMap();
+            activity.definition.name.Add("en-US", team.Name ?? "Unnamed Team");
+
+            var contextObj = BuildContext(viewId, teamId);
+
+            // Add parent context activity (the View)
+            var parentActivity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
+            parentActivity.definition = new ActivityDefinition
+            {
+                type = new Uri("http://adlnet.gov/expapi/activities/simulation")
+            };
+            contextObj.contextActivities.parent = new List<Activity> { parentActivity };
+
+            var statement = new Statement
+            {
+                actor = _agent,
+                verb = verb,
+                target = activity,
+                context = contextObj
+            };
+
+            await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
+            {
+                StatementJson = statement.ToJSON(true),
+                Verb = "switched",
+                ActivityId = activity.id,
+                ViewId = viewId
+            }, ct);
+
+            _logger.LogInformation("Queued TeamSwitched statement for Team {TeamId}, View {ViewId}", teamId, viewId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to emit TeamSwitched for Team {TeamId}, View {ViewId}", teamId, viewId);
         }
     }
 }

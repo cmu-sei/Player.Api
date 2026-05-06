@@ -70,4 +70,26 @@ public class XApiController : ControllerBase
         await _xApiService.EmitViewTerminatedAsync(viewId, duration, ct);
         return Ok();
     }
+
+    /// <summary>
+    /// Logs xAPI statement when user switches their active team
+    /// </summary>
+    /// <param name="viewId">The id of the View</param>
+    /// <param name="teamId">The id of the Team</param>
+    /// <param name="ct"></param>
+    /// <returns></returns>
+    [HttpPost("switched/view/{viewId}/team/{teamId}")]
+    [ProducesResponseType((int)HttpStatusCode.OK)]
+    [SwaggerOperation(OperationId = "teamSwitched")]
+    public async Task<IActionResult> TeamSwitched(
+        Guid viewId,
+        Guid teamId,
+        CancellationToken ct)
+    {
+        if (!_xApiService.IsConfigured())
+            return Ok();
+
+        await _xApiService.EmitTeamSwitchedAsync(viewId, teamId, ct);
+        return Ok();
+    }
 }
