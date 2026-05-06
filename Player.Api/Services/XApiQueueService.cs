@@ -28,26 +28,25 @@ public interface IXApiQueueService
 
 public class XApiQueueService : IXApiQueueService
 {
-    private readonly IDbContextFactory<PlayerContext> _contextFactory;
+    private readonly PlayerContext _context;
     private readonly ILogger<XApiQueueService> _logger;
 
     public XApiQueueService(
-        IDbContextFactory<PlayerContext> contextFactory,
+        PlayerContext context,
         ILogger<XApiQueueService> logger)
     {
-        _contextFactory = contextFactory;
+        _context = context;
         _logger = logger;
     }
 
     public async Task EnqueueAsync(XApiQueuedStatementEntity statement, CancellationToken ct = default)
     {
-        using var context = await _contextFactory.CreateDbContextAsync(ct);
-
+        
         statement.QueuedAt = DateTime.UtcNow;
         statement.Status = XApiQueueStatus.Pending;
         statement.RetryCount = 0;
 
-        context.XApiQueuedStatements.Add(statement);
+        _context.XApiQueuedStatements.Add(statement);
         await context.SaveChangesAsync(ct);
 
         _logger.LogDebug("Enqueued xAPI statement {StatementId} for verb {Verb}", statement.Id, statement.Verb);
@@ -55,8 +54,7 @@ public class XApiQueueService : IXApiQueueService
 
     public async Task<List<XApiQueuedStatementEntity>> DequeueAsync(int batchSize = 10, CancellationToken ct = default)
     {
-        using var context = await _contextFactory.CreateDbContextAsync(ct);
-
+        
         // Get pending statements (no retry count limit - transient errors retry indefinitely)
         var statements = await context.XApiQueuedStatements
             .Where(s => s.Status == XApiQueueStatus.Pending)
@@ -83,8 +81,7 @@ public class XApiQueueService : IXApiQueueService
 
     public async Task MarkCompletedAsync(Guid statementId, CancellationToken ct = default)
     {
-        using var context = await _contextFactory.CreateDbContextAsync(ct);
-
+        
         var statement = await context.XApiQueuedStatements.FindAsync(new object[] { statementId }, ct);
         if (statement == null)
         {
@@ -100,8 +97,7 @@ public class XApiQueueService : IXApiQueueService
 
     public async Task MarkFailedAsync(Guid statementId, string errorMessage, bool isTransientError, CancellationToken ct = default)
     {
-        using var context = await _contextFactory.CreateDbContextAsync(ct);
-
+        
         var statement = await context.XApiQueuedStatements.FindAsync(new object[] { statementId }, ct);
         if (statement == null)
         {
@@ -137,16 +133,14 @@ public class XApiQueueService : IXApiQueueService
 
     public async Task<int> GetQueueDepthAsync(CancellationToken ct = default)
     {
-        using var context = await _contextFactory.CreateDbContextAsync(ct);
-
+        
         return await context.XApiQueuedStatements
             .CountAsync(s => s.Status == XApiQueueStatus.Pending || s.Status == XApiQueueStatus.Processing, ct);
     }
 
     public async Task<List<XApiQueuedStatementEntity>> GetOldCompletedStatementsAsync(DateTime cutoffDate, CancellationToken ct = default)
     {
-        using var context = await _contextFactory.CreateDbContextAsync(ct);
-
+        
         return await context.XApiQueuedStatements
             .Where(s => s.Status == XApiQueueStatus.Completed && s.QueuedAt < cutoffDate)
             .ToListAsync(ct);
@@ -154,8 +148,7 @@ public class XApiQueueService : IXApiQueueService
 
     public async Task<List<XApiQueuedStatementEntity>> GetOldFailedStatementsAsync(DateTime cutoffDate, CancellationToken ct = default)
     {
-        using var context = await _contextFactory.CreateDbContextAsync(ct);
-
+        
         return await context.XApiQueuedStatements
             .Where(s => s.Status == XApiQueueStatus.Failed && s.QueuedAt < cutoffDate)
             .ToListAsync(ct);
@@ -163,8 +156,7 @@ public class XApiQueueService : IXApiQueueService
 
     public async Task<List<XApiQueuedStatementEntity>> GetStuckProcessingStatementsAsync(DateTime stuckThreshold, CancellationToken ct = default)
     {
-        using var context = await _contextFactory.CreateDbContextAsync(ct);
-
+        
         return await context.XApiQueuedStatements
             .Where(s => s.Status == XApiQueueStatus.Processing
                      && s.LastAttemptAt.HasValue
@@ -174,13 +166,12 @@ public class XApiQueueService : IXApiQueueService
 
     public async Task DeleteStatementsAsync(List<Guid> statementIds, CancellationToken ct = default)
     {
-        using var context = await _contextFactory.CreateDbContextAsync(ct);
-
+        
         var statements = await context.XApiQueuedStatements
             .Where(s => statementIds.Contains(s.Id))
             .ToListAsync(ct);
 
-        context.XApiQueuedStatements.RemoveRange(statements);
+        _context.XApiQueuedStatements.RemoveRange(statements);
         await context.SaveChangesAsync(ct);
     }
 }

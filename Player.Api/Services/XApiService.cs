@@ -31,7 +31,7 @@ public interface IXApiService
 
 public class XApiService : IXApiService
 {
-    private readonly IDbContextFactory<PlayerContext> _contextFactory;
+    private readonly PlayerContext _context;
     private readonly ClaimsPrincipal _user;
     private readonly XApiOptions _xApiOptions;
     private readonly IXApiQueueService _queueService;
@@ -39,13 +39,13 @@ public class XApiService : IXApiService
     private Agent _agent;
 
     public XApiService(
-        IDbContextFactory<PlayerContext> contextFactory,
+        PlayerContext context,
         IPrincipal user,
         XApiOptions xApiOptions,
         IXApiQueueService queueService,
         ILogger<XApiService> logger)
     {
-        _contextFactory = contextFactory;
+        _context = context;
         _user = user as ClaimsPrincipal;
         _xApiOptions = xApiOptions;
         _queueService = queueService;
@@ -56,8 +56,6 @@ public class XApiService : IXApiService
     {
         if (_agent != null || !IsConfigured())
             return;
-
-        using var context = await _contextFactory.CreateDbContextAsync(ct);
 
         var account = new AgentAccount
         {
@@ -79,7 +77,7 @@ public class XApiService : IXApiService
         }
 
         var userId = _user.GetId();
-        var user = await context.Users
+        var user = await _context.Users
             .Where(u => u.Id == userId)
             .FirstOrDefaultAsync(ct);
 
@@ -144,8 +142,7 @@ public class XApiService : IXApiService
         {
             await EnsureAgentInitializedAsync(ct);
 
-            using var context = await _contextFactory.CreateDbContextAsync(ct);
-            var view = await context.Views.FindAsync(new object[] { viewId }, ct);
+            var view = await _context.Views.FindAsync(new object[] { viewId }, ct);
             if (view == null)
             {
                 _logger.LogWarning("Cannot emit ViewViewed: View {ViewId} not found", viewId);
@@ -154,7 +151,7 @@ public class XApiService : IXApiService
 
             // Get user's active team for this view
             var userId = _user.GetId();
-            var viewMembership = await context.ViewMemberships
+            var viewMembership = await _context.ViewMemberships
                 .Include(vm => vm.PrimaryTeamMembership)
                 .FirstOrDefaultAsync(vm => vm.ViewId == viewId && vm.UserId == userId, ct);
             var teamId = viewMembership?.PrimaryTeamMembership?.TeamId;
@@ -205,11 +202,9 @@ public class XApiService : IXApiService
         {
             await EnsureAgentInitializedAsync(ct);
 
-            using var context = await _contextFactory.CreateDbContextAsync(ct);
-
             // Get user's active team for this view
             var userId = _user.GetId();
-            var viewMembership = await context.ViewMemberships
+            var viewMembership = await _context.ViewMemberships
                 .Include(vm => vm.PrimaryTeamMembership)
                 .FirstOrDefaultAsync(vm => vm.ViewId == viewId && vm.UserId == userId, ct);
             var teamId = viewMembership?.PrimaryTeamMembership?.TeamId;
@@ -285,7 +280,7 @@ public class XApiService : IXApiService
             await EnsureAgentInitializedAsync(ct);
 
             using var context = await _contextFactory.CreateDbContextAsync(ct);
-            var team = await context.Teams.FindAsync(new object[] { teamId }, ct);
+            var team = await _context.Teams.FindAsync(new object[] { teamId }, ct);
             if (team == null)
             {
                 _logger.LogWarning("Cannot emit TeamJoined: Team {TeamId} not found", teamId);
@@ -336,11 +331,9 @@ public class XApiService : IXApiService
         {
             await EnsureAgentInitializedAsync(ct);
 
-            using var context = await _contextFactory.CreateDbContextAsync(ct);
-
             // Get user's active team for this view
             var userId = _user.GetId();
-            var viewMembership = await context.ViewMemberships
+            var viewMembership = await _context.ViewMemberships
                 .Include(vm => vm.PrimaryTeamMembership)
                 .FirstOrDefaultAsync(vm => vm.ViewId == viewId && vm.UserId == userId, ct);
             var teamId = viewMembership?.PrimaryTeamMembership?.TeamId;
@@ -392,7 +385,7 @@ public class XApiService : IXApiService
             await EnsureAgentInitializedAsync(ct);
 
             using var context = await _contextFactory.CreateDbContextAsync(ct);
-            var team = await context.Teams.FindAsync(new object[] { teamId }, ct);
+            var team = await _context.Teams.FindAsync(new object[] { teamId }, ct);
             if (team == null)
             {
                 _logger.LogWarning("Cannot emit TeamSwitched: Team {TeamId} not found", teamId);
