@@ -8,6 +8,7 @@ using System.Security.Claims;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Player.Api.Data.Data;
@@ -232,7 +233,8 @@ public class XApiService : IXApiService
             verb.display = new LanguageMap();
             verb.display.Add("en-US", "accessed");
 
-            var activity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}/apps/{applicationName?.ToLower() ?? "unknown"}" };
+            var encodedAppName = HttpUtility.UrlEncode(applicationName?.ToLower() ?? "unknown");
+            var activity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}/apps/{encodedAppName}" };
             activity.definition = new ActivityDefinition
             {
                 type = new Uri("http://adlnet.gov/expapi/activities/module")
