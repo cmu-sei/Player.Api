@@ -81,6 +81,7 @@ public class ViewImporter(IMapper mapper, PlayerContext db, IFileService fileSer
                     view.Id,
                     view.Name,
                     $"Application {app.Name} ({app.Id}): No matching Application Template found");
+                continue;
             }
 
             app.ApplicationTemplateId = dbApp.Id;
@@ -103,6 +104,7 @@ public class ViewImporter(IMapper mapper, PlayerContext db, IFileService fileSer
                     view.Id,
                     view.Name,
                     $"Team {team.Name} ({team.Id}): No matching Role found");
+                continue;
             }
 
             team.RoleId = dbRole.Id;
