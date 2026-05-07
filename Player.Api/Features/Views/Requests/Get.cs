@@ -18,6 +18,7 @@ using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions;
+using Player.Api.Services;
 
 namespace Player.Api.Features.Views;
 

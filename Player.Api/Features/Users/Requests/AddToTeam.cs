@@ -56,7 +56,8 @@ public class AddToTeam
         IIdentityResolver identityResolver,
         IUserClaimsService claimsService,
         IPlayerAuthorizationService authorizationService,
-        PlayerContext db) : BaseHandler<Command>
+        PlayerContext db,
+        IXApiService xApiService) : BaseHandler<Command>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<TeamEntity>(request.TeamId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [TeamPermission.ManageTeam], cancellationToken);
@@ -110,6 +111,10 @@ public class AddToTeam
 
             await db.SaveChangesAsync(cancellationToken);
             await claimsService.RefreshClaims(request.UserId);
+
+            // Emit xAPI TeamJoined statement
+            await xApiService.EmitTeamJoinedAsync(request.TeamId, team.ViewId, cancellationToken);
+
             logger.LogWarning($"User {request.UserId} added to team {request.TeamId} by {identityResolver.GetId()}");
         }
     }

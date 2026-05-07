@@ -19,15 +19,18 @@ namespace Player.Api.Hubs
         private readonly INotificationService _notificationService;
         private readonly CancellationToken _ct;
         private readonly IPresenceService _presenceService;
+        private readonly IXApiService _xApiService;
 
         public ViewHub(
             INotificationService notificationService,
-            IPresenceService presenceService)
+            IPresenceService presenceService,
+            IXApiService xApiService)
         {
             _notificationService = notificationService;
             CancellationTokenSource source = new CancellationTokenSource();
             _ct = source.Token;
             _presenceService = presenceService;
+            _xApiService = xApiService;
         }
 
         public async Task Join(string idString)
@@ -41,6 +44,9 @@ namespace Player.Api.Hubs
 
             var presenceId = await _presenceService.AddConnectionToView(new Guid(idString), Context.User.GetId(), Context.ConnectionId, _ct);
             Context.Items["presenceId"] = presenceId;
+
+            // Emit xAPI view viewed statement when user joins hub
+            await _xApiService.EmitViewViewedAsync(id, _ct);
 
             await Clients.Caller.SendAsync("Reply", notification);
         }

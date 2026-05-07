@@ -204,6 +204,18 @@ public class Startup
             services.AddSingleton<IHostedService>(x => x.GetService<BackgroundWebhookService>());
         }
 
+        // xAPI Services
+        services.Configure<Infrastructure.Options.XApiOptions>(Configuration.GetSection("XApiOptions"))
+            .AddScoped(config => config.GetService<IOptionsMonitor<Infrastructure.Options.XApiOptions>>().CurrentValue);
+
+        services.AddScoped<IXApiQueueService, XApiQueueService>();
+        services.AddScoped<IXApiService, XApiService>();
+
+        if (!openApiOnly)
+        {
+            services.AddSingleton<IHostedService, XApiBackgroundService>();
+        }
+
         services.AddHttpClient();
 
         // Create Custom Open Telemetry Metric

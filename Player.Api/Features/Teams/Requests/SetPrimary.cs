@@ -54,7 +54,7 @@ public class SetPrimary
         }
     }
 
-    public class Handler(IUserClaimsService claimsService, IIdentityResolver identityResolver, PlayerContext db, IMapper mapper) : BaseHandler<Command, Team>
+    public class Handler(IUserClaimsService claimsService, IIdentityResolver identityResolver, PlayerContext db, IMapper mapper, IXApiService xApiService) : BaseHandler<Command, Team>
     {
         public override Task<bool> Authorize(Command request, CancellationToken cancellationToken)
         {
@@ -89,6 +89,9 @@ public class SetPrimary
             await db.SaveChangesAsync(cancellationToken);
 
             await claimsService.RefreshClaims(request.UserId);
+
+            // Emit xAPI statement for team switch
+            await xApiService.EmitTeamSwitchedAsync(teamEntity.ViewId, request.TeamId, cancellationToken);
 
             var team = await db.Teams
                 .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)
