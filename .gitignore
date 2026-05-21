@@ -303,6 +303,7 @@ _ReSharper.*/
 *.sdf
 bin/
 obj/
+*.csproj.lscache
 Debug/
 Release/
 *.opensdf
