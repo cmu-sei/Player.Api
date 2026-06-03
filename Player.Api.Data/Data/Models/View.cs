@@ -22,6 +22,7 @@ namespace Player.Api.Data.Data.Models
         public string Description { get; set; }
         public ViewStatus Status { get; set; }
         public bool IsTemplate { get; set; }
+        public DateTime DateCreated { get; set; }
         public Guid? DefaultTeamId { get; set; }
         public virtual TeamEntity DefaultTeam { get; set; }
         public virtual ICollection<TeamEntity> Teams { get; set; } = new List<TeamEntity>();
