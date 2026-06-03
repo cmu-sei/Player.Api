@@ -74,6 +74,7 @@ public class Clone
             var newView = view.Clone();
             newView.Name = $"Clone of {newView.Name}";
             newView.Status = ViewStatus.Active;
+            newView.DateCreated = DateTime.UtcNow;
 
             newView.Name = string.IsNullOrWhiteSpace(request.Name) ? newView.Name : request.Name;
             newView.Description = string.IsNullOrWhiteSpace(request.Description) ? newView.Description : request.Description;

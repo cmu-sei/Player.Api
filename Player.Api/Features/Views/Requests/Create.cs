@@ -68,6 +68,8 @@ public class Create
             if (request.Id.HasValue && request.Id.Value != Guid.Empty)
                 viewEntity.Id = request.Id.Value;
 
+            viewEntity.DateCreated = DateTime.UtcNow;
+
             var viewAdminRole = await db.TeamRoles
                 .Where(p => p.Name == roleOptions.DefaultViewCreatorRole)
                 .SingleAsync(cancellationToken);
