@@ -32,6 +32,7 @@ public class Clone
         public Guid ViewId { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
+        public bool? IsTemplate { get; set; }
     }
 
     public class Endpoint : IEndpoint
@@ -74,6 +75,7 @@ public class Clone
             var newView = view.Clone();
             newView.Name = $"Clone of {newView.Name}";
             newView.Status = ViewStatus.Active;
+            newView.IsTemplate = request.IsTemplate ?? false;
             newView.DateCreated = DateTime.UtcNow;
 
             newView.Name = string.IsNullOrWhiteSpace(request.Name) ? newView.Name : request.Name;
