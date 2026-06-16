@@ -38,6 +38,7 @@ public interface IPlayerAuthorizationService
     IEnumerable<Guid> GetAuthorizedViewIds();
     IEnumerable<string> GetSystemPermissions();
     IEnumerable<TeamPermissionsClaim> GetTeamPermissions();
+    IEnumerable<Guid> GetVisibleTeamIds(Guid viewId);
     bool IsCurrentUser(Guid userId);
 }
 
@@ -138,6 +139,22 @@ public class AuthorizationService(
            .Select(x => TeamPermissionsClaim.FromString(x.Value));
 
         return permissions;
+    }
+
+    // Team ids within a View that the current user can see by team-level permission: the
+    // team-level analog of ViewView/ManageView. Includes the user's member teams and any
+    // teams scoped to them whose resolved claim grants ViewTeam or ManageTeam. Used to
+    // surface scoped teams in "my teams in this View" results without altering the
+    // ViewView/ManageView all-teams behavior.
+    public IEnumerable<Guid> GetVisibleTeamIds(Guid viewId)
+    {
+        return GetTeamPermissions()
+            .Where(x => x.ViewId == viewId &&
+                (x.TeamPermissions.Contains(TeamPermission.ViewTeam) ||
+                 x.TeamPermissions.Contains(TeamPermission.ManageTeam)))
+            .Select(x => x.TeamId)
+            .Distinct()
+            .ToList();
     }
 
     private async Task<ResourceResult> GetResourceResult<T>(Guid resourceId, CancellationToken cancellationToken)

@@ -2,6 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -60,6 +61,15 @@ public class Delete
 
             if (teamToDelete == null)
                 throw new EntityNotFoundException<Team>();
+
+            // Remove permission scopes referencing this team (either as the granting or
+            // target team) since their FKs are not cascade-deleted.
+            var scopes = await db.TeamPermissionScopes
+                .Where(x => x.TeamId == request.Id || x.TargetTeamId == request.Id)
+                .ToListAsync(cancellationToken);
+
+            if (scopes.Count > 0)
+                db.TeamPermissionScopes.RemoveRange(scopes);
 
             db.Teams.Remove(teamToDelete);
             await db.SaveChangesAsync(cancellationToken);

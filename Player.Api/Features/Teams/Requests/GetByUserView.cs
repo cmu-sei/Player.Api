@@ -104,11 +104,28 @@ public class GetByUserView
             }
             else
             {
-                teamQuery = db.TeamMemberships
-                .Where(x => x.UserId == request.UserId && x.Team.ViewId == request.ViewId)
-                .Select(x => x.Team)
-                .Distinct()
-                .ProjectTo<TeamDTO>(mapper.ConfigurationProvider);
+                // Teams the user is a member of in this View.
+                var teamIds = await db.TeamMemberships
+                    .Where(x => x.UserId == request.UserId && x.Team.ViewId == request.ViewId)
+                    .Select(x => x.TeamId)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+
+                // For the current user, also include teams scoped to them whose resolved
+                // claim grants ViewTeam/ManageTeam — the team-level analog of the ViewView
+                // all-teams branch above. Scope claims are personal to the current principal,
+                // so this only applies when requesting one's own teams.
+                if (identityResolver.GetId() == request.UserId)
+                {
+                    teamIds = teamIds
+                        .Union(authorizationService.GetVisibleTeamIds(request.ViewId))
+                        .Distinct()
+                        .ToList();
+                }
+
+                teamQuery = db.Teams
+                    .Where(t => t.ViewId == request.ViewId && teamIds.Contains(t.Id))
+                    .ProjectTo<TeamDTO>(mapper.ConfigurationProvider);
             }
 
             var teams = await teamQuery.ToListAsync(cancellationToken);
