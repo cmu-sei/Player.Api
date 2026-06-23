@@ -288,6 +288,20 @@ namespace Player.Api.Data.Data
                 },
                 new TeamPermissionEntity
                 {
+                    Id = new("37256f30-4a64-425d-86f1-e6302bedc702"),
+                    Name = "DeleteViewIsos",
+                    Description = "Allows deleting ISOs that are available to any Teams in the View",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("b7d05581-0ba4-442f-81d8-3da72ea6533e"),
+                    Name = "DeleteTeamIsos",
+                    Description = "Allows deleting ISOs that are available to members of the Team",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
                     Id = new("3b135496-c7d9-4bef-b60c-fbcfa1af9c1b"),
                     Name = "DownloadVmFiles",
                     Description = "Allows downloading files directly from Vms",
