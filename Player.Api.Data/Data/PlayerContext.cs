@@ -184,6 +184,13 @@ namespace Player.Api.Data.Data
                     Name = "ManageNetworks",
                     Description = "Allows creating, updating, and deleting Network access across all Views",
                     Immutable = false
+                },
+                new PermissionEntity
+                {
+                    Id = new("0189a1b9-d975-4f14-b93c-db652f7dc064"),
+                    Name = SystemPermission.DeleteIsos.ToString(),
+                    Description = "Allows deleting any ISO across all Views",
+                    Immutable = false
                 }
             );
 
