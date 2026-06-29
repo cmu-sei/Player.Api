@@ -40,7 +40,6 @@ namespace Player.Api.Data.Data.Models
         ViewRoles,
         ManageRoles,
         ViewWebhookSubscriptions,
-        ManageWebhookSubscriptions,
-        DeleteIsos
+        ManageWebhookSubscriptions
     }
 }

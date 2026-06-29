@@ -188,7 +188,7 @@ namespace Player.Api.Data.Data
                 new PermissionEntity
                 {
                     Id = new("0189a1b9-d975-4f14-b93c-db652f7dc064"),
-                    Name = SystemPermission.DeleteIsos.ToString(),
+                    Name = "DeleteIsos",
                     Description = "Allows deleting any ISO across all Views",
                     Immutable = false
                 }
