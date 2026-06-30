@@ -200,13 +200,15 @@ public class UserClaimsService : IUserClaimsService
 
         roles = roles.Distinct().ToList();
 
+        var allSystemPermissionValues = await _context.Permissions.Select(x => x.Name).ToArrayAsync();
+
         foreach (var role in roles)
         {
             List<string> permissions;
 
             if (role.AllPermissions)
             {
-                permissions = Enum.GetValues<SystemPermission>().Select(x => x.ToString()).ToList();
+                permissions = allSystemPermissionValues.ToList();
             }
             else
             {
