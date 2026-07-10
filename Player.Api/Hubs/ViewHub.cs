@@ -107,15 +107,46 @@ namespace Player.Api.Hubs
         // return user statuses for accessible teams and subscribe to updates
         public async Task<IEnumerable<ViewPresence>> JoinPresence(Guid viewId)
         {
-            var group = await _presenceService.GetGroupByViewId(viewId);
-            await Groups.AddToGroupAsync(Context.ConnectionId, group);
+            var groups = await _presenceService.GetGroupsByViewId(viewId);
+
+            foreach (var group in groups)
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, group);
+            }
+
             return await _presenceService.GetPresenceByViewId(viewId);
+        }
+
+        public async Task<IEnumerable<ViewPresence>> JoinPresenceForTeam(Guid viewId, Guid? teamId)
+        {
+            var groups = await _presenceService.GetGroupsByViewId(viewId, teamId);
+
+            foreach (var group in groups)
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, group);
+            }
+
+            return await _presenceService.GetPresenceByViewId(viewId, teamId);
         }
 
         public async Task LeavePresence(Guid viewId)
         {
-            var group = await _presenceService.GetGroupByViewId(viewId);
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, group);
+            var groups = await _presenceService.GetGroupsByViewId(viewId);
+
+            foreach (var group in groups)
+            {
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, group);
+            }
+        }
+
+        public async Task LeavePresenceForTeam(Guid viewId, Guid? teamId)
+        {
+            var groups = await _presenceService.GetGroupsByViewId(viewId, teamId);
+
+            foreach (var group in groups)
+            {
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, group);
+            }
         }
     }
 }
