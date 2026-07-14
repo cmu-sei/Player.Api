@@ -273,25 +273,28 @@ public class UserClaimsService : IUserClaimsService
         // granting teams, or also be a team the user is directly a member of). The handler
         // matches a single claim per team id, so we merge then emit one claim per team.
         var permissionsByTeam = new Dictionary<Guid, HashSet<string>>();
+        var sourceTeamIdsByTeam = new Dictionary<Guid, HashSet<Guid>>();
         var viewIdByTeam = new Dictionary<Guid, Guid>();
         var primaryTeamIds = new HashSet<Guid>();
 
-        void Accumulate(Guid teamId, Guid viewId, IEnumerable<string> permissionValues)
+        void Accumulate(Guid teamId, Guid viewId, Guid sourceTeamId, IEnumerable<string> permissionValues)
         {
             if (!permissionsByTeam.TryGetValue(teamId, out var set))
             {
                 set = new HashSet<string>();
                 permissionsByTeam[teamId] = set;
+                sourceTeamIdsByTeam[teamId] = [];
                 viewIdByTeam[teamId] = viewId;
             }
 
             set.UnionWith(permissionValues);
+            sourceTeamIdsByTeam[teamId].Add(sourceTeamId);
         }
 
         foreach (var membership in teamMemberships)
         {
             var effectivePermissions = GetEffectivePermissions(membership);
-            Accumulate(membership.TeamId, membership.Team.ViewId, effectivePermissions);
+            Accumulate(membership.TeamId, membership.Team.ViewId, membership.TeamId, effectivePermissions);
 
             if (membership.ViewMembership.PrimaryTeamMembershipId == membership.Id)
             {
@@ -301,7 +304,7 @@ public class UserClaimsService : IUserClaimsService
             // Apply this membership's effective permissions to any teams scoped from it.
             foreach (var scope in scopes.Where(x => x.TeamId == membership.TeamId))
             {
-                Accumulate(scope.TargetTeamId, scope.TargetTeam.ViewId, effectivePermissions);
+                Accumulate(scope.TargetTeamId, scope.TargetTeam.ViewId, membership.TeamId, effectivePermissions);
             }
         }
 
@@ -312,6 +315,7 @@ public class UserClaimsService : IUserClaimsService
                 TeamId = teamId,
                 ViewId = viewIdByTeam[teamId],
                 PermissionValues = permissionValues.ToArray(),
+                SourceTeamIds = sourceTeamIdsByTeam[teamId].ToArray(),
                 IsPrimary = primaryTeamIds.Contains(teamId)
             };
 

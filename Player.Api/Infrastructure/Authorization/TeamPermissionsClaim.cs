@@ -17,6 +17,7 @@ public class TeamPermissionsClaim
     public Guid TeamId { get; set; }
     public bool IsPrimary { get; set; }
     public string[] PermissionValues { get; set; } = [];
+    public Guid[] SourceTeamIds { get; set; } = [];
 
     [JsonIgnore]
     public TeamPermission[] TeamPermissions
