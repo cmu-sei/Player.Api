@@ -246,52 +246,34 @@ namespace Player.Api.Services
 
         private async Task<PresenceAccess> GetPresenceAccess(Guid viewId, Guid? teamId, bool requireTeamId, CancellationToken ct)
         {
-            Guid activeTeamId;
-
-            if (teamId.HasValue)
-            {
-                activeTeamId = teamId.Value;
-            }
-            else if (requireTeamId)
+            if (requireTeamId && !teamId.HasValue)
             {
                 throw new HubException("An active team is required for presence.");
             }
-            else if (await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], ct))
-            {
-                var viewTeamIds = await _context.Teams
-                    .Where(x => x.ViewId == viewId)
-                    .Select(x => x.Id)
-                    .ToListAsync(ct);
 
-                return new PresenceAccess(true, viewTeamIds);
-            }
-            else
-            {
-                activeTeamId = await _context.ViewMemberships
-                    .Where(x => x.UserId == _user.GetId() && x.ViewId == viewId)
-                    .Select(x => x.PrimaryTeamMembership.TeamId)
-                    .FirstOrDefaultAsync(ct);
-            }
-
-            var activeTeam = await _context.TeamMemberships
-                .Where(x => x.UserId == _user.GetId() && x.TeamId == activeTeamId && x.Team.ViewId == viewId)
-                .Select(x => new
-                {
-                    x.TeamId,
-                    ScopedTeamIds = x.Team.Scopes.Select(s => s.TargetTeamId).ToArray()
-                })
+            var primaryTeamId = await _context.ViewMemberships
+                .Where(x => x.UserId == _user.GetId() && x.ViewId == viewId)
+                .Select(x => (Guid?)x.PrimaryTeamMembership.TeamId)
                 .FirstOrDefaultAsync(ct);
 
-            if (activeTeam == null)
+            if (!primaryTeamId.HasValue || (teamId.HasValue && teamId.Value != primaryTeamId.Value))
             {
                 throw new HubException("The active team is not valid for this view.");
             }
 
-            var activeTeamClaim = _authorizationService.GetTeamPermissions()
-                .FirstOrDefault(x => x.ViewId == viewId && x.TeamId == activeTeamId);
+            var viewClaims = _authorizationService.GetTeamPermissions()
+                .Where(x => x.ViewId == viewId)
+                .ToArray();
+            var primaryTeamClaim = viewClaims
+                .FirstOrDefault(x => x.TeamId == primaryTeamId.Value && x.IsPrimary);
 
-            if (activeTeamClaim?.ViewPermissions.Contains(ViewPermission.ViewView) == true ||
-                activeTeamClaim?.ViewPermissions.Contains(ViewPermission.ManageView) == true)
+            if (primaryTeamClaim == null)
+            {
+                return new PresenceAccess(false, []);
+            }
+
+            if (primaryTeamClaim.DirectViewPermissions.Contains(ViewPermission.ViewView) ||
+                primaryTeamClaim.DirectViewPermissions.Contains(ViewPermission.ManageView))
             {
                 var viewTeamIds = await _context.Teams
                     .Where(x => x.ViewId == viewId)
@@ -301,12 +283,14 @@ namespace Player.Api.Services
                 return new PresenceAccess(true, viewTeamIds);
             }
 
-            var teamIds = new HashSet<Guid> { activeTeamId };
+            var teamIds = new HashSet<Guid> { primaryTeamId.Value };
 
-            if (activeTeamClaim?.TeamPermissions.Contains(TeamPermission.ViewTeam) == true ||
-                activeTeamClaim?.TeamPermissions.Contains(TeamPermission.ManageTeam) == true)
+            if (primaryTeamClaim.DirectTeamPermissions.Contains(TeamPermission.ViewTeam) ||
+                primaryTeamClaim.DirectTeamPermissions.Contains(TeamPermission.ManageTeam))
             {
-                teamIds.UnionWith(activeTeam.ScopedTeamIds);
+                teamIds.UnionWith(viewClaims
+                    .Where(x => x.SourceTeamIds.Contains(primaryTeamId.Value))
+                    .Select(x => x.TeamId));
             }
 
             return new PresenceAccess(false, teamIds.ToList());

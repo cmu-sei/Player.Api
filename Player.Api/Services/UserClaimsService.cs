@@ -273,6 +273,7 @@ public class UserClaimsService : IUserClaimsService
         // granting teams, or also be a team the user is directly a member of). The handler
         // matches a single claim per team id, so we merge then emit one claim per team.
         var permissionsByTeam = new Dictionary<Guid, HashSet<string>>();
+        var directPermissionsByTeam = new Dictionary<Guid, HashSet<string>>();
         var sourceTeamIdsByTeam = new Dictionary<Guid, HashSet<Guid>>();
         var viewIdByTeam = new Dictionary<Guid, Guid>();
         var primaryTeamIds = new HashSet<Guid>();
@@ -295,6 +296,7 @@ public class UserClaimsService : IUserClaimsService
         {
             var effectivePermissions = GetEffectivePermissions(membership);
             Accumulate(membership.TeamId, membership.Team.ViewId, membership.TeamId, effectivePermissions);
+            directPermissionsByTeam[membership.TeamId] = effectivePermissions.ToHashSet();
 
             if (membership.ViewMembership.PrimaryTeamMembershipId == membership.Id)
             {
@@ -315,6 +317,7 @@ public class UserClaimsService : IUserClaimsService
                 TeamId = teamId,
                 ViewId = viewIdByTeam[teamId],
                 PermissionValues = permissionValues.ToArray(),
+                DirectPermissionValues = directPermissionsByTeam.GetValueOrDefault(teamId, []).ToArray(),
                 SourceTeamIds = sourceTeamIdsByTeam[teamId].ToArray(),
                 IsPrimary = primaryTeamIds.Contains(teamId)
             };
