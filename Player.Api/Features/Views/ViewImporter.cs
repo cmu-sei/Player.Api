@@ -46,8 +46,18 @@ public class ViewImporter(IMapper mapper, PlayerContext db, IFileService fileSer
             var viewFailures = new List<ImportViewFailure>();
             viewFailures.AddRange(ValidateApplications(view, dbApplicationTemplates, matchApplicationTemplatesByName));
             viewFailures.AddRange(ValidateTeamRoles(view, dbTeamRoles, matchRolesByName));
+            viewFailures.AddRange(ValidateScopes(view));
 
             var viewEntity = mapper.Map<ViewEntity>(view);
+
+            foreach (var team in view.Teams)
+            {
+                var sourceTeam = viewEntity.Teams.First(x => x.Id == team.Id);
+                foreach (var targetTeamId in (team.ScopedTeamIds ?? []).Distinct())
+                {
+                    sourceTeam.Scopes.Add(new TeamPermissionScopeEntity(sourceTeam.Id, targetTeamId));
+                }
+            }
 
             viewFailures.AddRange(await ValidateFiles(viewEntity, fileData, fileService, cancellationToken));
 
@@ -63,6 +73,40 @@ public class ViewImporter(IMapper mapper, PlayerContext db, IFileService fileSer
 
         await db.SaveChangesAsync(cancellationToken);
         return failures;
+    }
+
+    private static IEnumerable<ImportViewFailure> ValidateScopes(ViewExport view)
+    {
+        var teamIds = view.Teams.Select(x => x.Id).ToHashSet();
+
+        foreach (var team in view.Teams)
+        {
+            var scopedTeamIds = team.ScopedTeamIds ?? [];
+
+            if (scopedTeamIds.Contains(team.Id))
+            {
+                yield return new ImportViewFailure(
+                    view.Id,
+                    view.Name,
+                    $"Team {team.Name} ({team.Id}): A Team cannot scope its permissions onto itself");
+            }
+
+            if (scopedTeamIds.Count != scopedTeamIds.Distinct().Count())
+            {
+                yield return new ImportViewFailure(
+                    view.Id,
+                    view.Name,
+                    $"Team {team.Name} ({team.Id}): Duplicate scoped Team ids");
+            }
+
+            foreach (var targetTeamId in scopedTeamIds.Where(x => !teamIds.Contains(x)))
+            {
+                yield return new ImportViewFailure(
+                    view.Id,
+                    view.Name,
+                    $"Team {team.Name} ({team.Id}): Scoped Team {targetTeamId} is not part of the imported View");
+            }
+        }
     }
 
     private static IEnumerable<ImportViewFailure> ValidateApplications(

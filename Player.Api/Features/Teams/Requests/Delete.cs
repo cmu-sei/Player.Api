@@ -49,7 +49,11 @@ public class Delete
         }
     }
 
-    public class Handler(ILogger<Delete> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command>
+    public class Handler(
+        ILogger<Delete> logger,
+        IIdentityResolver identityResolver,
+        IPlayerAuthorizationService authorizationService,
+        PlayerContext db) : BaseHandler<Command>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<TeamEntity>(request.Id, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
@@ -57,6 +61,7 @@ public class Delete
         public override async Task HandleRequest(Command request, CancellationToken cancellationToken)
         {
             var teamToDelete = await db.Teams
+                .Include(t => t.Memberships)
                 .SingleOrDefaultAsync(t => t.Id == request.Id, cancellationToken);
 
             if (teamToDelete == null)
@@ -73,6 +78,7 @@ public class Delete
 
             db.Teams.Remove(teamToDelete);
             await db.SaveChangesAsync(cancellationToken);
+
             logger.LogWarning($"Team {teamToDelete.Name} ({teamToDelete.Id}) in View {teamToDelete.ViewId} deleted by {identityResolver.GetId()}");
         }
     }

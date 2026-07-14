@@ -17,7 +17,6 @@ using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
-using Player.Api.Services;
 
 namespace Player.Api.Features.TeamPermissionScopes;
 
@@ -52,7 +51,6 @@ public class Remove
     public class Handler(
         ILogger<Remove> logger,
         IIdentityResolver identityResolver,
-        IUserClaimsService claimsService,
         IPlayerAuthorizationService authorizationService,
         PlayerContext db) : BaseHandler<Command>
     {
@@ -69,17 +67,6 @@ public class Remove
             {
                 db.TeamPermissionScopes.Remove(scope);
                 await db.SaveChangesAsync(cancellationToken);
-
-                var userIds = await db.TeamMemberships
-                    .Where(x => x.TeamId == request.TeamId)
-                    .Select(x => x.UserId)
-                    .Distinct()
-                    .ToListAsync(cancellationToken);
-
-                foreach (var userId in userIds)
-                {
-                    await claimsService.RefreshClaims(userId);
-                }
 
                 logger.LogWarning($"Team {request.TeamId} permission scope removed from Team {request.TargetTeamId} by {identityResolver.GetId()}");
             }

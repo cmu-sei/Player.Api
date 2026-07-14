@@ -19,7 +19,6 @@ using Player.Api.Features.Teams;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions;
-using Player.Api.Services;
 
 namespace Player.Api.Features.TeamPermissionScopes;
 
@@ -54,7 +53,6 @@ public class Add
     public class Handler(
         ILogger<Add> logger,
         IIdentityResolver identityResolver,
-        IUserClaimsService claimsService,
         IPlayerAuthorizationService authorizationService,
         PlayerContext db) : BaseHandler<Command>
     {
@@ -91,23 +89,7 @@ public class Add
                 db.TeamPermissionScopes.Add(new TeamPermissionScopeEntity(request.TeamId, request.TargetTeamId));
                 await db.SaveChangesAsync(cancellationToken);
 
-                await RefreshGrantingTeamMemberClaims(request.TeamId, cancellationToken);
-
                 logger.LogWarning($"Team {request.TeamId} permissions scoped onto Team {request.TargetTeamId} by {identityResolver.GetId()}");
-            }
-        }
-
-        private async Task RefreshGrantingTeamMemberClaims(Guid teamId, CancellationToken cancellationToken)
-        {
-            var userIds = await db.TeamMemberships
-                .Where(x => x.TeamId == teamId)
-                .Select(x => x.UserId)
-                .Distinct()
-                .ToListAsync(cancellationToken);
-
-            foreach (var userId in userIds)
-            {
-                await claimsService.RefreshClaims(userId);
             }
         }
     }

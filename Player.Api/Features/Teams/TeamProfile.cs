@@ -28,7 +28,8 @@ public class MappingProfile : Profile
 
         CreateMap<TeamEntity, TeamExport>()
             .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role.Name))
-            .ForMember(dest => dest.Permissions, opt => opt.MapFrom(src => src.Permissions.Select(x => x.Permission)));
+            .ForMember(dest => dest.Permissions, opt => opt.MapFrom(src => src.Permissions.Select(x => x.Permission)))
+            .ForMember(dest => dest.ScopedTeamIds, opt => opt.MapFrom(src => src.Scopes.Select(x => x.TargetTeamId)));
 
         CreateMap<TeamDTO, TeamEntity>();
         CreateMap<TeamExport, TeamEntity>();

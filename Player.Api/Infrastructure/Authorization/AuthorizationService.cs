@@ -39,6 +39,7 @@ public interface IPlayerAuthorizationService
     IEnumerable<string> GetSystemPermissions();
     IEnumerable<TeamPermissionsClaim> GetTeamPermissions();
     IEnumerable<Guid> GetVisibleTeamIds(Guid viewId);
+    Task<PrimaryVisibilityContext> GetPrimaryVisibilityContext(Guid viewId, CancellationToken cancellationToken);
     bool IsCurrentUser(Guid userId);
 }
 
@@ -157,6 +158,45 @@ public class AuthorizationService(
             .ToList();
     }
 
+    public async Task<PrimaryVisibilityContext> GetPrimaryVisibilityContext(
+        Guid viewId,
+        CancellationToken cancellationToken)
+    {
+        var viewClaims = GetTeamPermissions()
+            .Where(x => x.ViewId == viewId)
+            .ToArray();
+        var primaryClaim = viewClaims.FirstOrDefault(x => x.IsPrimary);
+
+        if (primaryClaim == null)
+            return PrimaryVisibilityContext.Empty;
+
+        var canViewAllTeams =
+            primaryClaim.DirectViewPermissions.Contains(ViewPermission.ViewView) ||
+            primaryClaim.DirectViewPermissions.Contains(ViewPermission.ManageView);
+
+        if (canViewAllTeams)
+        {
+            var allTeamIds = await dbContext.Teams
+                .Where(x => x.ViewId == viewId)
+                .Select(x => x.Id)
+                .ToHashSetAsync(cancellationToken);
+
+            return new PrimaryVisibilityContext(primaryClaim.TeamId, true, allTeamIds);
+        }
+
+        var visibleTeamIds = new HashSet<Guid> { primaryClaim.TeamId };
+
+        if (primaryClaim.DirectTeamPermissions.Contains(TeamPermission.ViewTeam) ||
+            primaryClaim.DirectTeamPermissions.Contains(TeamPermission.ManageTeam))
+        {
+            visibleTeamIds.UnionWith(viewClaims
+                .Where(x => x.SourceTeamIds?.Contains(primaryClaim.TeamId) ?? false)
+                .Select(x => x.TeamId));
+        }
+
+        return new PrimaryVisibilityContext(primaryClaim.TeamId, false, visibleTeamIds);
+    }
+
     private async Task<ResourceResult> GetResourceResult<T>(Guid resourceId, CancellationToken cancellationToken)
     {
         return typeof(T) switch
@@ -234,4 +274,12 @@ public class AuthorizationService(
         public Guid ViewId { get; set; }
         public Guid? TeamId { get; set; }
     }
+}
+
+public sealed record PrimaryVisibilityContext(
+    Guid? PrimaryTeamId,
+    bool CanViewAllTeams,
+    IReadOnlySet<Guid> TeamIds)
+{
+    public static PrimaryVisibilityContext Empty { get; } = new(null, false, new HashSet<Guid>());
 }

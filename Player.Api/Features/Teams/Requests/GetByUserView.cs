@@ -96,7 +96,14 @@ public class GetByUserView
 
             IQueryable<TeamDTO> teamQuery;
 
-            if (await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken))
+            if (identityResolver.GetId() == request.UserId)
+            {
+                var visibility = await authorizationService.GetPrimaryVisibilityContext(request.ViewId, cancellationToken);
+                teamQuery = db.Teams
+                    .Where(t => t.ViewId == request.ViewId && visibility.TeamIds.Contains(t.Id))
+                    .ProjectTo<TeamDTO>(mapper.ConfigurationProvider);
+            }
+            else if (await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken))
             {
                 teamQuery = db.Teams
                     .Where(t => t.ViewId == request.ViewId)
@@ -110,18 +117,6 @@ public class GetByUserView
                     .Select(x => x.TeamId)
                     .Distinct()
                     .ToListAsync(cancellationToken);
-
-                // For the current user, also include teams scoped to them whose resolved
-                // claim grants ViewTeam/ManageTeam — the team-level analog of the ViewView
-                // all-teams branch above. Scope claims are personal to the current principal,
-                // so this only applies when requesting one's own teams.
-                if (identityResolver.GetId() == request.UserId)
-                {
-                    teamIds = teamIds
-                        .Union(authorizationService.GetVisibleTeamIds(request.ViewId))
-                        .Distinct()
-                        .ToList();
-                }
 
                 teamQuery = db.Teams
                     .Where(t => t.ViewId == request.ViewId && teamIds.Contains(t.Id))
