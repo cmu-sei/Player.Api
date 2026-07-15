@@ -67,8 +67,8 @@ public class Delete
             if (teamToDelete == null)
                 throw new EntityNotFoundException<Team>();
 
-            // Remove permission scopes referencing this team (either as the granting or
-            // target team) since their FKs are not cascade-deleted.
+            // Delete scopes explicitly so entity events invalidate authorization caches.
+            // The database cascade remains a fallback for other Team deletion paths.
             var scopes = await db.TeamPermissionScopes
                 .Where(x => x.TeamId == request.Id || x.TargetTeamId == request.Id)
                 .ToListAsync(cancellationToken);

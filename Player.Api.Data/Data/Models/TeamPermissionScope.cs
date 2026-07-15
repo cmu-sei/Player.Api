@@ -42,20 +42,17 @@ namespace Player.Api.Data.Data.Models
         {
             builder.HasIndex(x => new { x.TeamId, x.TargetTeamId }).IsUnique();
 
-            // Two FKs to the same teams table. Use Restrict to avoid multiple cascade
-            // paths (rejected by PostgreSQL); scope rows are cleaned up explicitly when
-            // a Team is deleted.
             builder
                 .HasOne(x => x.Team)
                 .WithMany(t => t.Scopes)
                 .HasForeignKey(x => x.TeamId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Cascade);
 
             builder
                 .HasOne(x => x.TargetTeam)
                 .WithMany()
                 .HasForeignKey(x => x.TargetTeamId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }
