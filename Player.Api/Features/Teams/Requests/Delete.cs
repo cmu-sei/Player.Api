@@ -2,6 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -48,7 +49,11 @@ public class Delete
         }
     }
 
-    public class Handler(ILogger<Delete> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command>
+    public class Handler(
+        ILogger<Delete> logger,
+        IIdentityResolver identityResolver,
+        IPlayerAuthorizationService authorizationService,
+        PlayerContext db) : BaseHandler<Command>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<TeamEntity>(request.Id, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
@@ -56,13 +61,24 @@ public class Delete
         public override async Task HandleRequest(Command request, CancellationToken cancellationToken)
         {
             var teamToDelete = await db.Teams
+                .Include(t => t.Memberships)
                 .SingleOrDefaultAsync(t => t.Id == request.Id, cancellationToken);
 
             if (teamToDelete == null)
                 throw new EntityNotFoundException<Team>();
 
+            // Delete scopes explicitly so entity events invalidate authorization caches.
+            // The database cascade remains a fallback for other Team deletion paths.
+            var scopes = await db.TeamPermissionScopes
+                .Where(x => x.TeamId == request.Id || x.TargetTeamId == request.Id)
+                .ToListAsync(cancellationToken);
+
+            if (scopes.Count > 0)
+                db.TeamPermissionScopes.RemoveRange(scopes);
+
             db.Teams.Remove(teamToDelete);
             await db.SaveChangesAsync(cancellationToken);
+
             logger.LogWarning($"Team {teamToDelete.Name} ({teamToDelete.Id}) in View {teamToDelete.ViewId} deleted by {identityResolver.GetId()}");
         }
     }

@@ -9,7 +9,7 @@ namespace Player.Api.Services
 {
     public class ConnectionCacheService
     {
-        public readonly ConcurrentDictionary<Guid, List<string>> ViewMembershipConnections = new ConcurrentDictionary<Guid, List<string>>();
+        public readonly ConcurrentDictionary<Guid, Dictionary<string, Guid>> ViewMembershipConnections = new();
         public readonly ConcurrentDictionary<Guid, object> Locks = new ConcurrentDictionary<Guid, object>();
 
         public ConnectionCacheService() { }

@@ -244,27 +244,84 @@ public class UserClaimsService : IUserClaimsService
 
         var allTeamPermissionValues = await _context.TeamPermissions.Select(x => x.Name).ToArrayAsync();
 
-        foreach (var membership in teamMemberships)
+        // Computes the effective Team permissions for a single membership: all permissions
+        // if either the membership role or the team's default role grants AllPermissions,
+        // otherwise the union of the team's direct permission assignments, the team's default
+        // role permissions, and the membership-specific role permissions.
+        List<string> GetEffectivePermissions(TeamMembershipEntity membership)
         {
-            var teamPermissions = new List<string>();
-
             if ((membership?.Role?.AllPermissions ?? false) || (membership?.Team?.Role?.AllPermissions ?? false))
             {
-                teamPermissions.AddRange(allTeamPermissionValues);
-            }
-            else
-            {
-                teamPermissions.AddRange(membership.Team.Permissions.Select(x => x.Permission.Name));
-                teamPermissions.AddRange(membership.Team.Role?.Permissions.Select(x => x.Permission.Name) ?? []);
-                teamPermissions.AddRange(membership.Role?.Permissions.Select(x => x.Permission.Name) ?? []);
+                return allTeamPermissionValues.ToList();
             }
 
+            var permissions = new List<string>();
+            permissions.AddRange(membership.Team.Permissions.Select(x => x.Permission.Name));
+            permissions.AddRange(membership.Team.Role?.Permissions.Select(x => x.Permission.Name) ?? []);
+            permissions.AddRange(membership.Role?.Permissions.Select(x => x.Permission.Name) ?? []);
+            return permissions;
+        }
+
+        // Load permission scopes granted by the teams this user is a member of. A scope lets
+        // the granting team's effective permissions apply on a target team, so members of the
+        // granting team gain those permissions over the target team without joining it.
+        var membershipTeamIds = teamMemberships.Select(x => x.TeamId).ToList();
+        var scopes = await _context.TeamPermissionScopes
+            .Where(x => membershipTeamIds.Contains(x.TeamId))
+            .Include(x => x.TargetTeam)
+            .ToListAsync();
+
+        // Accumulate permission values per team id (a target team may be scoped from multiple
+        // granting teams, or also be a team the user is directly a member of). The handler
+        // matches a single claim per team id, so we merge then emit one claim per team.
+        var permissionsByTeam = new Dictionary<Guid, HashSet<string>>();
+        var directPermissionsByTeam = new Dictionary<Guid, HashSet<string>>();
+        var sourceTeamIdsByTeam = new Dictionary<Guid, HashSet<Guid>>();
+        var viewIdByTeam = new Dictionary<Guid, Guid>();
+        var primaryTeamIds = new HashSet<Guid>();
+
+        void Accumulate(Guid teamId, Guid viewId, Guid sourceTeamId, IEnumerable<string> permissionValues)
+        {
+            if (!permissionsByTeam.TryGetValue(teamId, out var set))
+            {
+                set = new HashSet<string>();
+                permissionsByTeam[teamId] = set;
+                sourceTeamIdsByTeam[teamId] = [];
+                viewIdByTeam[teamId] = viewId;
+            }
+
+            set.UnionWith(permissionValues);
+            sourceTeamIdsByTeam[teamId].Add(sourceTeamId);
+        }
+
+        foreach (var membership in teamMemberships)
+        {
+            var effectivePermissions = GetEffectivePermissions(membership);
+            Accumulate(membership.TeamId, membership.Team.ViewId, membership.TeamId, effectivePermissions);
+            directPermissionsByTeam[membership.TeamId] = effectivePermissions.ToHashSet();
+
+            if (membership.ViewMembership.PrimaryTeamMembershipId == membership.Id)
+            {
+                primaryTeamIds.Add(membership.TeamId);
+            }
+
+            // Apply this membership's effective permissions to any teams scoped from it.
+            foreach (var scope in scopes.Where(x => x.TeamId == membership.TeamId))
+            {
+                Accumulate(scope.TargetTeamId, scope.TargetTeam.ViewId, membership.TeamId, effectivePermissions);
+            }
+        }
+
+        foreach (var (teamId, permissionValues) in permissionsByTeam)
+        {
             var permissionsClaim = new TeamPermissionsClaim
             {
-                TeamId = membership.TeamId,
-                ViewId = membership.Team.ViewId,
-                PermissionValues = teamPermissions.ToArray(),
-                IsPrimary = membership.ViewMembership.PrimaryTeamMembershipId == membership.Id
+                TeamId = teamId,
+                ViewId = viewIdByTeam[teamId],
+                PermissionValues = permissionValues.ToArray(),
+                DirectPermissionValues = directPermissionsByTeam.GetValueOrDefault(teamId, []).ToArray(),
+                SourceTeamIds = sourceTeamIdsByTeam[teamId].ToArray(),
+                IsPrimary = primaryTeamIds.Contains(teamId)
             };
 
             claims.Add(new Claim(AuthorizationConstants.TeamPermissionsClaimType, permissionsClaim.ToString()));

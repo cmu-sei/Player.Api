@@ -67,6 +67,8 @@ public class Clone
                     .ThenInclude(o => o.Applications)
                 .Include(o => o.Teams)
                     .ThenInclude(o => o.Permissions)
+                .Include(o => o.Teams)
+                    .ThenInclude(o => o.Scopes)
                 .Include(o => o.Applications)
                     .ThenInclude(o => o.Template)
                 .Include(o => o.Files)
@@ -88,10 +90,13 @@ public class Clone
                 newView.Applications.Add(newApplication);
             }
 
+            var clonedTeams = new Dictionary<Guid, TeamEntity>();
+
             //copy teams
             foreach (var team in view.Teams)
             {
                 var newTeam = team.Clone();
+                clonedTeams[team.Id] = newTeam;
 
                 //copy team applications
                 foreach (var applicationInstance in team.Applications)
@@ -126,6 +131,18 @@ public class Clone
 
             db.Add(newView);
             await db.SaveChangesAsync(cancellationToken);
+
+            foreach (var team in view.Teams)
+            {
+                foreach (var scope in team.Scopes)
+                {
+                    if (clonedTeams.TryGetValue(scope.TargetTeamId, out var targetTeam))
+                    {
+                        db.TeamPermissionScopes.Add(
+                            new TeamPermissionScopeEntity(clonedTeams[team.Id].Id, targetTeam.Id));
+                    }
+                }
+            }
 
             // SaveChanges is called twice because we need the new IDs for each time.
             // Should figure out a better way to do it.

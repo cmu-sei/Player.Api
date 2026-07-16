@@ -38,6 +38,8 @@ public interface IPlayerAuthorizationService
     IEnumerable<Guid> GetAuthorizedViewIds();
     IEnumerable<string> GetSystemPermissions();
     IEnumerable<TeamPermissionsClaim> GetTeamPermissions();
+    IEnumerable<Guid> GetVisibleTeamIds(Guid viewId);
+    Task<PrimaryVisibilityContext> GetPrimaryVisibilityContext(Guid viewId, CancellationToken cancellationToken);
     bool IsCurrentUser(Guid userId);
 }
 
@@ -140,6 +142,61 @@ public class AuthorizationService(
         return permissions;
     }
 
+    // Team ids within a View that the current user can see by team-level permission: the
+    // team-level analog of ViewView/ManageView. Includes the user's member teams and any
+    // teams scoped to them whose resolved claim grants ViewTeam or ManageTeam. Used to
+    // surface scoped teams in "my teams in this View" results without altering the
+    // ViewView/ManageView all-teams behavior.
+    public IEnumerable<Guid> GetVisibleTeamIds(Guid viewId)
+    {
+        return GetTeamPermissions()
+            .Where(x => x.ViewId == viewId &&
+                (x.TeamPermissions.Contains(TeamPermission.ViewTeam) ||
+                 x.TeamPermissions.Contains(TeamPermission.ManageTeam)))
+            .Select(x => x.TeamId)
+            .Distinct()
+            .ToList();
+    }
+
+    public async Task<PrimaryVisibilityContext> GetPrimaryVisibilityContext(
+        Guid viewId,
+        CancellationToken cancellationToken)
+    {
+        var viewClaims = GetTeamPermissions()
+            .Where(x => x.ViewId == viewId)
+            .ToArray();
+        var primaryClaim = viewClaims.FirstOrDefault(x => x.IsPrimary);
+
+        if (primaryClaim == null)
+            return PrimaryVisibilityContext.Empty;
+
+        var canViewAllTeams =
+            primaryClaim.DirectViewPermissions.Contains(ViewPermission.ViewView) ||
+            primaryClaim.DirectViewPermissions.Contains(ViewPermission.ManageView);
+
+        if (canViewAllTeams)
+        {
+            var allTeamIds = await dbContext.Teams
+                .Where(x => x.ViewId == viewId)
+                .Select(x => x.Id)
+                .ToHashSetAsync(cancellationToken);
+
+            return new PrimaryVisibilityContext(primaryClaim.TeamId, true, allTeamIds);
+        }
+
+        var visibleTeamIds = new HashSet<Guid> { primaryClaim.TeamId };
+
+        if (primaryClaim.DirectTeamPermissions.Contains(TeamPermission.ViewTeam) ||
+            primaryClaim.DirectTeamPermissions.Contains(TeamPermission.ManageTeam))
+        {
+            visibleTeamIds.UnionWith(viewClaims
+                .Where(x => x.SourceTeamIds?.Contains(primaryClaim.TeamId) ?? false)
+                .Select(x => x.TeamId));
+        }
+
+        return new PrimaryVisibilityContext(primaryClaim.TeamId, false, visibleTeamIds);
+    }
+
     private async Task<ResourceResult> GetResourceResult<T>(Guid resourceId, CancellationToken cancellationToken)
     {
         return typeof(T) switch
@@ -217,4 +274,12 @@ public class AuthorizationService(
         public Guid ViewId { get; set; }
         public Guid? TeamId { get; set; }
     }
+}
+
+public sealed record PrimaryVisibilityContext(
+    Guid? PrimaryTeamId,
+    bool CanViewAllTeams,
+    IReadOnlySet<Guid> TeamIds)
+{
+    public static PrimaryVisibilityContext Empty { get; } = new(null, false, new HashSet<Guid>());
 }
