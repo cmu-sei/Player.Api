@@ -2,6 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -17,6 +18,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
+using Player.Api.Features.Teams;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions;
@@ -61,11 +63,27 @@ public class EditApplicationInstance
         public override async Task<ApplicationInstance> HandleRequest(Command request, CancellationToken cancellationToken)
         {
             var instanceToUpdate = await db.ApplicationInstances
-                .Include(ai => ai.Team)
                 .SingleOrDefaultAsync(v => v.Id == request.Id, cancellationToken);
 
             if (instanceToUpdate == null)
                 throw new EntityNotFoundException<ApplicationInstance>();
+
+            var team = await db.Teams
+                .Where(e => e.Id == request.TeamId)
+                .SingleOrDefaultAsync(cancellationToken);
+
+            if (team == null)
+                throw new EntityNotFoundException<Team>();
+
+            var application = await db.Applications
+                .Where(e => e.Id == request.ApplicationId)
+                .SingleOrDefaultAsync(cancellationToken);
+
+            if (application == null)
+                throw new EntityNotFoundException<Application>();
+
+            if (team.ViewId != application.ViewId)
+                throw new ConflictException("The Team and Application must belong to the same View.");
 
             mapper.Map(request, instanceToUpdate);
             await db.SaveChangesAsync(cancellationToken);

@@ -70,6 +70,16 @@ public class CreateApplicationInstance
             if (team == null)
                 throw new EntityNotFoundException<Team>();
 
+            var application = await db.Applications
+                .Where(e => e.Id == request.ApplicationId)
+                .SingleOrDefaultAsync(cancellationToken);
+
+            if (application == null)
+                throw new EntityNotFoundException<Application>();
+
+            if (team.ViewId != application.ViewId)
+                throw new ConflictException("The Team and Application must belong to the same View.");
+
             var instanceEntity = mapper.Map<ApplicationInstanceEntity>(request);
 
             db.ApplicationInstances.Add(instanceEntity);
