@@ -2,6 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -65,6 +66,22 @@ public class Delete
             foreach (var fp in files)
             {
                 await fileService.DeleteAsync(fp.id, cancellationToken);
+            }
+
+            // Break the ViewMembership <-> TeamMembership primary membership cycle before
+            // removing the View so EF can deterministically order the delete graph.
+            var viewMemberships = await db.ViewMemberships
+                .Where(vm => vm.ViewId == request.Id && vm.PrimaryTeamMembershipId.HasValue)
+                .ToListAsync(cancellationToken);
+
+            if (viewMemberships.Count > 0)
+            {
+                foreach (var viewMembership in viewMemberships)
+                {
+                    viewMembership.PrimaryTeamMembershipId = null;
+                }
+
+                await db.SaveChangesAsync(cancellationToken);
             }
 
             db.Views.Remove(viewToDelete);
