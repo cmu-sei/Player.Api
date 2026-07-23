@@ -50,13 +50,14 @@ namespace Player.Api.Controllers
 
         /// <summary> Get all files in a view accessable to the calling user </summary>
         /// <param name="viewId">The id of the view</param>
+        /// <param name="includeAllViewFiles">Whether to include all files in the view instead of applying primary-team visibility.</param>
         /// <param name="ct"></param>
         [HttpGet("views/{viewId}/files")]
         [ProducesResponseType(typeof(IEnumerable<FileModel>), (int)HttpStatusCode.OK)]
         [SwaggerOperation(OperationId = "getViewFiles")]
-        public async Task<IActionResult> GetViewFiles(Guid viewId, CancellationToken ct)
+        public async Task<IActionResult> GetViewFiles(Guid viewId, CancellationToken ct, [FromQuery] bool includeAllViewFiles = false)
         {
-            var files = await _fileService.GetByViewAsync(viewId, ct);
+            var files = await _fileService.GetByViewAsync(viewId, includeAllViewFiles, ct);
             return Ok(files);
         }
 
