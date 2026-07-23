@@ -27,7 +27,7 @@ namespace Player.Api.Services
     {
         Task<IEnumerable<FileModel>> UploadAsync(FileForm form, CancellationToken ct);
         Task<IEnumerable<FileModel>> GetAsync(CancellationToken ct);
-        Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct);
+        Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, bool includeAllViewFiles, CancellationToken ct);
         Task<IEnumerable<FileModel>> GetByTeamAsync(Guid teamId, CancellationToken ct);
         Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct);
         Task<Tuple<FileStream, string>> DownloadAsync(Guid fileId, CancellationToken ct);
@@ -110,9 +110,34 @@ namespace Player.Api.Services
             return _mapper.Map<IEnumerable<FileModel>>(files);
         }
 
-        public async Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, CancellationToken ct)
+        public async Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, bool includeAllViewFiles, CancellationToken ct)
         {
-            var userId = _user.GetId();
+            if (includeAllViewFiles)
+            {
+                var viewExists = await _context.Views
+                    .AnyAsync(v => v.Id == viewId, ct);
+
+                if (!viewExists)
+                    throw new EntityNotFoundException<ViewEntity>();
+
+                if (!await _authorizationService.Authorize<ViewEntity>(
+                    viewId,
+                    [SystemPermission.ViewViews, SystemPermission.ManageViews],
+                    [ViewPermission.ViewView, ViewPermission.ManageView],
+                    [],
+                    ct))
+                {
+                    throw new ForbiddenException();
+                }
+
+                var allViewFiles = await _context.Files
+                    .Where(f => f.View.Id == viewId)
+                    .Include(f => f.View)
+                    .ToListAsync(ct);
+
+                return _mapper.Map<IEnumerable<FileModel>>(allViewFiles);
+            }
+
             var teams = await _teamService.GetByViewIdForCurrentUserAsync(viewId, ct);
             var accessable = new List<FileModel>();
 
