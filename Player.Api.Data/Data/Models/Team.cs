@@ -26,6 +26,9 @@ namespace Player.Api.Data.Data.Models
         public virtual ICollection<TeamMembershipEntity> Memberships { get; set; } = new List<TeamMembershipEntity>();
         public virtual ICollection<TeamPermissionAssignmentEntity> Permissions { get; set; } = new List<TeamPermissionAssignmentEntity>();
 
+        // Teams onto which this Team's effective permissions are scoped.
+        public virtual ICollection<TeamPermissionScopeEntity> Scopes { get; set; } = new List<TeamPermissionScopeEntity>();
+
         public TeamEntity() { }
 
         public TeamEntity Clone()
@@ -34,6 +37,7 @@ namespace Player.Api.Data.Data.Models
             entity.Applications = new List<ApplicationInstanceEntity>();
             entity.Memberships = new List<TeamMembershipEntity>();
             entity.Permissions = new List<TeamPermissionAssignmentEntity>();
+            entity.Scopes = new List<TeamPermissionScopeEntity>();
             entity.Id = Guid.Empty;
             entity.ViewId = Guid.Empty;
             entity.View = null;

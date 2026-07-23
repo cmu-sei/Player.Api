@@ -30,6 +30,7 @@ public class Create
         public string Name { get; set; }
         public string Description { get; set; }
         public ViewStatus Status { get; set; }
+        public bool IsTemplate { get; set; }
         public bool CreateAdminTeam { get; set; } = true;
     }
 

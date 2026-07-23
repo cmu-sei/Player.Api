@@ -26,8 +26,10 @@ namespace Player.Api.Services
     {
         Task<Guid?> AddConnectionToView(Guid viewId, Guid userId, string connectionId, CancellationToken ct);
         Task<Guid?> RemoveConnectionFromView(Guid viewMembershipId, Guid userId, string connectionId, CancellationToken ct);
-        Task<string> GetGroupByViewId(Guid viewId);
+        Task<IEnumerable<string>> GetGroupsByViewId(Guid viewId);
         Task<IEnumerable<ViewPresence>> GetPresenceByViewId(Guid viewId);
+        Task<IEnumerable<string>> GetGroupsByViewId(Guid viewId, Guid? teamId);
+        Task<IEnumerable<ViewPresence>> GetPresenceByViewId(Guid viewId, Guid? teamId);
     }
 
     public class PresenceService : IPresenceService
@@ -73,40 +75,32 @@ namespace Player.Api.Services
 
             if (viewMembership != null)
             {
-                var connectionIds = _connectionCacheService.ViewMembershipConnections.AddOrUpdate(
-                    viewMembership.Id,
-                    new List<string>(new[] { connectionId }),
-                    (id, connectionIds) =>
-                    {
-                        var viewLock = _connectionCacheService.Locks.GetOrAdd(viewMembership.Id, new object());
-
-                        lock (viewLock)
-                        {
-                            if (!connectionIds.Contains(connectionId))
-                            {
-                                connectionIds.Add(connectionId);
-                            }
-                        }
-
-                        return connectionIds;
-                    });
-
-
-                var groupList = new List<string> { GetGroup(viewId) };
-
-                foreach (var teamId in viewMembership.TeamMemberships.Select(x => x.TeamId))
+                var primaryTeamId = viewMembership.PrimaryTeamMembership?.TeamId;
+                if (!primaryTeamId.HasValue)
                 {
-                    groupList.Add(GetGroup(teamId));
+                    return null;
                 }
 
-                await _hub.Clients.Groups(groupList).SendAsync("PresenceUpdate", new ViewPresence
+                var viewLock = _connectionCacheService.Locks.GetOrAdd(viewMembership.Id, new object());
+                var connections = _connectionCacheService.ViewMembershipConnections
+                    .GetOrAdd(viewMembership.Id, _ => new Dictionary<string, Guid>());
+
+                lock (viewLock)
+                {
+                    connections[connectionId] = primaryTeamId.Value;
+                }
+
+                var presence = new ViewPresence
                 {
                     Id = viewMembership.Id,
-                    Online = connectionIds.Any(),
+                    Online = true,
                     UserId = userId,
                     UserName = viewMembership.User.Name,
                     ViewId = viewId
-                });
+                };
+
+                await _hub.Clients.Group(GetGroup(viewId)).SendAsync("PresenceUpdate", presence);
+                await _hub.Clients.Group(GetGroup(primaryTeamId.Value)).SendAsync("PresenceUpdate", presence);
 
                 returnVal = viewMembership.Id;
                 _telemetryService.ViewActiveUsers.Record(1,
@@ -167,33 +161,47 @@ namespace Player.Api.Services
                 );
 
                 var viewLock = _connectionCacheService.Locks.GetOrAdd(viewMembership.Id, new object());
-                List<string> connectionList;
+                Dictionary<string, Guid> connections;
 
-                if (_connectionCacheService.ViewMembershipConnections.TryGetValue(viewMembershipId, out connectionList))
+                if (_connectionCacheService.ViewMembershipConnections.TryGetValue(viewMembershipId, out connections))
                 {
-                    bool online = false;
-
-                    var groupList = new List<string> { GetGroup(viewMembership.ViewId) };
-
-                    foreach (var teamId in viewMembership.TeamMemberships.Select(x => x.TeamId))
-                    {
-                        groupList.Add(GetGroup(teamId));
-                    }
+                    Guid? primaryTeamId = null;
+                    bool viewOnline;
+                    bool primaryTeamOnline;
 
                     lock (viewLock)
                     {
-                        connectionList.Remove(connectionId);
-                        online = connectionList.Any();
+                        if (connections.TryGetValue(connectionId, out var storedPrimaryTeamId))
+                        {
+                            primaryTeamId = storedPrimaryTeamId;
+                            connections.Remove(connectionId);
+                        }
+
+                        viewOnline = connections.Count > 0;
+                        primaryTeamOnline = primaryTeamId.HasValue &&
+                            connections.Values.Any(x => x == primaryTeamId.Value);
                     }
 
-                    await _hub.Clients.Groups(groupList).SendAsync("PresenceUpdate", new ViewPresence
+                    await _hub.Clients.Group(GetGroup(viewMembership.ViewId)).SendAsync("PresenceUpdate", new ViewPresence
                     {
                         Id = viewMembership.Id,
-                        Online = online,
+                        Online = viewOnline,
                         UserId = userId,
                         UserName = viewMembership.User.Name,
                         ViewId = viewMembership.ViewId
                     });
+
+                    if (primaryTeamId.HasValue)
+                    {
+                        await _hub.Clients.Group(GetGroup(primaryTeamId.Value)).SendAsync("PresenceUpdate", new ViewPresence
+                        {
+                            Id = viewMembership.Id,
+                            Online = primaryTeamOnline,
+                            UserId = userId,
+                            UserName = viewMembership.User.Name,
+                            ViewId = viewMembership.ViewId
+                        });
+                    }
 
                     returnVal = viewMembership.Id;
                 }
@@ -202,11 +210,103 @@ namespace Player.Api.Services
             return returnVal;
         }
 
+        public async Task<IEnumerable<ViewPresence>> GetPresenceByViewId(Guid viewId, Guid? teamId)
+        {
+            var access = await GetPresenceAccess(viewId, teamId, true, default);
+            return await GetPresenceByAccess(viewId, access);
+        }
+
+        public async Task<IEnumerable<string>> GetGroupsByViewId(Guid viewId, Guid? teamId)
+        {
+            var access = await GetPresenceAccess(viewId, teamId, true, default);
+
+            if (access.CanViewAllTeams)
+            {
+                return [GetGroup(viewId)];
+            }
+            else
+            {
+                return GetGroups(access.TeamIds.ToArray());
+            }
+        }
+
         public async Task<IEnumerable<ViewPresence>> GetPresenceByViewId(Guid viewId)
+        {
+            var access = await GetPresenceAccess(viewId, null, false, default);
+            return await GetPresenceByAccess(viewId, access);
+        }
+
+        public async Task<IEnumerable<string>> GetGroupsByViewId(Guid viewId)
+        {
+            var access = await GetPresenceAccess(viewId, null, false, default);
+
+            if (access.CanViewAllTeams)
+            {
+                return [GetGroup(viewId)];
+            }
+            else
+            {
+                return GetGroups(access.TeamIds.ToArray());
+            }
+        }
+
+        private async Task<PresenceAccess> GetPresenceAccess(Guid viewId, Guid? teamId, bool requireTeamId, CancellationToken ct)
+        {
+            if (requireTeamId && !teamId.HasValue)
+            {
+                throw new HubException("An active team is required for presence.");
+            }
+
+            var primaryTeamId = await _context.ViewMemberships
+                .Where(x => x.UserId == _user.GetId() && x.ViewId == viewId)
+                .Select(x => (Guid?)x.PrimaryTeamMembership.TeamId)
+                .FirstOrDefaultAsync(ct);
+
+            if (!primaryTeamId.HasValue || (teamId.HasValue && teamId.Value != primaryTeamId.Value))
+            {
+                throw new HubException("The active team is not valid for this view.");
+            }
+
+            var viewClaims = _authorizationService.GetTeamPermissions()
+                .Where(x => x.ViewId == viewId)
+                .ToArray();
+            var primaryTeamClaim = viewClaims
+                .FirstOrDefault(x => x.TeamId == primaryTeamId.Value && x.IsPrimary);
+
+            if (primaryTeamClaim == null)
+            {
+                return new PresenceAccess(false, []);
+            }
+
+            if (primaryTeamClaim.DirectViewPermissions.Contains(ViewPermission.ViewView) ||
+                primaryTeamClaim.DirectViewPermissions.Contains(ViewPermission.ManageView))
+            {
+                var viewTeamIds = await _context.Teams
+                    .Where(x => x.ViewId == viewId)
+                    .Select(x => x.Id)
+                    .ToListAsync(ct);
+
+                return new PresenceAccess(true, viewTeamIds);
+            }
+
+            var teamIds = new HashSet<Guid> { primaryTeamId.Value };
+
+            if (primaryTeamClaim.DirectTeamPermissions.Contains(TeamPermission.ViewTeam) ||
+                primaryTeamClaim.DirectTeamPermissions.Contains(TeamPermission.ManageTeam))
+            {
+                teamIds.UnionWith(viewClaims
+                    .Where(x => x.SourceTeamIds.Contains(primaryTeamId.Value))
+                    .Select(x => x.TeamId));
+            }
+
+            return new PresenceAccess(false, teamIds.ToList());
+        }
+
+        private async Task<IEnumerable<ViewPresence>> GetPresenceByAccess(Guid viewId, PresenceAccess access)
         {
             ViewMembershipEntity[] viewMembershipList;
 
-            if (await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], default))
+            if (access.CanViewAllTeams)
             {
                 viewMembershipList = await _context.ViewMemberships
                     .Include(x => x.User)
@@ -216,18 +316,10 @@ namespace Player.Api.Services
             }
             else
             {
-                var team = await _context.ViewMemberships
-                    .Where(x => x.ViewId == viewId && x.UserId == _user.GetId())
-                    .Select(x => x.PrimaryTeamMembership.Team)
-                    .FirstOrDefaultAsync();
-
-                viewMembershipList = await _context.TeamMemberships
-                    .Include(x => x.ViewMembership)
-                        .ThenInclude(x => x.User)
-                    .Include(x => x.ViewMembership)
-                        .ThenInclude(x => x.TeamMemberships)
-                    .Where(x => x.TeamId == team.Id)
-                    .Select(x => x.ViewMembership)
+                viewMembershipList = await _context.ViewMemberships
+                    .Include(x => x.User)
+                    .Include(x => x.TeamMemberships)
+                    .Where(x => x.ViewId == viewId && x.TeamMemberships.Any(t => access.TeamIds.Contains(t.TeamId)))
                     .ToArrayAsync();
             }
 
@@ -235,7 +327,7 @@ namespace Player.Api.Services
 
             foreach (var viewMembership in viewMembershipList)
             {
-                List<string> connectionList;
+                Dictionary<string, Guid> connections;
 
                 var viewPresence = new ViewPresence
                 {
@@ -243,17 +335,24 @@ namespace Player.Api.Services
                     Online = false,
                     UserId = viewMembership.UserId,
                     UserName = viewMembership.User.Name,
-                    TeamIds = viewMembership.TeamMemberships.Select(x => x.TeamId).ToArray(),
+                    TeamIds = access.CanViewAllTeams
+                        ? viewMembership.TeamMemberships.Select(x => x.TeamId).ToArray()
+                        : viewMembership.TeamMemberships
+                            .Where(x => access.TeamIds.Contains(x.TeamId))
+                            .Select(x => x.TeamId)
+                            .ToArray(),
                     ViewId = viewMembership.ViewId
                 };
 
-                if (_connectionCacheService.ViewMembershipConnections.TryGetValue(viewMembership.Id, out connectionList))
+                if (_connectionCacheService.ViewMembershipConnections.TryGetValue(viewMembership.Id, out connections))
                 {
                     var viewMembershipLock = _connectionCacheService.Locks.GetOrAdd(viewMembership.Id, new object());
 
                     lock (viewMembershipLock)
                     {
-                        viewPresence.Online = connectionList.Any();
+                        viewPresence.Online = access.CanViewAllTeams
+                            ? connections.Count > 0
+                            : connections.Values.Any(access.TeamIds.Contains);
                     }
                 }
 
@@ -261,30 +360,6 @@ namespace Player.Api.Services
             }
 
             return viewPresenceList.ToArray();
-        }
-
-        public async Task<string> GetGroupByViewId(Guid viewId)
-        {
-            if (await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], default))
-            {
-                return GetGroup(viewId);
-            }
-            else
-            {
-                var teamMembership = await _context.ViewMemberships
-                    .Where(x => x.UserId == _user.GetId() && x.ViewId == viewId)
-                    .Select(x => x.PrimaryTeamMembership)
-                    .FirstOrDefaultAsync();
-
-                if (teamMembership != null)
-                {
-                    return GetGroup(teamMembership.TeamId);
-                }
-                else
-                {
-                    return null;
-                }
-            }
         }
 
         public IEnumerable<string> GetGroups(Guid[] groupIds)
@@ -303,5 +378,7 @@ namespace Player.Api.Services
         {
             return $"Presence-{groupId}";
         }
+
+        private record PresenceAccess(bool CanViewAllTeams, List<Guid> TeamIds);
     }
 }

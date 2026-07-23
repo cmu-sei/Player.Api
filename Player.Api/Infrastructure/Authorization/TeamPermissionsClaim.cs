@@ -17,6 +17,8 @@ public class TeamPermissionsClaim
     public Guid TeamId { get; set; }
     public bool IsPrimary { get; set; }
     public string[] PermissionValues { get; set; } = [];
+    public string[] DirectPermissionValues { get; set; } = [];
+    public Guid[] SourceTeamIds { get; set; } = [];
 
     [JsonIgnore]
     public TeamPermission[] TeamPermissions
@@ -36,6 +38,30 @@ public class TeamPermissionsClaim
         get
         {
             return PermissionValues
+                .Where(x => Enum.TryParse<ViewPermission>(x, out var _))
+                .Select(Enum.Parse<ViewPermission>)
+                .ToArray();
+        }
+    }
+
+    [JsonIgnore]
+    public TeamPermission[] DirectTeamPermissions
+    {
+        get
+        {
+            return DirectPermissionValues
+                .Where(x => Enum.TryParse<TeamPermission>(x, out var _))
+                .Select(Enum.Parse<TeamPermission>)
+                .ToArray();
+        }
+    }
+
+    [JsonIgnore]
+    public ViewPermission[] DirectViewPermissions
+    {
+        get
+        {
+            return DirectPermissionValues
                 .Where(x => Enum.TryParse<ViewPermission>(x, out var _))
                 .Select(Enum.Parse<ViewPermission>)
                 .ToArray();

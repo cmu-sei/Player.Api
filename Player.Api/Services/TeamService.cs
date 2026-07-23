@@ -60,22 +60,10 @@ public class TeamService : ITeamService
         if (!userExists)
             throw new EntityNotFoundException<User>();
 
-        IQueryable<TeamDTO> teamQuery;
-
-        if (await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], ct))
-        {
-            teamQuery = _context.Teams
-                .Where(t => t.ViewId == viewId)
-                .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
-        }
-        else
-        {
-            teamQuery = _context.TeamMemberships
-                .Where(x => x.UserId == userId && x.Team.ViewId == viewId)
-                .Select(x => x.Team)
-                .Distinct()
-                .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
-        }
+        var visibility = await _authorizationService.GetPrimaryVisibilityContext(viewId, ct);
+        var teamQuery = _context.Teams
+            .Where(t => t.ViewId == viewId && visibility.TeamIds.Contains(t.Id))
+            .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
 
         var teams = await teamQuery.ToListAsync(ct);
 

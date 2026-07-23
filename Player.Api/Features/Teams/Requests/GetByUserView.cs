@@ -96,7 +96,14 @@ public class GetByUserView
 
             IQueryable<TeamDTO> teamQuery;
 
-            if (await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken))
+            if (identityResolver.GetId() == request.UserId)
+            {
+                var visibility = await authorizationService.GetPrimaryVisibilityContext(request.ViewId, cancellationToken);
+                teamQuery = db.Teams
+                    .Where(t => t.ViewId == request.ViewId && visibility.TeamIds.Contains(t.Id))
+                    .ProjectTo<TeamDTO>(mapper.ConfigurationProvider);
+            }
+            else if (await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken))
             {
                 teamQuery = db.Teams
                     .Where(t => t.ViewId == request.ViewId)
@@ -104,11 +111,16 @@ public class GetByUserView
             }
             else
             {
-                teamQuery = db.TeamMemberships
-                .Where(x => x.UserId == request.UserId && x.Team.ViewId == request.ViewId)
-                .Select(x => x.Team)
-                .Distinct()
-                .ProjectTo<TeamDTO>(mapper.ConfigurationProvider);
+                // Teams the user is a member of in this View.
+                var teamIds = await db.TeamMemberships
+                    .Where(x => x.UserId == request.UserId && x.Team.ViewId == request.ViewId)
+                    .Select(x => x.TeamId)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+
+                teamQuery = db.Teams
+                    .Where(t => t.ViewId == request.ViewId && teamIds.Contains(t.Id))
+                    .ProjectTo<TeamDTO>(mapper.ConfigurationProvider);
             }
 
             var teams = await teamQuery.ToListAsync(cancellationToken);
