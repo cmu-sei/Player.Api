@@ -73,6 +73,22 @@ public class Delete
                 await fileService.DeleteAsync(fileId, cancellationToken);
             }
 
+            // Break the ViewMembership <-> TeamMembership primary membership cycle before
+            // removing the View so EF can deterministically order the delete graph.
+            var viewMemberships = await db.ViewMemberships
+                .Where(vm => vm.ViewId == request.Id && vm.PrimaryTeamMembershipId.HasValue)
+                .ToListAsync(cancellationToken);
+
+            if (viewMemberships.Count > 0)
+            {
+                foreach (var viewMembership in viewMemberships)
+                {
+                    viewMembership.PrimaryTeamMembershipId = null;
+                }
+
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
             db.Views.Remove(viewToDelete);
             await db.SaveChangesAsync(cancellationToken);
         }
