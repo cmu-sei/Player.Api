@@ -2,6 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -60,11 +61,32 @@ public class Delete
             if (viewToDelete == null)
                 throw new EntityNotFoundException<View>();
 
-            // Delete files within this view
-            var files = await fileService.GetByViewAsync(request.Id, cancellationToken);
-            foreach (var fp in files)
+            // GetByViewAsync is filtered by the caller's team access. Deleting a view
+            // must remove every file row or the view's foreign key will block deletion.
+            var fileIds = await db.Files
+                .Where(f => f.View.Id == request.Id)
+                .Select(f => f.Id)
+                .ToListAsync(cancellationToken);
+
+            foreach (var fileId in fileIds)
             {
-                await fileService.DeleteAsync(fp.id, cancellationToken);
+                await fileService.DeleteAsync(fileId, cancellationToken);
+            }
+
+            // Break the ViewMembership <-> TeamMembership primary membership cycle before
+            // removing the View so EF can deterministically order the delete graph.
+            var viewMemberships = await db.ViewMemberships
+                .Where(vm => vm.ViewId == request.Id && vm.PrimaryTeamMembershipId.HasValue)
+                .ToListAsync(cancellationToken);
+
+            if (viewMemberships.Count > 0)
+            {
+                foreach (var viewMembership in viewMemberships)
+                {
+                    viewMembership.PrimaryTeamMembershipId = null;
+                }
+
+                await db.SaveChangesAsync(cancellationToken);
             }
 
             db.Views.Remove(viewToDelete);

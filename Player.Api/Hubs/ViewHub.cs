@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Player.Api.Services;
 using Player.Api.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Player.Api.Hubs
 {
@@ -20,17 +21,20 @@ namespace Player.Api.Hubs
         private readonly CancellationToken _ct;
         private readonly IPresenceService _presenceService;
         private readonly IXApiService _xApiService;
+        private readonly ILogger<ViewHub> _logger;
 
         public ViewHub(
             INotificationService notificationService,
             IPresenceService presenceService,
-            IXApiService xApiService)
+            IXApiService xApiService,
+            ILogger<ViewHub> logger)
         {
             _notificationService = notificationService;
             CancellationTokenSource source = new CancellationTokenSource();
             _ct = source.Token;
             _presenceService = presenceService;
             _xApiService = xApiService;
+            _logger = logger;
         }
 
         public async Task Join(string idString)
@@ -42,11 +46,29 @@ namespace Player.Api.Hubs
                 await Groups.AddToGroupAsync(Context.ConnectionId, idString);
             }
 
-            var presenceId = await _presenceService.AddConnectionToView(new Guid(idString), Context.User.GetId(), Context.ConnectionId, _ct);
-            Context.Items["presenceId"] = presenceId;
+            try
+            {
+                var presenceId = await _presenceService.AddConnectionToView(
+                    id,
+                    Context.User.GetId(),
+                    Context.ConnectionId,
+                    _ct);
+                Context.Items["presenceId"] = presenceId;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to register presence for View {ViewId}", id);
+            }
 
-            // Emit xAPI view viewed statement when user joins hub
-            await _xApiService.EmitViewViewedAsync(id, _ct);
+            try
+            {
+                // Emit xAPI view viewed statement when user joins hub
+                await _xApiService.EmitViewViewedAsync(id, _ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to emit xAPI view viewed statement for View {ViewId}", id);
+            }
 
             await Clients.Caller.SendAsync("Reply", notification);
         }
