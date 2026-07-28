@@ -185,6 +185,13 @@ namespace Player.Api.Data.Data
                     Name = "ManageNetworks",
                     Description = "Allows creating, updating, and deleting Network access across all Views",
                     Immutable = false
+                },
+                new PermissionEntity
+                {
+                    Id = new("0189a1b9-d975-4f14-b93c-db652f7dc064"),
+                    Name = "DeleteIsos",
+                    Description = "Allows deleting any ISO across all Views",
+                    Immutable = false
                 }
             );
 
@@ -285,6 +292,20 @@ namespace Player.Api.Data.Data
                     Id = new("d7271fd0-e47f-4630-a5ef-744acc4dc004"),
                     Name = "UploadTeamIsos",
                     Description = "Allows uploading ISOs that can be used by members of the Team",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("37256f30-4a64-425d-86f1-e6302bedc702"),
+                    Name = "DeleteViewIsos",
+                    Description = "Allows deleting ISOs that are available to any Teams in the View",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("b7d05581-0ba4-442f-81d8-3da72ea6533e"),
+                    Name = "DeleteTeamIsos",
+                    Description = "Allows deleting ISOs that are available to members of the Team",
                     Immutable = false
                 },
                 new TeamPermissionEntity
