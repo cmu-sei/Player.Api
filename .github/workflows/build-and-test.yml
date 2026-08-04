@@ -52,6 +52,7 @@ jobs:
         run: |
           set -o pipefail
           dotnet test --no-build --collect:"XPlat Code Coverage" \
+            --settings Player.Api.Tests/coverlet.runsettings \
             -- xUnit.DiagnosticMessages=true | tee "$RUNNER_TEMP/test.log"
 
       # PLAYER_TESTS_REQUIRE_POSTGRES already fails the run if PostgreSQL is unavailable, so this is
