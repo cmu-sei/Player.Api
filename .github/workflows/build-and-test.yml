@@ -1,0 +1,71 @@
+name: Build and Test
+
+# Deliberately not scoped to a branch list. The publish workflows here are limited to `main`
+# because releasing is gated; running the test suite is not, and a regression should surface on
+# the feature branch that introduced it rather than waiting for a pull request to be opened.
+on:
+  push:
+  pull_request:
+
+# A same-repo pull request fires both triggers above, and each new push supersedes the run before
+# it, so cancel anything still in flight for the same ref.
+concurrency:
+  group: build-and-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    env:
+      # The single most important line in this file. Player.Api.Tests falls back to SQLite when no
+      # Docker daemon is reachable so that a contributor without Docker still gets coverage; in CI
+      # that fallback would report a green run that never touched production's database. With this
+      # set, DatabaseFixture turns an unavailable daemon into a hard failure instead.
+      # See Player.Api.Tests/Support/DatabaseFixture.cs.
+      PLAYER_TESTS_REQUIRE_POSTGRES: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v5
+        with:
+          # The SDK version lives in global.json; never pin a second copy of it here.
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore
+
+      # Testcontainers starts and disposes the PostgreSQL container itself, so this job
+      # intentionally has no `services: postgres:` block.
+      #
+      # xUnit.DiagnosticMessages surfaces DatabaseFixture's provider banner. Without it the VSTest
+      # bridge discards the test host's stdout and the log never records which database the run
+      # actually used. `tee` keeps it for the assertion in the next step.
+      - name: Test
+        run: |
+          set -o pipefail
+          dotnet test --no-build --collect:"XPlat Code Coverage" \
+            -- xUnit.DiagnosticMessages=true | tee "$RUNNER_TEMP/test.log"
+
+      # PLAYER_TESTS_REQUIRE_POSTGRES already fails the run if PostgreSQL is unavailable, so this is
+      # a second, independent check on the same guarantee: it reads what the suite reported rather
+      # than trusting that the environment variable was honoured.
+      - name: Confirm the suite ran against PostgreSQL
+        # Block scalar, not a plain one: the pattern contains a colon-space, which YAML would
+        # otherwise read as the start of a mapping entry.
+        run: |
+          grep -F '[Player.Api.Tests] database provider: PostgreSql' "$RUNNER_TEMP/test.log"
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: Player.Api.Tests/TestResults/**/coverage.cobertura.xml
+          if-no-files-found: error
