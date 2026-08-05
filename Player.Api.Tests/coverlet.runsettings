@@ -3,16 +3,19 @@
   Scopes coverage to code this repository actually writes and could plausibly test.
 
   Without this, the reported figure is dominated by things no test drives: the generated migration
-  assembly alone is ~57,000 of ~73,000 sequence points and scores ~97%, purely because the test
-  harness calls Migrate() on a real database. That put the headline at 78% while the application
-  itself sat at 6%, which is worse than having no number at all.
+  assembly takes the total from 14,368 sequence points to 36,661 and scores 96.9%, purely because the
+  test harness calls Migrate() on a real database. That puts the headline at 94.6% while Player.Api
+  itself sits at 86.2%, which is worse than having no number at all.
 
-  Pass it with the `settings` argument to `dotnet test`, as the CI workflow does.
+  Player.Api.Tests.csproj names this file in RunSettingsFilePath, so it applies to every run and a
+  coverage run cannot accidentally go without it. The collector below is disabled by default so that
+  an ordinary `dotnet test` pays nothing for coverage it did not ask for; collecting is opt-in, through
+  the collect argument of `dotnet test`, and the exclusions here still apply.
 -->
 <RunSettings>
   <DataCollectionRunSettings>
     <DataCollectors>
-      <DataCollector friendlyName="XPlat code coverage">
+      <DataCollector friendlyName="XPlat code coverage" enabled="False">
         <Configuration>
           <Format>cobertura</Format>
 
