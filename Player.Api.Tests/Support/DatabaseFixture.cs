@@ -120,7 +120,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// <remarks>
     /// Sent as an xUnit diagnostic message, not just written to the console. An assembly fixture
     /// initializes before any test exists to attach output to, and the VSTest bridge that
-    /// <c>dotnet test</c> uses discards the test host's plain stdout at every verbosity — so a
+    /// <c>dotnet test</c> uses discards the test host's plain stdout at every verbosity, so a
     /// <see cref="Console.WriteLine"/> alone reaches a direct <c>dotnet run</c> of the suite but never
     /// a <c>dotnet test</c> log. The diagnostic sink does get surfaced, with
     /// <c>-- xUnit.DiagnosticMessages=true</c>. Both channels are used so the banner shows up either
@@ -130,7 +130,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
     {
         var detail = kind == TestDatabaseKind.PostgreSql
             ? "real migrations, snake_case casing and store-generated UUIDs are covered"
-            : "FALLBACK — migrations, snake_case casing and store-generated UUIDs are NOT covered";
+            : "FALLBACK: migrations, snake_case casing and store-generated UUIDs are NOT covered";
 
         var banner = $"[Player.Api.Tests] database provider: {kind} ({detail})";
 
