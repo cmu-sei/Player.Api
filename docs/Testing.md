@@ -43,10 +43,12 @@ PLAYER_TESTS_REQUIRE_POSTGRES=true dotnet test
 # Coverage
 
 ```bash
-dotnet test --collect:"XPlat Code Coverage" --settings Player.Api.Tests/coverlet.runsettings
+dotnet test --collect:"XPlat Code Coverage"
 ```
 
-The `coverlet.runsettings` file should always be passed, or the resulting number will not be meaningful. Without it, the generated migration assembly alone accounts for roughly 57,000 of about 73,000 sequence points and scores about 97%, only because the harness calls `Migrate()` on a real database. This put the headline figure at 78% while the application itself sat at 6%.
+`coverlet.runsettings` is applied automatically: `Player.Api.Tests.csproj` names it in `RunSettingsFilePath`, so no `--settings` argument is needed and a coverage run cannot accidentally go without its exclusions. The collector in that file is disabled by default, so a plain `dotnet test` collects nothing — coverage happens only when the command above asks for it.
+
+The exclusions have to be applied, or the number means nothing. Measured without them, the generated migration assembly takes the total from 14,368 sequence points to 36,661 and scores 96.9%, purely because the harness calls `Migrate()` on a real database; the headline reads 94.6% while `Player.Api` itself sits at 86.2%.
 
 The runsettings file excludes:
 
@@ -66,6 +68,26 @@ With those exclusions applied, the current figures are:
 Note that coverlet's cobertura output emits each class element twice, so summing the class-level line counts will double-count them. Deduplicate by class name and filename before adding anything up.
 
 The code that remains uncovered in `Player.Api` is largely not reachable from a test of this kind. It consists of the endpoint delegates registered in each feature's `Endpoint` class, the `Program` and `Startup` composition, and the thin controllers that only return the result of a mediator call. Around 90% is the practical ceiling for a suite of this style.
+
+# Build settings the suite relies on
+
+`Directory.Build.props` sets `TreatWarningsAsErrors`, which is what actually enforces the xUnit analyzers that ship with `xunit.v3`. A `[Theory]` with an unused parameter (xUnit1026), a public method on a test class with no `[Fact]` (xUnit1013), an awaited call that ignores the test's cancellation token (xUnit1051), `Assert.Equal` with the expected value second (xUnit2000) and `Assert.True` over a collection lookup (xUnit2012) all fail the build rather than adding a line to a log nobody reads. The suite compiles with no warnings, so this pays no backlog off; it keeps the state it is in.
+
+Restore-time warnings stay warnings, through `WarningsNotAsErrors`. `NU1901`-`NU1904` are the NuGet audit, and it has findings that cannot be acted on here: AutoMapper 13 and MediatR 12 are pinned deliberately, because later versions need a commercial licence. `NU1701` is TinCan, which ships only .NET Framework assets. Blocking every build on those would make them invisible rather than fixed.
+
+`.editorconfig` raises xUnit1004 to a warning, and therefore to an error: a test parked with `[Fact(Skip = "...")]` fails the build. Conditional skips are untouched, so `[RequiresPostgres]`, which uses `SkipUnless`, and the one runtime `Assert.SkipWhen` still work. This is the mechanical half of the convention below that a bug is characterized rather than skipped.
+
+Package versions live in `Directory.Packages.props`. This matters to the suite specifically: `Player.Api.Tests` references `Microsoft.EntityFrameworkCore.Sqlite` directly for the fallback provider, and it now takes that version from the same entry the application uses, rather than from a second version number with a comment asking the next person to keep the two in step.
+
+## Why VSTest and not Microsoft.Testing.Platform
+
+`dotnet test` runs the suite through VSTest — `Microsoft.NET.Test.Sdk`, `xunit.runner.visualstudio` and `coverlet.collector`. Microsoft's guidance for the .NET 10 SDK is the MTP mode of `dotnet test` instead, enabled by a `test` section in `global.json`, and MTP mode does run this suite: all 999 tests pass under it.
+
+Coverage is what blocks the move. `coverlet.collector` is a VSTest data collector and does not exist under MTP, so coverage would come from `Microsoft.Testing.Extensions.CodeCoverage` — and every version of that package from 18.5 on depends on `Microsoft.Testing.Platform` 2.x, while stable `xunit.v3` (3.2.2) is built against MTP v1. Running them together throws `TypeLoadException: Could not load type 'Microsoft.Testing.Platform.Extensions.TestHost.IDataConsumer'` before the first test. MTP v2 support in xUnit exists only in the 4.0.0 prereleases.
+
+So the position is: revisit when `xunit.v3` 4.x is stable, at which point Microsoft's coverage engine can replace coverlet — its `SkipAutoProperties` defaults to true and its `ModulePaths`, `Sources` and `Attributes` exclusions cover what `coverlet.runsettings` does today. Until then, moving would mean giving up the coverage figures above.
+
+One related trap: do not move `xUnit.DiagnosticMessages` out of the CI command line and into `diagnosticMessages` in `xunit.runner.json`. Both make the provider banner appear, but with the setting in that file the run hangs after the last test instead of finishing — the test host stays alive and never reports completion, reproduced on SDK 10.0.103 with VSTest 18.0.1 and `xunit.v3` 3.2.2.
 
 # How the harness works
 
@@ -200,6 +222,10 @@ An issue number in a test comment is a handle into the findings list that accomp
 
 Prefer a real assertion over the call count of a substitute. The suite has a real database so that the question of whether something was saved can be answered by reading it back through `NewContext()`, rather than by verifying that `SaveChangesAsync` was called.
 
+A context from `NewContext()` belongs to whoever asked for it. Scope it with `await using`, or hand it to something that disposes it, such as a scoped registration in a service collection the test owns. An undisposed `PlayerContext` keeps its pooled connection checked out for the rest of the run, and one PostgreSQL server serves the whole suite. Where a file re-reads the same table in several tests, a private `Stored()` helper that opens, reads and disposes in one place reads better than an `await using` in every test — `XApiQueueServiceTests`, `NotificationServiceTests` and `FileServiceTests` each have one.
+
+`WaitUntil(condition, what)`, on `DatabaseTestBase`, is for the two background services, whose work starts in their constructor and finishes nowhere a test can await. It is a last resort, not a first: prefer a signal to await, and prefer making the effect queue behind a later, observable operation. `BackgroundWebhookServiceTests.AddEvent_with_no_matching_subscription_queues_nothing` shows the second form — it sends a second, subscribed event as a barrier, because the sender's block has a degree of parallelism of one, rather than sleeping for a fixed 250 ms and hoping.
+
 # Common mistakes
 
 - `HostFor(user, configure)` honours `configure` only on the call that builds the host. Later calls with the same principal return the cached host and silently ignore it. Configure the host on first use, or use a distinct principal.
@@ -210,6 +236,10 @@ Prefer a real assertion over the call count of a substitute. The suite has a rea
 
 # Continuous integration
 
-`.github/workflows/build-and-test.yml` restores, builds and runs the suite with coverage on every push and pull request. It is not scoped to a branch list. Releasing is gated separately, and a regression should surface on the branch that introduced it rather than waiting for a pull request.
+`.github/workflows/build-and-test.yml` restores, builds and runs the suite on every push and pull request. It is not scoped to a branch list. Releasing is gated separately, and a regression should surface on the branch that introduced it rather than waiting for a pull request.
 
-The job sets `PLAYER_TESTS_REQUIRE_POSTGRES=true` and then independently greps the provider banner of the run out of the log, so that a run cannot pass having quietly used the SQLite fallback. Coverage is uploaded as a `coverage` artifact in cobertura form. There is no `services: postgres:` block, because Testcontainers starts and disposes the container itself.
+The job sets `PLAYER_TESTS_REQUIRE_POSTGRES=true` and then independently greps the provider banner of the run out of the log, so that a run cannot pass having quietly used the SQLite fallback. There is no `services: postgres:` block, because Testcontainers starts and disposes the container itself.
+
+The run produces one artifact, `test-results`, the TRX of the run, uploaded even when the job fails so that a failure shows which tests failed rather than only a count. The NuGet cache is keyed on `Directory.Packages.props` and the project files, which are what decide what a restore pulls.
+
+Coverage is not collected in CI. Nothing gates on the figure, so paying for it on every push buys a number that only a person reads; measure it locally with the command in [Coverage](#coverage) when a change is meant to move it. If it ever becomes a gate, it needs a threshold step as well as the collector — `coverlet.collector` has no `--threshold`, so that means either parsing the cobertura report in a step or moving to `coverlet.msbuild`.
