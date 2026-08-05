@@ -80,7 +80,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
             Ct);
 
         Assert.Equal(["first.txt", "second.txt"], uploaded.Select(x => x.Name));
-        Assert.Equal(2, NewContext().Files.Count());
+        Assert.Equal(2, (await Stored()).Count);
     }
 
     /// <summary>
@@ -531,7 +531,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         Assert.True(await Service().DeleteAsync(file.Id, Ct));
 
         Assert.False(File.Exists(file.Path));
-        Assert.Empty(NewContext().Files);
+        Assert.Empty(await Stored());
     }
 
     [Fact]
@@ -546,7 +546,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         await Service().DeleteAsync(file.Id, Ct);
 
         Assert.True(File.Exists(file.Path));
-        Assert.Equal(copy.Id, NewContext().Files.Single().Id);
+        Assert.Equal(copy.Id, Assert.Single(await Stored()).Id);
     }
 
     /// <summary>
@@ -562,7 +562,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var file = await SeedFileAt(view, path: null, "hidden.txt", team.Id);
 
         Assert.True(await Service().DeleteAsync(file.Id, Ct));
-        Assert.Empty(NewContext().Files);
+        Assert.Empty(await Stored());
     }
 
     [Fact]
@@ -618,6 +618,18 @@ public class FileServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
     }
 
     // ---- Helpers ----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The file rows as they are on disk, read through a context that lives only for the read: the
+    /// service writes through the context the test holds, and an undisposed context keeps its pooled
+    /// connection for the rest of the run.
+    /// </summary>
+    private async Task<List<FileEntity>> Stored()
+    {
+        await using var db = NewContext();
+
+        return await db.Files.AsNoTracking().ToListAsync(Ct);
+    }
 
     /// <summary>
     /// The service as <paramref name="user"/>, over this test's upload directory.

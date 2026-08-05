@@ -161,9 +161,7 @@ public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ApiTestBase(f
             [.. Enumerable.Range(0, 10).Select(i => $$"""{"n":{{i}}}""")],
             lrs.Sent.Select(x => x.Body));
 
-        var untouched = await NewContext().XApiQueuedStatements.AsNoTracking()
-            .Where(x => x.Status == XApiQueueStatus.Pending)
-            .ToListAsync(Ct);
+        var untouched = (await Stored()).Where(x => x.Status == XApiQueueStatus.Pending).ToList();
         Assert.Equal(2, untouched.Count);
         Assert.All(untouched, x => Assert.Equal(0, x.RetryCount));
     }
@@ -266,7 +264,7 @@ public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ApiTestBase(f
             async db => await db.XApiQueuedStatements.AsNoTracking().CountAsync(Ct) == 1,
             "the old statements to be deleted");
 
-        var remaining = await NewContext().XApiQueuedStatements.AsNoTracking().ToListAsync(Ct);
+        var remaining = await Stored();
         Assert.Equal([recentCompleted.Id], remaining.Select(x => x.Id));
     }
 
@@ -296,7 +294,7 @@ public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ApiTestBase(f
             async db => await db.XApiQueuedStatements.AsNoTracking().CountAsync(Ct) == 1,
             "the stuck statement to be deleted");
 
-        var remaining = await NewContext().XApiQueuedStatements.AsNoTracking().ToListAsync(Ct);
+        var remaining = await Stored();
         Assert.Equal([inFlight.Id], remaining.Select(x => x.Id));
     }
 
@@ -359,20 +357,8 @@ public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ApiTestBase(f
 
         try
         {
-            using var probe = NewContext();
-            var done = false;
-
-            for (var attempt = 0; attempt < 400 && !done; attempt++)
-            {
-                if (attempt > 0)
-                {
-                    await Task.Delay(25, Ct);
-                }
-
-                done = await until(probe);
-            }
-
-            Assert.True(done, $"Timed out waiting for {what}.");
+            await using var probe = NewContext();
+            await WaitUntil(() => until(probe), what);
         }
         finally
         {
@@ -399,8 +385,24 @@ public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ApiTestBase(f
     private static XApiQueuedStatementEntity Pending(DateTime? queuedAt = null) =>
         TestData.QueuedStatement(queuedAt: queuedAt ?? DateTime.UtcNow);
 
-    private async Task<XApiQueuedStatementEntity> Read(XApiQueuedStatementEntity statement) =>
-        await NewContext().XApiQueuedStatements.AsNoTracking().SingleAsync(x => x.Id == statement.Id, Ct);
+    private async Task<XApiQueuedStatementEntity> Read(XApiQueuedStatementEntity statement)
+    {
+        await using var db = NewContext();
+
+        return await db.XApiQueuedStatements.AsNoTracking().SingleAsync(x => x.Id == statement.Id, Ct);
+    }
+
+    /// <summary>
+    /// The queue as it is on disk, read through a context that lives only for the read: the service
+    /// writes through the context the test holds, and an undisposed context keeps its pooled connection
+    /// for the rest of the run.
+    /// </summary>
+    private async Task<List<XApiQueuedStatementEntity>> Stored()
+    {
+        await using var db = NewContext();
+
+        return await db.XApiQueuedStatements.AsNoTracking().ToListAsync(Ct);
+    }
 
     /// <summary>The credentials the LRS would decode, rather than the base64 the code produced.</summary>
     private static string BasicCredentials(SentRequest request) =>

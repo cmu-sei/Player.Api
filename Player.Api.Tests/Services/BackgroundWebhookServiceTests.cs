@@ -25,8 +25,8 @@ namespace Player.Api.Tests.Services;
 /// <remarks>
 /// <para>
 /// The service has no synchronous entry point — work goes onto TPL Dataflow blocks that the constructor
-/// starts — so tests observe effects rather than await calls: <see cref="Until"/> polls the database or the
-/// stubbed subscriber until the effect appears.
+/// starts — so tests observe effects rather than await calls: <see cref="DatabaseTestBase.WaitUntil"/> polls the
+/// database or the stubbed subscriber until the effect appears.
 /// </para>
 /// <para>
 /// A failed delivery is retried forever, five seconds apart at first (see issue 30). Tests of failure
@@ -60,7 +60,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
 
         using var sender = await Start();
 
-        await Until(async () => await PendingCount() == 0, "the event to be delivered");
+        await WaitUntil(async () => await PendingCount() == 0, "the event to be delivered");
         var delivered = Assert.Single(_http.Sent, x => x.Uri == CallbackUri);
         Assert.Equal(HttpMethod.Post, delivered.Method);
         Assert.Equal("""{"ViewName":"queued"}""", delivered.Body);
@@ -85,7 +85,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
 
         using var sender = await Start();
 
-        await Until(async () => await PendingCount() == 0, "all three events to be delivered");
+        await WaitUntil(async () => await PendingCount() == 0, "all three events to be delivered");
         Assert.Equal(
             ["""{"n":1}""", """{"n":2}""", """{"n":3}"""],
             _http.Sent.Where(x => x.Uri == CallbackUri).Select(x => x.Body));
@@ -106,7 +106,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
 
         using var sender = await Start();
 
-        await Until(async () => await PendingCount() == 0, "the event to be delivered");
+        await WaitUntil(async () => await PendingCount() == 0, "the event to be delivered");
         Assert.DoesNotContain(OtherCallbackUri, _http.Requests);
         Assert.Null((await Read(idle)).LastError);
     }
@@ -130,10 +130,10 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
         using var sender = await Start();
         await sender.AddEvent(ViewCreated("Sales"));
 
-        await Until(
+        await WaitUntil(
             async () => _http.Requests.Contains(CallbackUri) && _http.Requests.Contains(OtherCallbackUri),
             "both subscribers to be called");
-        await Until(async () => await PendingCount() == 0, "both events to be removed");
+        await WaitUntil(async () => await PendingCount() == 0, "both events to be removed");
         Assert.DoesNotContain("https://uninterested.test/hook", _http.Requests);
     }
 
@@ -144,16 +144,26 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
     [Fact]
     public async Task AddEvent_with_no_matching_subscription_queues_nothing()
     {
-        await Subscriber(CallbackUri, EventType.ViewDeleted);
+        var subscriber = await Subscriber(CallbackUri, EventType.ViewDeleted);
         RespondToToken();
+        _http.RespondWithStatus(CallbackUri, HttpStatusCode.OK);
 
         using var sender = await Start();
         await sender.AddEvent(ViewCreated());
 
-        // Nothing observable happens, so the wait is for the event to be handled at all: a matching
-        // subscriber would have been called well inside this window.
-        await Task.Delay(250, Ct);
-        Assert.Empty(_http.Requests);
+        // A second event, this one subscribed, is the barrier. ProcessEvent runs on a block with a degree
+        // of parallelism of one, so its delivery cannot be observed until the unmatched event ahead of it
+        // has been handled — which a fixed delay could only guess at.
+        await sender.AddEvent(new WebhookEvent(EventType.ViewDeleted, new ViewDeleted()));
+
+        // Waiting on Sent rather than Requests, because Sent is what the assertion reads.
+        await WaitUntil(
+            async () => _http.Sent.Any(x => x.Uri == CallbackUri),
+            "the subscribed event to be delivered");
+
+        // One delivery, and an empty queue: the unmatched event neither reached a subscriber nor left a
+        // row behind. An empty queue alone would prove nothing, since it is also empty before the wait.
+        Assert.Single(_http.Sent, x => x.Uri == CallbackUri);
         Assert.Equal(0, await PendingCount());
     }
 
@@ -171,7 +181,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
         using var sender = await Start();
         await sender.AddEvent(ViewCreated("Sales"));
 
-        await Until(async () => _http.Requests.Contains(CallbackUri), "the event to be delivered");
+        await WaitUntil(async () => _http.Requests.Contains(CallbackUri), "the event to be delivered");
         var body = JsonNode.Parse(Assert.Single(_http.Sent, x => x.Uri == CallbackUri).Body);
         Assert.Equal((int)EventType.ViewCreated, body["Type"].GetValue<int>());
         Assert.NotEqual(default, body["Timestamp"].GetValue<DateTime>());
@@ -198,7 +208,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
         var evt = new WebhookEvent(EventType.ViewDeleted, new ViewDeleted { ViewId = Guid.NewGuid() });
         await sender.AddEvent(evt);
 
-        await Until(async () => await PendingCount() == 1, "the event to be queued");
+        await WaitUntil(async () => await PendingCount() == 1, "the event to be queued");
         var queued = await Db.PendingEvents.AsNoTracking().SingleAsync(Ct);
         Assert.Equal(EventType.ViewDeleted, queued.EventType);
         Assert.Equal(webhook.Id, queued.SubscriptionId);
@@ -222,7 +232,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
 
         using var sender = await Start();
 
-        await Until(async () => await PendingCount() == 0, "the event to be delivered");
+        await WaitUntil(async () => await PendingCount() == 0, "the event to be delivered");
         var tokenRequest = Assert.Single(_http.Sent, x => x.Uri == TokenUri);
         Assert.Equal(
             $"grant_type=client_credentials&client_id={webhook.ClientId}&client_secret={webhook.ClientSecret}",
@@ -248,7 +258,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
 
         using var sender = await Start();
 
-        await Until(async () => await PendingCount() == 0, "both events to be delivered");
+        await WaitUntil(async () => await PendingCount() == 0, "both events to be delivered");
         Assert.Single(_http.Requests, x => x == TokenUri);
         Assert.Equal(2, _http.Requests.Count(x => x == CallbackUri));
     }
@@ -269,7 +279,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
 
         using var sender = await Start();
 
-        await Until(async () => await PendingCount() == 0, "both events to be delivered");
+        await WaitUntil(async () => await PendingCount() == 0, "both events to be delivered");
         Assert.Equal(2, _http.Requests.Count(x => x == TokenUri));
     }
 
@@ -292,7 +302,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
 
         using var sender = await Start();
 
-        await Until(async () => await PendingCount() == 0, "the event to be delivered");
+        await WaitUntil(async () => await PendingCount() == 0, "the event to be delivered");
         Assert.Equal("Bearer", Assert.Single(_http.Sent, x => x.Uri == CallbackUri).Headers["Authorization"]);
     }
 
@@ -315,12 +325,12 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
         _http.RespondWithStatus(OtherCallbackUri, HttpStatusCode.OK);
 
         using var sender = await Start();
-        await Until(async () => (await Read(rejecting)).LastError != null, "the rejection to be recorded");
+        await WaitUntil(async () => (await Read(rejecting)).LastError != null, "the rejection to be recorded");
 
         // The rejected event's own retry is five seconds away, so the second delivery's token request is
         // the only one that can land in between.
         await sender.AddEvent(new WebhookEvent(EventType.ViewDeleted, new ViewDeleted()));
-        await Until(async () => _http.Requests.Contains(OtherCallbackUri), "the second event to be delivered");
+        await WaitUntil(async () => _http.Requests.Contains(OtherCallbackUri), "the second event to be delivered");
 
         Assert.Equal(2, _http.Requests.Count(x => x == TokenUri));
     }
@@ -351,12 +361,12 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
 
         if (delivered)
         {
-            await Until(async () => await PendingCount() == 0, "the event to be removed");
+            await WaitUntil(async () => await PendingCount() == 0, "the event to be removed");
             Assert.Null((await Read(webhook)).LastError);
         }
         else
         {
-            await Until(async () => (await Read(webhook)).LastError != null, "the failure to be recorded");
+            await WaitUntil(async () => (await Read(webhook)).LastError != null, "the failure to be recorded");
             Assert.Equal(1, await PendingCount());
         }
     }
@@ -375,7 +385,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
 
         using var sender = await Start();
 
-        await Until(async () => (await Read(webhook)).LastError != null, "the failure to be recorded");
+        await WaitUntil(async () => (await Read(webhook)).LastError != null, "the failure to be recorded");
         Assert.Equal(
             "Callback endpoint returned status code InternalServerError",
             (await Read(webhook)).LastError);
@@ -395,7 +405,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
 
         using var sender = await Start();
 
-        await Until(async () => (await Read(webhook)).LastError != null, "the failure to be recorded");
+        await WaitUntil(async () => (await Read(webhook)).LastError != null, "the failure to be recorded");
         Assert.Contains("Connection refused", (await Read(webhook)).LastError);
         Assert.Equal(1, await PendingCount());
     }
@@ -416,7 +426,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
 
         using var sender = await Start();
 
-        await Until(async () => await PendingCount() == 0, "the event to be delivered");
+        await WaitUntil(async () => await PendingCount() == 0, "the event to be delivered");
         Assert.Null((await Read(webhook)).LastError);
     }
 
@@ -488,25 +498,6 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
             ViewId = Guid.NewGuid(),
             ViewName = viewName
         });
-
-    /// <summary>
-    /// Polls until <paramref name="condition"/> holds. Effects arrive on the sender's own threads, so
-    /// there is nothing for a test to await.
-    /// </summary>
-    private static async Task Until(Func<Task<bool>> condition, string what)
-    {
-        for (var attempt = 0; attempt < 500; attempt++)
-        {
-            if (await condition())
-            {
-                return;
-            }
-
-            await Task.Delay(10, Ct);
-        }
-
-        Assert.Fail($"Timed out waiting for {what}.");
-    }
 
     private Task<int> PendingCount() => Db.PendingEvents.AsNoTracking().CountAsync(Ct);
 

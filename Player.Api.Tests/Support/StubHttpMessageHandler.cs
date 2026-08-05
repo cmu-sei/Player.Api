@@ -19,14 +19,41 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
     private readonly Dictionary<string, Exception> _failures = [];
     private readonly Lock _recording = new();
 
+    private readonly List<string> _requests = [];
+    private readonly List<SentRequest> _sent = [];
+
     /// <summary>Every absolute uri that was requested, in order.</summary>
-    public List<string> Requests { get; } = [];
+    /// <remarks>
+    /// A snapshot taken under the recording lock rather than the live list. The callers under test include
+    /// background senders that record from their own threads, and reading a <c>List&lt;T&gt;</c> while
+    /// another thread adds to it is undefined — which a test that polls this in a loop will eventually
+    /// find out.
+    /// </remarks>
+    public IReadOnlyList<string> Requests
+    {
+        get
+        {
+            lock (_recording)
+            {
+                return [.. _requests];
+            }
+        }
+    }
 
     /// <summary>
     /// The same requests with their method, headers and body, for the callers whose behaviour is in what
-    /// they send rather than what they do with the answer.
+    /// they send rather than what they do with the answer. Also a snapshot.
     /// </summary>
-    public List<SentRequest> Sent { get; } = [];
+    public IReadOnlyList<SentRequest> Sent
+    {
+        get
+        {
+            lock (_recording)
+            {
+                return [.. _sent];
+            }
+        }
+    }
 
     public StubHttpMessageHandler Respond(
         string uri,
@@ -59,11 +86,12 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
         var uri = request.RequestUri.ToString();
         var captured = await Capture(request, cancellationToken);
 
-        // Locked because callers include background senders that run a request per queue in parallel.
+        // Locked because callers include background senders that run a request per queue in parallel, and
+        // because Requests and Sent snapshot under the same lock.
         lock (_recording)
         {
-            Requests.Add(uri);
-            Sent.Add(captured);
+            _requests.Add(uri);
+            _sent.Add(captured);
         }
 
         if (_failures.TryGetValue(uri, out var failure))

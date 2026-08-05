@@ -30,7 +30,7 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
     [Fact]
     public async Task Create_assigns_the_named_role()
     {
-        var role = await NewContext().Roles.FirstAsync(Ct);
+        var role = await Db.Roles.AsNoTracking().FirstAsync(Ct);
 
         var created = await SendAsync(new Create.Command
         {

@@ -2,6 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data.Models;
 using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
@@ -262,7 +263,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ApiTestBase(fix
 
         await Service(Member(view.Id, team.Id)).JoinView(view.Id, Ct);
 
-        Assert.Empty(NewContext().Notifications);
+        Assert.Empty(await Stored());
     }
 
     [Fact]
@@ -454,7 +455,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ApiTestBase(fix
 
         Assert.True(posted.WasSuccess);
         Assert.True(posted.CanPost);
-        Assert.Equal("Hello", NewContext().Notifications.Single().Text);
+        Assert.Equal("Hello", Assert.Single(await Stored()).Text);
     }
 
     [Fact]
@@ -468,7 +469,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ApiTestBase(fix
             .PostToTeam(team.Id, new Notification { Text = "Hello" }, Ct);
 
         Assert.True(posted.WasSuccess);
-        Assert.Equal("Hello", NewContext().Notifications.Single().Text);
+        Assert.Equal("Hello", Assert.Single(await Stored()).Text);
     }
 
     [Fact]
@@ -482,7 +483,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ApiTestBase(fix
             .PostToUser(view.Id, user.Id, new Notification { Text = "Hello" }, Ct);
 
         Assert.True(posted.WasSuccess);
-        Assert.Equal("Hello", NewContext().Notifications.Single().Text);
+        Assert.Equal("Hello", Assert.Single(await Stored()).Text);
     }
 
     // ---- Icon url ---------------------------------------------------------------------------------
@@ -538,7 +539,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ApiTestBase(fix
         await Seed(view, notification);
 
         Assert.True(await Service().DeleteAsync(notification.Key, Ct));
-        Assert.Empty(NewContext().Notifications);
+        Assert.Empty(await Stored());
     }
 
     [Fact]
@@ -562,7 +563,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ApiTestBase(fix
             other);
 
         Assert.True(await Service().DeleteViewNotificationsAsync(view.Id, Ct));
-        Assert.Equal(other.Key, NewContext().Notifications.Single().Key);
+        Assert.Equal(other.Key, Assert.Single(await Stored()).Key);
     }
 
     /// <summary>
@@ -576,6 +577,18 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ApiTestBase(fix
     }
 
     // ---- Helpers ----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The notifications as they are on disk, read through a context that lives only for the read: the
+    /// service writes through the context the test holds, and an undisposed context keeps its pooled
+    /// connection for the rest of the run.
+    /// </summary>
+    private async Task<List<NotificationEntity>> Stored()
+    {
+        await using var db = NewContext();
+
+        return await db.Notifications.AsNoTracking().ToListAsync(Ct);
+    }
 
     private INotificationService Service(ClaimsPrincipal user = null) =>
         HostFor(user ?? Root).Resolve<INotificationService>();

@@ -33,7 +33,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
 
         await Service.EnqueueAsync(statement, Ct);
 
-        var stored = Assert.Single(await NewContext().XApiQueuedStatements.ToListAsync(Ct));
+        var stored = Assert.Single(await Stored());
         Assert.Equal(XApiQueueStatus.Pending, stored.Status);
         Assert.Equal(0, stored.RetryCount);
         Assert.NotEqual(Noon, stored.QueuedAt);
@@ -48,7 +48,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
 
         await Service.EnqueueAsync(statement, Ct);
 
-        var stored = Assert.Single(await NewContext().XApiQueuedStatements.ToListAsync(Ct));
+        var stored = Assert.Single(await Stored());
         Assert.NotEqual(Guid.Empty, stored.Id);
         Assert.Equal("""{"verb":{"id":"terminated"}}""", stored.StatementJson);
         Assert.Equal("terminated", stored.Verb);
@@ -71,7 +71,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
         Assert.Equal(1, dequeued.RetryCount);
         Assert.NotNull(dequeued.LastAttemptAt);
 
-        var stored = Assert.Single(await NewContext().XApiQueuedStatements.ToListAsync(Ct));
+        var stored = Assert.Single(await Stored());
         Assert.Equal(XApiQueueStatus.Processing, stored.Status);
         Assert.Equal(1, stored.RetryCount);
     }
@@ -122,7 +122,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
         Assert.Equal(["first", "second"], dequeued.Select(x => x.Verb));
         Assert.Equal(
             XApiQueueStatus.Pending,
-            (await NewContext().XApiQueuedStatements.SingleAsync(x => x.Verb == "third", Ct)).Status);
+            (await Stored()).Single(x => x.Verb == "third").Status);
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
 
         Assert.Equal(
             XApiQueueStatus.Completed,
-            (await NewContext().XApiQueuedStatements.SingleAsync(Ct)).Status);
+            Assert.Single(await Stored()).Status);
     }
 
     /// <summary>
@@ -170,7 +170,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
 
         await Service.MarkFailedAsync(statement.Id, "connection refused", true, Ct);
 
-        var stored = await NewContext().XApiQueuedStatements.SingleAsync(Ct);
+        var stored = Assert.Single(await Stored());
         Assert.Equal(XApiQueueStatus.Pending, stored.Status);
         Assert.Equal("[TRANSIENT] connection refused", stored.ErrorMessage);
         Assert.Equal(3, stored.RetryCount);
@@ -188,7 +188,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
 
         await Service.MarkFailedAsync(statement.Id, "400 malformed statement", false, Ct);
 
-        var stored = await NewContext().XApiQueuedStatements.SingleAsync(Ct);
+        var stored = Assert.Single(await Stored());
         Assert.Equal(XApiQueueStatus.Failed, stored.Status);
         Assert.Equal("[PERMANENT] 400 malformed statement", stored.ErrorMessage);
     }
@@ -208,7 +208,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
 
         Assert.Equal(
             "[PERMANENT] later",
-            (await NewContext().XApiQueuedStatements.SingleAsync(Ct)).ErrorMessage);
+            Assert.Single(await Stored()).ErrorMessage);
     }
 
     /// <summary>
@@ -221,7 +221,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
         await Service.MarkCompletedAsync(Guid.NewGuid(), Ct);
         await Service.MarkFailedAsync(Guid.NewGuid(), "gone", true, Ct);
 
-        Assert.Empty(await NewContext().XApiQueuedStatements.ToListAsync(Ct));
+        Assert.Empty(await Stored());
     }
 
     /// <summary>
@@ -348,7 +348,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
 
         await Service.DeleteStatementsAsync([deleted.Id], Ct);
 
-        var remaining = await NewContext().XApiQueuedStatements.ToListAsync(Ct);
+        var remaining = await Stored();
         Assert.Equal([kept.Id], remaining.Select(x => x.Id));
     }
 
@@ -365,10 +365,22 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
         await Service.DeleteStatementsAsync([], Ct);
         await Service.DeleteStatementsAsync([Guid.NewGuid()], Ct);
 
-        Assert.Single(await NewContext().XApiQueuedStatements.ToListAsync(Ct));
+        Assert.Single(await Stored());
     }
 
     // ---- Helpers ----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The queue as it is on disk. The service writes through the context the test holds, so a re-read
+    /// has to come from a cold change tracker; the context lives only for the read, since an undisposed
+    /// one keeps its pooled connection for the rest of the run.
+    /// </summary>
+    private async Task<List<XApiQueuedStatementEntity>> Stored()
+    {
+        await using var db = NewContext();
+
+        return await db.XApiQueuedStatements.AsNoTracking().ToListAsync(Ct);
+    }
 
     /// <summary>
     /// The queue takes no part in authorization — the sender runs with no user at all — so every test

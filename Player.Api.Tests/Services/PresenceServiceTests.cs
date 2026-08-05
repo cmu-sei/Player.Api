@@ -364,7 +364,8 @@ public class PresenceServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture
 
         await service.AddConnectionToView(view.Id, member.UserId, "conn-1", Ct);
 
-        Assert.True(Assert.Single(await service.GetPresenceByViewId(view.Id)).Online);
+        var presence = Assert.Single(await service.GetPresenceByViewId(view.Id));
+        Assert.True(presence.Online);
     }
 
     /// <summary>

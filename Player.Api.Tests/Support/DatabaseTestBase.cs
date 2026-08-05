@@ -1,6 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
+using System.Diagnostics;
 using MediatR;
 using Player.Api.Data.Data;
 
@@ -44,12 +45,42 @@ public abstract class DatabaseTestBase(DatabaseFixture fixture) : IAsyncLifetime
     /// Creates an additional context over the same database, for re-reading through a cold change
     /// tracker after a save.
     /// </summary>
+    /// <remarks>
+    /// The caller owns it: scope it with <c>await using</c>, or hand it to something that disposes it,
+    /// such as a scoped service registration. An undisposed context keeps its pooled connection checked
+    /// out for the rest of the run, and one PostgreSQL server serves the whole suite.
+    /// </remarks>
     protected PlayerContext NewContext() => _session.CreateContext();
+
+    /// <summary>
+    /// Polls until <paramref name="condition"/> holds, or fails the test naming
+    /// <paramref name="what"/> it was waiting for. For the background services, whose work starts in
+    /// their constructor and completes nowhere a test can await; prefer a signal, or an effect that
+    /// queues behind a later observable one, wherever one exists.
+    /// </summary>
+    protected static async Task WaitUntil(Func<Task<bool>> condition, string what)
+    {
+        // A duration, not a count of attempts, so the wait means the same on a loaded CI runner as on a
+        // developer machine. Generous because it only bounds a hang: a passing test returns on the first
+        // or second poll.
+        var budget = TimeSpan.FromSeconds(10);
+        var elapsed = Stopwatch.StartNew();
+
+        while (!await condition())
+        {
+            if (elapsed.Elapsed >= budget)
+            {
+                Assert.Fail($"Timed out after {budget.TotalSeconds:0.#}s waiting for {what}.");
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(10), Ct);
+        }
+    }
 
     public virtual async ValueTask InitializeAsync()
     {
         _session = await Fixture.BeginSessionAsync();
-        Db = _session.CreateContext();
+        Db = NewContext();
     }
 
     public virtual async ValueTask DisposeAsync()
