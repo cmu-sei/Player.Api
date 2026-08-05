@@ -1,10 +1,12 @@
+Player.Api has an automated test suite in the `Player.Api.Tests` project. This document details how the suite is put together, how to run it, and the conventions to follow when adding to it.
+
 # Testing
 
-`Player.Api.Tests` is the automated test suite for this repository. It contains 999 tests across 52 test classes — 998 of which run today, the other skipping itself until the application gives it something to assert on — and covers 85.6% of `Player.Api` and 97.1% of `Player.Api.Data` by line.
+The suite contains 999 tests across 52 test classes. 998 of them run today. The remaining one skips itself until the application gives it something to assert on. Line coverage is 85.6% for `Player.Api` and 97.1% for `Player.Api.Data`.
 
-The suite is built on xUnit v3 and NSubstitute, and runs against a real PostgreSQL instance started in a container. It is deliberately not a collection of isolated unit tests: most tests send a real MediatR request through the real handler, the real authorization stack, the real AutoMapper profiles and a real database, and assert on what came back and what changed in the database. Only collaborators that leave the process are substituted.
+The suite is built on xUnit v3 and NSubstitute, and runs against a real PostgreSQL instance started in a container. The tests are not isolated unit tests. A typical test sends a real MediatR request through the real handler, the real authorization stack, the real AutoMapper profiles and a real database, then asserts on the result and on what changed in the database. Only collaborators that leave the process are substituted.
 
-## Running the tests
+# Running the tests
 
 ```bash
 dotnet test
@@ -12,88 +14,87 @@ dotnet test
 
 Docker must be running. The suite starts and disposes its own PostgreSQL container through [Testcontainers](https://testcontainers.com/), so there is nothing to install or configure and no local database to keep in sync.
 
-To run one class or one test:
+A single class or a single test can be run with a filter:
 
 ```bash
 dotnet test --filter "FullyQualifiedName~ViewRequestTests"
 dotnet test --filter "FullyQualifiedName~ViewRequestTests.Export_round_trips_through_Import"
 ```
 
-### Without Docker
+## Running without Docker
 
-If no Docker daemon is reachable the suite falls back to in-memory SQLite so that a contributor without Docker still gets useful coverage rather than a wall of skipped tests. The fallback is announced at the start of the run:
+If no Docker daemon is reachable, the suite falls back to in-memory SQLite, so that a contributor without Docker still gets useful coverage instead of a wall of skipped tests. The fallback is announced at the start of the run:
 
 ```
 [Player.Api.Tests] database provider: Sqlite (FALLBACK — migrations, snake_case casing and store-generated UUIDs are NOT covered)
 ```
 
-What the fallback does not cover is the `if (Database.IsNpgsql())` branch of `PlayerContext.OnModelCreating` — snake_case column naming and store-generated UUIDs — and the migration history, because SQLite is created with `EnsureCreated()` rather than by migrating. The application itself makes the same distinction: `DatabaseExtensions.InitializeDatabase` skips `Database.Migrate()` on SQLite, since only PostgreSQL migrations exist. Tests that genuinely need PostgreSQL are marked `[RequiresPostgres]` and skip on the fallback.
+Two things are not covered by the fallback:
 
-**A green SQLite run is not the same assurance as a green PostgreSQL run.** Set `PLAYER_TESTS_REQUIRE_POSTGRES=true` to turn an unavailable Docker daemon into a hard failure instead of a silent fallback. CI sets it, and a local run before opening a pull request should too:
+- The `if (Database.IsNpgsql())` branch of `PlayerContext.OnModelCreating`, which handles snake_case column naming and store-generated UUIDs.
+- The migration history, because the SQLite database is created with `EnsureCreated()` rather than by migrating. The application makes the same distinction. `DatabaseExtensions.InitializeDatabase` skips `Database.Migrate()` on SQLite, since only PostgreSQL migrations exist.
+
+Tests that genuinely require PostgreSQL are marked `[RequiresPostgres]` and skip on the fallback. A green SQLite run does not give the same assurance as a green PostgreSQL run. Setting `PLAYER_TESTS_REQUIRE_POSTGRES=true` turns an unavailable Docker daemon into a hard failure instead of a silent fallback. CI sets this value, and it should also be set for a local run before opening a pull request:
 
 ```bash
 PLAYER_TESTS_REQUIRE_POSTGRES=true dotnet test
 ```
 
-## Coverage
+# Coverage
 
 ```bash
 dotnet test --collect:"XPlat Code Coverage" --settings Player.Api.Tests/coverlet.runsettings
 ```
 
-Passing `coverlet.runsettings` is not optional if you want a meaningful number. Without it the generated migration assembly alone is roughly 57,000 of about 73,000 sequence points and scores about 97% — purely because the harness calls `Migrate()` on a real database — which put the headline figure at 78% while the application itself sat at 6%.
+The `coverlet.runsettings` file should always be passed, or the resulting number will not be meaningful. Without it, the generated migration assembly alone accounts for roughly 57,000 of about 73,000 sequence points and scores about 97%, only because the harness calls `Migrate()` on a real database. This put the headline figure at 78% while the application itself sat at 6%.
 
 The runsettings file excludes:
 
-- the `Player.Api.Migrations.PostgreSQL` assembly and any `**/Migrations/**` source, because migrations are generated by `dotnet ef migrations add` and asserting on them pins EF's output rather than our behaviour;
-- third-party sources that compile into our assemblies rather than arriving as a reference — `Crucible.Common.EntityEvents` ships its implementation as `contentFiles`, so no assembly filter can reach it;
-- generated code, by attribute (`GeneratedCodeAttribute`, `CompilerGeneratedAttribute`, `ExcludeFromCodeCoverageAttribute`);
-- auto-implemented property accessors (`SkipAutoProps`), which are not logic and cannot fail. Counting them let a DTO with forty properties look like meaningful coverage the moment one mapping test touched it.
+- The `Player.Api.Migrations.PostgreSQL` assembly and any `**/Migrations/**` source. Migrations are generated by `dotnet ef migrations add`, so asserting on them pins EF's output rather than the behaviour of the application.
+- Third-party sources that compile into the Player assemblies rather than arriving as a reference. `Crucible.Common.EntityEvents` ships its implementation as `contentFiles`, so no assembly filter can reach it.
+- Generated code, by attribute. The attributes are `GeneratedCodeAttribute`, `CompilerGeneratedAttribute` and `ExcludeFromCodeCoverageAttribute`.
+- Auto-implemented property accessors, through `SkipAutoProps`. These are not logic and cannot fail. Counting them allowed a DTO with forty properties to look like meaningful coverage as soon as one mapping test touched it.
 
-Current figures, with those exclusions applied:
+With those exclusions applied, the current figures are:
 
 | Assembly | Lines | Line coverage | Branch coverage |
 |---|---|---|---|
 | `Player.Api` | 11,240 / 13,132 | 85.6% | 89.1% |
 | `Player.Api.Data` | 1,200 / 1,236 | 97.1% | 88.9% |
-| **Total** | **12,440 / 14,368** | **86.6%** | **89.1%** |
+| Total | 12,440 / 14,368 | 86.6% | 89.1% |
 
-Note that coverlet's cobertura output emits each class element twice, so summing class-level line counts double-counts. Deduplicate by `(class name, filename)` before adding anything up.
+Note that coverlet's cobertura output emits each class element twice, so summing the class-level line counts will double-count them. Deduplicate by class name and filename before adding anything up.
 
-Most of what remains uncovered in `Player.Api` is not reachable from a test of this kind: the endpoint delegates registered in each feature's `Endpoint` class, `Program`/`Startup` composition, and the thin controllers that do nothing but `return Ok(await _mediator.Send(...))`. The practical ceiling for this style of suite is around 90%.
+The code that remains uncovered in `Player.Api` is largely not reachable from a test of this kind. It consists of the endpoint delegates registered in each feature's `Endpoint` class, the `Program` and `Startup` composition, and the thin controllers that only return the result of a mediator call. Around 90% is the practical ceiling for a suite of this style.
 
-## How the harness works
+# How the harness works
 
-There is no `WebApplicationFactory` and no Kestrel. Two base classes cover almost everything.
+There is no `WebApplicationFactory` and no Kestrel. Two base classes cover almost every test.
 
-### `DatabaseTestBase`
+## DatabaseTestBase
 
-For tests that need a database but not the request pipeline. It gives you:
+`DatabaseTestBase` is for tests that need a database but not the request pipeline. It provides:
 
-| Member | What it is |
-|---|---|
-| `Db` | A `PlayerContext` over a database no other test can see |
-| `NewContext()` | Another context over the same database, for re-reading through a cold change tracker after a save |
-| `Mediator` | The substituted mediator `PlayerContext.PublishEventsAsync` resolves — assert on it to verify published entity events |
-| `Ct` | The running test's cancellation token |
-| `Fixture` | The run-wide `DatabaseFixture`, for checking which provider is active |
+- `Db` - A `PlayerContext` over a database that no other test can see.
+- `NewContext()` - Another context over the same database, for re-reading through a cold change tracker after a save.
+- `Mediator` - The substituted mediator that `PlayerContext.PublishEventsAsync` resolves. Assert on it to verify published entity events.
+- `Ct` - The cancellation token of the running test.
+- `Fixture` - The run-wide `DatabaseFixture`, which can be used to check the active provider.
 
-Pass `Ct` to awaited calls. It is what lets the runner cancel a hung test, which matters more here than in a pure unit test: a query blocked on a PostgreSQL lock would otherwise hold the whole run open.
+`Ct` should be passed to awaited calls, so that the runner is able to cancel a hung test. A query blocked on a PostgreSQL lock would otherwise hold the whole run open.
 
-### `ApiTestBase`
+## ApiTestBase
 
-Extends `DatabaseTestBase` for tests that drive real request handlers. It adds:
+`ApiTestBase` extends `DatabaseTestBase` for tests that drive real request handlers. It adds:
 
-| Member | What it is |
-|---|---|
-| `SendAsync(request)` | Sends through MediatR as `Root` |
-| `SendAsync(user, request)` | Sends as a specific principal |
-| `Seed(params object[])` | Adds entities and saves |
-| `Root` | A principal holding every system permission, for tests about what a handler does rather than who may call it |
-| `RootHost` / `HostFor(user, configure)` | The service container acting as that principal |
-| `Resolve<T>()` (on a host) | Any registered service, including the substituted collaborators |
+- `SendAsync(request)` - Sends the request through MediatR as `Root`.
+- `SendAsync(user, request)` - Sends the request as a specific principal.
+- `Seed(params object[])` - Adds entities and saves.
+- `Root` - A principal holding every system Permission, for tests concerned with what a handler does rather than who may call it.
+- `RootHost` and `HostFor(user, configure)` - The service container acting as that principal.
+- `Resolve<T>()`, on a host - Any registered service, including the substituted collaborators.
 
-A typical test reads:
+A typical test looks like this:
 
 ```csharp
 public class ViewRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
@@ -114,41 +115,41 @@ public class ViewRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
 
 The `DatabaseFixture` arrives by constructor injection, which xUnit v3 satisfies from the `[assembly: AssemblyFixture(typeof(DatabaseFixture))]` declaration in `AssemblyFixtures.cs`. Every test class that needs a database forwards it the same way.
 
-### What is real and what is substituted
+## What is real and what is substituted
 
-`ApiTestHost` builds a `ServiceCollection` mirroring `Startup.ConfigureServices`. Handlers are resolved from that container rather than constructed by hand — there are ninety of them, and hand-wiring would mean ninety call sites to update per added dependency, each one a chance to pass a substitute where production passes the real thing.
+`ApiTestHost` builds a `ServiceCollection` that mirrors `Startup.ConfigureServices`. Handlers are resolved from that container rather than constructed by hand. There are ninety of them, so hand-wiring would mean ninety call sites to update each time a handler gains a dependency, and every one of those is an opportunity to pass a substitute where production passes the real thing.
 
-Substituted, because they leave the process:
+The following are substituted, because they leave the process:
 
-- `IHubContext<ViewHub>`, `IHubContext<TeamHub>`, `IHubContext<UserHub>` — assert on these for broadcast notifications
-- `IBackgroundWebhookService` — the webhook queue
-- `IHttpClientFactory` — pair it with `StubHttpMessageHandler`
+- `IHubContext<ViewHub>`, `IHubContext<TeamHub>` and `IHubContext<UserHub>` - Assert on these for broadcast notifications.
+- `IBackgroundWebhookService` - The webhook queue.
+- `IHttpClientFactory` - Pair this with `StubHttpMessageHandler`.
 
-Everything else is the real thing, including `IdentityResolver` over a real `IHttpContextAccessor`, the authorization handlers, and the AutoMapper profiles. `ApiTestHostTests` asserts that every handler in the assembly can be constructed from the container, so adding a production dependency that the harness does not register fails one test by name rather than whichever test happened to touch that handler.
+Everything else is the real thing, including `IdentityResolver` over a real `IHttpContextAccessor`, the authorization handlers, and the AutoMapper profiles. `ApiTestHostTests` asserts that every handler in the assembly can be constructed from the container. If a production dependency is added that the harness does not register, one test fails by name, rather than whichever test happened to touch that handler.
 
-Options the application reads from configuration are exposed through `ApiTestHostOptions`, defaulted so every handler runs. Override only what a test asserts on:
+Options that the application reads from configuration are exposed through `ApiTestHostOptions`, and are defaulted so that every handler runs. Only override what a test asserts on:
 
 ```csharp
 HostFor(Root, options => options.FileUpload.basePath = _basePath)
 ```
 
-### Adding a test
+## Database isolation
 
-1. Put the file where the code under test lives — `Features/Views/` for a view request, `Services/` for a service.
-2. Derive from `ApiTestBase` if the test sends a request, `DatabaseTestBase` if it only needs a database, and from neither if it needs nothing (`ArchiveServiceTests` and the authorization handler tests take no fixture at all).
-3. Seed with `TestData` object mothers rather than building entities inline, and add a new mother there if one is missing.
+Migrations are applied once, to a template database. Each test then gets its own database created from that template, which is a file-level copy and much cheaper than re-running the 34 migrations for every test. Isolation is per test rather than per class, and it is real isolation rather than a shared database with a rollback, so `SaveChanges` behaves exactly as it does in production.
+
+The migrations emit `CREATE EXTENSION "uuid-ossp"`, which requires superuser. The default `postgres` user in the official image is a superuser, so the container must not be reconfigured to a restricted role.
+
+# Adding a test
+
+1. Put the file where the code under test lives. A view request goes in `Features/Views/`, a service in `Services/`.
+2. Derive from `ApiTestBase` if the test sends a request, or from `DatabaseTestBase` if it only needs a database. Some tests need neither. `ArchiveServiceTests` and the authorization handler tests take no fixture at all.
+3. Seed with the `TestData` object mothers rather than building entities inline, and add a new mother there if one is missing.
 4. Name the method as a sentence, and pass `Ct` to anything awaited.
-5. Assert on the database through `NewContext()`, not on the seeded objects you still hold — the change tracker will happily tell you what you already know.
+5. Assert on the database through `NewContext()`, not on the seeded objects that are still held. The change tracker will only confirm what was already set.
 
-### Database isolation
+# Layout
 
-Migrations are applied once, to a template database. Each test then gets its own database created from that template, which is a file-level copy and much cheaper than re-running the 34 migrations per test. Isolation is per test, not per class, and it is real isolation rather than a shared database with a rollback, so `SaveChanges` behaves exactly as it does in production.
-
-The migrations emit `CREATE EXTENSION "uuid-ossp"`, which requires superuser. The default `postgres` user in the official image is superuser, so the container must not be reconfigured to a restricted role.
-
-## Layout
-
-The test project mirrors `Player.Api`, so the tests for a file are where you would look for them:
+The test project mirrors `Player.Api`, so the tests for a file are where you would expect to look for them:
 
 ```
 Player.Api.Tests/
@@ -157,36 +158,34 @@ Player.Api.Tests/
   Infrastructure/    authorization, endpoints, exceptions, filters, extensions, JSON converters, mapping
   Hubs/              the three SignalR hubs
   Events/            entity event handlers
-  Support/           the harness — see below
+  Support/           the harness, described below
 ```
 
-## Support helpers
+The harness itself lives in `Support/`:
 
-| Type | What it is for |
-|---|---|
-| `DatabaseFixture` | Resolves the provider, starts it once for the run, hands out an isolated session per test |
-| `DatabaseTestBase`, `ApiTestBase` | The two base classes above |
-| `ApiTestHost`, `ApiTestHostOptions` | The application's pipeline without the web host |
-| `TestData` | Object mothers for the entities most tests need — `TestData.View()`, `TestData.Team()`, `TestData.ApplicationTemplate()` |
-| `ClaimsPrincipalBuilder` | Builds the principal `IIdentityResolver` would hand the authorization stack, including `Anonymous()` |
-| `AuthorizationHarness` | Wires the authorization stack the way `Startup.ApplyPolicies` does, for testing a handler directly |
-| `TestMapper` | The real AutoMapper configuration without starting the application |
-| `PlayerContextFactory` | Builds a `PlayerContext` wired the way production wires it |
-| `HubHarness` | The connection-scoped state SignalR sets on a hub before invoking a method |
-| `EndpointHarness` | Runs an `IEndpoint`'s `RegisterEndpoints` against a real route group and hands back the routes |
-| `ArchiveHelper` | Bridges export and import, which exchange an `ArchiveResult` for an `IFormFile` at the HTTP boundary |
-| `StubHttpMessageHandler` | Answers outbound HTTP from a fixed table |
-| `RequiresPostgresAttribute` | Marks a test that only makes sense on PostgreSQL |
+- `DatabaseFixture` - Resolves the provider, starts it once for the run, and hands out an isolated session per test.
+- `DatabaseTestBase` and `ApiTestBase` - The two base classes described above.
+- `ApiTestHost` and `ApiTestHostOptions` - The pipeline of the application without the web host.
+- `TestData` - Object mothers for the entities that most tests need, such as `TestData.View()`, `TestData.Team()` and `TestData.ApplicationTemplate()`.
+- `ClaimsPrincipalBuilder` - Builds the principal that `IIdentityResolver` would hand to the authorization stack, including `Anonymous()`.
+- `AuthorizationHarness` - Wires the authorization stack the way `Startup.ApplyPolicies` does, for testing a handler directly.
+- `TestMapper` - The real AutoMapper configuration, without starting the application.
+- `PlayerContextFactory` - Builds a `PlayerContext` wired the way production wires it.
+- `HubHarness` - The connection-scoped state that SignalR sets on a hub before invoking a method.
+- `EndpointHarness` - Runs the `RegisterEndpoints` method of an `IEndpoint` against a real route group and hands back the routes.
+- `ArchiveHelper` - Bridges export and import, which exchange an `ArchiveResult` for an `IFormFile` at the HTTP boundary.
+- `StubHttpMessageHandler` - Answers outbound HTTP from a fixed table.
+- `RequiresPostgresAttribute` - Marks a test that only makes sense on PostgreSQL.
 
-`DatabaseHarnessTests` and `ApiTestHostTests` are tests of the harness itself. They pin the behaviour the rest of the suite assumes — that two tests inserting the same key do not see each other, that explicit ids survive a round trip under either provider, that saving publishes entity events, that on PostgreSQL the real migration history and snake_case naming are in force, that every handler resolves and does so as the principal the host was built with. A broken harness then fails as a harness failure rather than as a hundred confusing ones.
+`DatabaseHarnessTests` and `ApiTestHostTests` are tests of the harness itself. They pin the behaviour that the rest of the suite assumes: that two tests inserting the same key do not see each other, that explicit ids survive a round trip under either provider, that saving publishes entity events, that the real migration history and snake_case naming are in force on PostgreSQL, and that every handler resolves as the principal the host was built with. When the harness breaks, these tests fail instead of a hundred unrelated ones.
 
-## Conventions
+# Conventions
 
-**Test names are sentences.** `Export_produces_an_archive_containing_the_view_json`, not `TestExport2`. A failure summary should read as a statement about the application, since that is all a reader of CI output gets.
+Test names are sentences. Use `Export_produces_an_archive_containing_the_view_json` rather than `TestExport2`. The failure summary is all that a reader of CI output gets, so it should read as a statement about the application.
 
-**No Arrange/Act/Assert comments.** The shape of a test is visible from a blank line. Comments explain what a test pins and why it matters, in one or two lines — not what the code on the next line does.
+Do not add Arrange, Act and Assert comments. The shape of a test is already visible from a blank line. Comments should explain what a test pins and why it matters, in a line or two, rather than what the code on the next line does.
 
-**Bugs found while writing a test are characterized, not fixed.** The test asserts the current, wrong behaviour and turns red when the behaviour is corrected. Its remarks say what turns it red, so whoever makes the fix knows the failure is expected and what the test should become:
+Bugs found while writing a test are characterized, not fixed. The test asserts the current, incorrect behaviour and turns red when that behaviour is corrected. Its remarks state what turns it red, so that whoever makes the fix knows the failure is expected and knows what the test should become:
 
 ```csharp
 /// <summary>
@@ -197,20 +196,20 @@ Player.Api.Tests/
 /// <remarks>Turns red when the importer defers its writes to the save.</remarks>
 ```
 
-An issue number in a test comment is a handle into the findings list that accompanies this work; the test's own remarks are self-contained, so the number is a cross-reference rather than something you need to have read.
+An issue number in a test comment is a handle into the findings list that accompanies this work. The remarks of the test are self-contained, so the number is a cross-reference rather than required reading.
 
-**Prefer a real assertion over a substitute's call count.** The suite has a real database precisely so that "was it saved" can be answered by reading it back through `NewContext()` rather than by verifying that `SaveChangesAsync` was called.
+Prefer a real assertion over the call count of a substitute. The suite has a real database so that the question of whether something was saved can be answered by reading it back through `NewContext()`, rather than by verifying that `SaveChangesAsync` was called.
 
-## Things that have caught people out
+# Common mistakes
 
-- **`HostFor(user, configure)` honours `configure` only on the call that builds the host.** Later calls with the same principal return the cached host and silently ignore it. Configure on first use, or use a distinct principal.
-- **One host means one change tracker.** Several requests sent as the same user share a `PlayerContext`, which a sequence of production requests would not. Where identity-resolution or staleness matters, re-read through `NewContext()`.
-- **The SQLite fallback does enforce foreign keys.** The bundled `e_sqlite3` is compiled with `SQLITE_DEFAULT_FOREIGN_KEYS`, so "SQLite won't catch this" is not a reason to skip an assertion. `[RequiresPostgres]` is for casing, store-generated UUIDs, migrations and delete-graph ordering.
-- **The file layout does not always match the namespace.** `Features/Webhooks/Requests/Edit.cs` declares `namespace Player.Api.Features.Webhooks`, with no `.Requests` segment. Read the `namespace` line rather than inferring it from the path.
-- **Minimal-API parameter binding classifies every handler parameter at registration time.** Anything it cannot resolve as a service it infers as a body, which is rejected outright on a GET. That is why `EndpointHarness` registers substitutes for `IMediator` and `IIdentityResolver` before building.
+- `HostFor(user, configure)` honours `configure` only on the call that builds the host. Later calls with the same principal return the cached host and silently ignore it. Configure the host on first use, or use a distinct principal.
+- One host means one change tracker. Several requests sent as the same user share a `PlayerContext`, which a sequence of production requests would not. Where identity resolution or staleness matters, re-read through `NewContext()`.
+- The SQLite fallback does enforce foreign keys. The bundled `e_sqlite3` is compiled with `SQLITE_DEFAULT_FOREIGN_KEYS`, so the assumption that SQLite will not catch a violation is not a reason to skip an assertion. `[RequiresPostgres]` is for casing, store-generated UUIDs, migrations and delete-graph ordering.
+- The file layout does not always match the namespace. `Features/Webhooks/Requests/Edit.cs` declares `namespace Player.Api.Features.Webhooks`, with no `.Requests` segment. Read the `namespace` line rather than inferring it from the path.
+- Minimal-API parameter binding classifies every handler parameter at registration time. Anything it cannot resolve as a service is inferred as a body, which is rejected outright on a GET. This is why `EndpointHarness` registers substitutes for `IMediator` and `IIdentityResolver` before building.
 
-## Continuous integration
+# Continuous integration
 
-`.github/workflows/build-and-test.yml` restores, builds and runs the suite with coverage on every push and pull request. It is deliberately not scoped to a branch list: releasing is gated, but a regression should surface on the branch that introduced it rather than waiting for a pull request.
+`.github/workflows/build-and-test.yml` restores, builds and runs the suite with coverage on every push and pull request. It is not scoped to a branch list. Releasing is gated separately, and a regression should surface on the branch that introduced it rather than waiting for a pull request.
 
-The job sets `PLAYER_TESTS_REQUIRE_POSTGRES=true` and then independently greps the run's provider banner out of the log, so a run cannot pass having quietly used the SQLite fallback. Coverage is uploaded as a `coverage` artifact in cobertura form. There is no `services: postgres:` block, because Testcontainers starts and disposes the container itself.
+The job sets `PLAYER_TESTS_REQUIRE_POSTGRES=true` and then independently greps the provider banner of the run out of the log, so that a run cannot pass having quietly used the SQLite fallback. Coverage is uploaded as a `coverage` artifact in cobertura form. There is no `services: postgres:` block, because Testcontainers starts and disposes the container itself.
