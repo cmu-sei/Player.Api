@@ -1,0 +1,75 @@
+<!--
+  Central Package Management. Every PackageReference in the repository takes its version from this
+  file, so a package that two projects share cannot drift between them.
+
+  This exists because Player.Api.Tests approximates production's PostgreSQL with SQLite and so
+  references EF Core directly. Before this file, that reference carried its own version number and a
+  comment asking the next person to keep it in step with Player.Api by hand.
+-->
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!--
+      Fail the restore if a project overrides a central version with VersionOverride. Pinning one
+      project to a different version of a shared package is exactly the drift this file prevents.
+    -->
+    <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
+  </PropertyGroup>
+
+  <!-- Application and data access. -->
+  <ItemGroup>
+    <PackageVersion Include="AutoMapper" Version="13.0.1" /> <!-- DO NOT UPDATE. Version 15+ requires a license. Plan to migrate to something else. -->
+    <PackageVersion Include="MediatR" Version="12.4.1" /> <!-- DO NOT UPDATE. Version 13+ requires a license. Plan to migrate to something else. -->
+    <PackageVersion Include="Crucible.Common.EntityEvents" Version="0.2.0" />
+    <PackageVersion Include="Crucible.Common.ServiceDefaults" Version="0.0.2" />
+    <PackageVersion Include="IdentityServer4.AccessTokenValidation" Version="3.0.1" />
+    <PackageVersion Include="SharpZipLib" Version="1.4.2" />
+    <PackageVersion Include="TinCan" Version="1.3.0" />
+  </ItemGroup>
+
+  <!--
+    EF Core and its providers. Player.Api.Tests takes Microsoft.EntityFrameworkCore.Sqlite from the
+    same entries as the application, which is what keeps the SQLite fallback on the same EF patch as
+    production's PostgreSQL.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.1" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+  </ItemGroup>
+
+  <!-- ASP.NET Core, diagnostics and API surface. -->
+  <ItemGroup>
+    <PackageVersion Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
+    <PackageVersion Include="AspNetCore.HealthChecks.Sqlite" Version="9.0.0" />
+    <PackageVersion Include="AspNetCore.HealthChecks.SqlServer" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.0-rc.1.25458.5" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.0" />
+    <PackageVersion Include="Swashbuckle.AspNetCore.Annotations" Version="10.1.0" />
+  </ItemGroup>
+
+  <!-- The generated client, which targets netstandard2.0. -->
+  <ItemGroup>
+    <PackageVersion Include="System.ComponentModel.Annotations" Version="6.0.0-preview.4.21253.7" />
+    <PackageVersion Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <!-- Test-only. -->
+  <ItemGroup>
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageVersion Include="NSubstitute" Version="6.0.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+  </ItemGroup>
+
+</Project>
