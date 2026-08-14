@@ -13,7 +13,7 @@ namespace Player.Api.Tests.Services;
 /// column is the whole protocol: <c>Pending</c> is what the sender selects, <c>Processing</c> is a claim
 /// on a row, and a transient failure has to return the row to <c>Pending</c> or the statement is lost.
 /// </summary>
-public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class XApiQueueServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     private static readonly DateTime Noon = new(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc);
 
@@ -23,6 +23,12 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
     /// The queue stamps the row itself rather than trusting the caller, so a statement always arrives in
     /// the one state the sender looks for.
     /// </summary>
+    /// <remarks>
+    /// The stamp is asserted as an instant near now rather than by its <see cref="DateTimeKind"/>:
+    /// Npgsql returns <c>Utc</c> for a <c>timestamptz</c> and SQLite returns <c>Unspecified</c>, and
+    /// nothing in the queue re-applies the kind on read, so the kind is the provider's answer rather
+    /// than the application's.
+    /// </remarks>
     [Fact]
     public async Task EnqueueAsync_stores_the_statement_pending_and_unattempted()
     {
@@ -37,7 +43,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ApiTestBase(fixtur
         Assert.Equal(XApiQueueStatus.Pending, stored.Status);
         Assert.Equal(0, stored.RetryCount);
         Assert.NotEqual(Noon, stored.QueuedAt);
-        Assert.Equal(DateTimeKind.Utc, stored.QueuedAt.Kind);
+        Assert.Equal(DateTime.UtcNow, stored.QueuedAt, TimeSpan.FromMinutes(1));
     }
 
     [Fact]

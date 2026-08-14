@@ -125,7 +125,10 @@ public sealed class PostgresTestDatabase : ITestDatabase
     {
         public IMediator Mediator { get; } = mediator;
 
-        public PlayerContext CreateContext() => database.CreateContextFor(databaseName, services);
+        public PlayerContext CreateContext() => CreateContext(services);
+
+        public PlayerContext CreateContext(IServiceProvider provider) =>
+            database.CreateContextFor(databaseName, provider);
 
         public async ValueTask DisposeAsync() => await database.DropDatabaseAsync(databaseName);
     }

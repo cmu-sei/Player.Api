@@ -24,7 +24,8 @@ public sealed class RequiresPostgresAttribute : FactAttribute
         [CallerLineNumber] int sourceLineNumber = -1)
         : base(sourceFilePath, sourceLineNumber)
     {
-        Skip = "Requires PostgreSQL; the SQLite fallback is active because no usable Docker daemon was found.";
+        Skip = "Requires PostgreSQL; the SQLite fallback is active, either because no usable Docker "
+            + $"daemon was found or because {DatabaseFixture.ForceSqliteVariable} is set.";
         SkipUnless = nameof(DatabaseFixture.PostgresActive);
         SkipType = typeof(DatabaseFixture);
     }

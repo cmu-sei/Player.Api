@@ -61,4 +61,16 @@ public interface ITestDatabaseSession : IAsyncDisposable
     /// to re-read through a cold change tracker.
     /// </summary>
     PlayerContext CreateContext();
+
+    /// <summary>
+    /// Creates a context whose <c>ServiceProvider</c> is <paramref name="services"/>, so that
+    /// <see cref="PlayerContext.PublishEventsAsync"/> resolves the mediator out of it.
+    /// </summary>
+    /// <remarks>
+    /// This is how a request gets a context: <see cref="PlayerAppFactory"/> passes the request scope,
+    /// so entity events reach the application's real handlers rather than
+    /// <see cref="Mediator"/>. The parameterless overload passes the session's own provider, whose
+    /// mediator is a substitute a test can assert against.
+    /// </remarks>
+    PlayerContext CreateContext(IServiceProvider services);
 }

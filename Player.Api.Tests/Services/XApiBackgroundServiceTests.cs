@@ -24,7 +24,7 @@ namespace Player.Api.Tests.Services;
 /// <c>StopAsync</c>. <see cref="Configured"/> sets a processing delay long enough that the loop cannot
 /// come round a second time, which makes one start equal exactly one pass.
 /// </remarks>
-public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     private const string Endpoint = "https://lrs.test";
     private const string StatementsUri = $"{Endpoint}/statements";

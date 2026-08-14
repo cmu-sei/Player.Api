@@ -18,7 +18,7 @@ namespace Player.Api.Tests.Services;
 /// describing whether it worked, so the interesting behaviour is in what that reply says rather than in
 /// what it throws.
 /// </summary>
-public class NotificationServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     // ---- Reads ------------------------------------------------------------------------------------
 

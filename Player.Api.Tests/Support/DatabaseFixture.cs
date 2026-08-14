@@ -24,6 +24,18 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// </summary>
     public const string RequirePostgresVariable = "PLAYER_TESTS_REQUIRE_POSTGRES";
 
+    /// <summary>
+    /// Set this to take the SQLite path on a machine that has Docker, so the fallback can be exercised
+    /// deliberately rather than only by not having a daemon.
+    /// </summary>
+    /// <remarks>
+    /// The fallback is a supported way to run the suite, so it needs to be runnable by whoever changes
+    /// it. Testcontainers resolves its endpoint from several sources and a bogus <c>DOCKER_HOST</c> does
+    /// not reliably defeat the probe, which left the fallback verifiable only on a machine without
+    /// Docker — that is, not on the machines where it is maintained.
+    /// </remarks>
+    public const string ForceSqliteVariable = "PLAYER_TESTS_FORCE_SQLITE";
+
     private static TestDatabaseKind? _resolvedKind;
 
     private ITestDatabase _database = null!;
@@ -56,8 +68,12 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// </remarks>
     public static bool PostgresActive => _resolvedKind == TestDatabaseKind.PostgreSql;
 
-    public static bool PostgresRequired =>
-        Environment.GetEnvironmentVariable(RequirePostgresVariable)
+    public static bool PostgresRequired => IsSet(RequirePostgresVariable);
+
+    public static bool SqliteForced => IsSet(ForceSqliteVariable);
+
+    private static bool IsSet(string variable) =>
+        Environment.GetEnvironmentVariable(variable)
             ?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
 
     /// <summary>
@@ -80,6 +96,18 @@ public sealed class DatabaseFixture : IAsyncLifetime
     private static async Task<ITestDatabase> ResolveDatabaseAsync()
     {
         var requirePostgres = PostgresRequired;
+
+        if (SqliteForced)
+        {
+            if (requirePostgres)
+            {
+                throw new InvalidOperationException(
+                    $"{ForceSqliteVariable} and {RequirePostgresVariable} are both set, and they ask " +
+                    "for opposite things. Set one.");
+            }
+
+            return new SqliteTestDatabase();
+        }
 
         if (!DockerAvailable)
         {

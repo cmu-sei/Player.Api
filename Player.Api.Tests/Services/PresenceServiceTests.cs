@@ -16,7 +16,7 @@ namespace Player.Api.Tests.Services;
 /// behaviour under test is the interaction between that cache, the hub broadcasts, and the caller's
 /// primary team claim — which decides how much of the view they see.
 /// </summary>
-public class PresenceServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class PresenceServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     // ---- Adding a connection ----------------------------------------------------------------------
 

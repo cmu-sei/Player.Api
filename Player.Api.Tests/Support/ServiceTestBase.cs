@@ -1,0 +1,66 @@
+// Copyright 2026 Carnegie Mellon University. All Rights Reserved.
+// Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
+
+using System.Security.Claims;
+using Player.Api.Data.Data.Models;
+
+namespace Player.Api.Tests.Support;
+
+/// <summary>
+/// Base class for tests that resolve a service out of a container built for one principal.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A host is built per principal and reused, so services resolved as the same user share one container,
+/// one <see cref="DatabaseTestBase.Db"/> and one change tracker — which a sequence of production
+/// requests would not. Where that matters, re-read through <see cref="DatabaseTestBase.NewContext"/>.
+/// </para>
+/// <para>
+/// A test that sends a request belongs on <see cref="ApiTestBase"/> instead, which drives the
+/// application over HTTP so that the endpoint, the middleware and the claims transformer are the real
+/// ones. This class is for the tests that construct a service with per-test options.
+/// </para>
+/// </remarks>
+public abstract class ServiceTestBase(DatabaseFixture fixture) : DatabaseTestBase(fixture)
+{
+    private readonly Dictionary<ClaimsPrincipal, ApiTestHost> _hosts = [];
+
+    /// <summary>
+    /// A principal holding every system permission, for the tests that are about what a handler does
+    /// rather than who may call it. Authorization tests build a narrower principal.
+    /// </summary>
+    protected ClaimsPrincipal Root => _root ??= new ClaimsPrincipalBuilder()
+        .WithSystemPermissions(Enum.GetValues<SystemPermission>())
+        .Build();
+
+    private ClaimsPrincipal _root;
+
+    /// <summary>The host for <see cref="Root"/>, built on first use.</summary>
+    protected ApiTestHost RootHost => HostFor(Root);
+
+    /// <summary>
+    /// The host for <paramref name="user"/>. Repeated calls with the same principal return the same
+    /// host; <paramref name="configure"/> is honored only on the call that builds it.
+    /// </summary>
+    protected ApiTestHost HostFor(ClaimsPrincipal user, Action<ApiTestHostOptions> configure = null)
+    {
+        if (!_hosts.TryGetValue(user, out var host))
+        {
+            host = ApiTestHost.Create(Db, user, configure);
+            _hosts.Add(user, host);
+        }
+
+        return host;
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        // Before the base disposes Db, since a container tears down scoped services that hold it.
+        foreach (var host in _hosts.Values)
+        {
+            host.Dispose();
+        }
+
+        await base.DisposeAsync();
+    }
+}

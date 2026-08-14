@@ -19,9 +19,13 @@ namespace Player.Api.Tests.Support;
 /// </remarks>
 public abstract class DatabaseTestBase(DatabaseFixture fixture) : IAsyncLifetime
 {
-    private ITestDatabaseSession _session = null!;
-
     protected DatabaseFixture Fixture { get; } = fixture;
+
+    /// <summary>
+    /// The test's own database. Protected because <see cref="ApiTestBase"/> registers it with
+    /// <see cref="TestDatabaseScope"/>, which is how a request reaches it.
+    /// </summary>
+    protected ITestDatabaseSession Session { get; private set; } = null!;
 
     /// <summary>
     /// The running test's cancellation token. Passing it to awaited calls is what lets the runner
@@ -39,7 +43,7 @@ public abstract class DatabaseTestBase(DatabaseFixture fixture) : IAsyncLifetime
     /// The substituted mediator that <c>PlayerContext.PublishEventsAsync</c> resolves. Assert on it
     /// to verify published entity events.
     /// </summary>
-    protected IMediator Mediator => _session.Mediator;
+    protected IMediator Mediator => Session.Mediator;
 
     /// <summary>
     /// Creates an additional context over the same database, for re-reading through a cold change
@@ -50,7 +54,16 @@ public abstract class DatabaseTestBase(DatabaseFixture fixture) : IAsyncLifetime
     /// such as a scoped service registration. An undisposed context keeps its pooled connection checked
     /// out for the rest of the run, and one PostgreSQL server serves the whole suite.
     /// </remarks>
-    protected PlayerContext NewContext() => _session.CreateContext();
+    protected PlayerContext NewContext() => Session.CreateContext();
+
+    /// <summary>
+    /// Adds entities and saves. Returns nothing, so a test keeps using the references it already holds.
+    /// </summary>
+    protected async Task Seed(params object[] entities)
+    {
+        Db.AddRange(entities);
+        await Db.SaveChangesAsync(Ct);
+    }
 
     /// <summary>
     /// Polls until <paramref name="condition"/> holds, or fails the test naming
@@ -79,13 +92,13 @@ public abstract class DatabaseTestBase(DatabaseFixture fixture) : IAsyncLifetime
 
     public virtual async ValueTask InitializeAsync()
     {
-        _session = await Fixture.BeginSessionAsync();
+        Session = await Fixture.BeginSessionAsync();
         Db = NewContext();
     }
 
     public virtual async ValueTask DisposeAsync()
     {
         await Db.DisposeAsync();
-        await _session.DisposeAsync();
+        await Session.DisposeAsync();
     }
 }

@@ -18,7 +18,7 @@ namespace Player.Api.Tests.Services;
 /// each test runs against a real directory and asserts on the bytes as well as the rows — a pointer
 /// without a file, or a file no row points at, is the failure mode.
 /// </summary>
-public class FileServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     private readonly string _basePath =
         Path.Combine(Path.GetTempPath(), $"player-file-tests-{Guid.NewGuid():N}");
@@ -66,6 +66,28 @@ public class FileServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
             Assert.Equal(Path.Combine(_basePath, view.Id.ToString()), Path.GetDirectoryName(path));
             Assert.NotEqual("notes.txt", Path.GetFileName(path));
         });
+    }
+
+    /// <summary>
+    /// The generated name carries two dots before its extension: <c>GetNameToStore</c>
+    /// (<c>FileService.cs:352-358</c>) appends a separator to <c>Path.GetExtension</c>, which already
+    /// returns one. Harmless on disk, and pinned because the name is what an operator sees there.
+    /// </summary>
+    /// <remarks>Turns red when the extension is appended without the extra separator.</remarks>
+    [Fact]
+    public async Task UploadAsync_stores_the_file_with_two_dots_before_its_extension()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        await Service().UploadAsync(Form(view.Id, [team.Id], ("notes.txt", "one")), Ct);
+
+        using var db = NewContext();
+        var stored = Path.GetFileName(db.Files.Single().Path);
+
+        Assert.EndsWith("..txt", stored);
+        Assert.True(Guid.TryParse(stored[..^5], out _), $"'{stored}' does not start with a guid");
     }
 
     [Fact]

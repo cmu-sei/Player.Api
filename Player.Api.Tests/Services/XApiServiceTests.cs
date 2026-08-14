@@ -16,7 +16,7 @@ namespace Player.Api.Tests.Services;
 /// is fire-and-forget — the whole body sits inside a try/catch — so a failure here is silent, and what
 /// these tests pin is which paths produce a statement and what that statement says.
 /// </summary>
-public class XApiServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class XApiServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     private const string Issuer = "https://identity.test";
     private const string ApiUrl = "https://player.test/api";

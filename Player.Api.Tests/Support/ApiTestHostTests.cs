@@ -9,7 +9,7 @@ namespace Player.Api.Tests.Support;
 /// <summary>
 /// Guards <see cref="ApiTestHost"/> itself.
 /// </summary>
-public class ApiTestHostTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class ApiTestHostTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     /// <summary>
     /// Constructs every registered request handler and notification handler.

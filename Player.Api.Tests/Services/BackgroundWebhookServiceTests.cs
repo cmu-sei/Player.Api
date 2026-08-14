@@ -35,7 +35,7 @@ namespace Player.Api.Tests.Services;
 /// <see cref="DatabaseTestBase.Db"/> after the test ends.
 /// </para>
 /// </remarks>
-public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     private const string TokenUri = "https://identity.test/connect/token";
     private const string CallbackUri = "https://subscriber.test/hook";
@@ -164,7 +164,11 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ApiTestBas
         // One delivery, and an empty queue: the unmatched event neither reached a subscriber nor left a
         // row behind. An empty queue alone would prove nothing, since it is also empty before the wait.
         Assert.Single(_http.Sent, x => x.Uri == CallbackUri);
-        Assert.Equal(0, await PendingCount());
+
+        // Waited on rather than read. The delivered event's own row is removed after its send returns, so
+        // the count observed the moment the delivery appears can still include it. A row the unmatched
+        // event left would never be removed, since nothing delivers it, so waiting proves the same thing.
+        await WaitUntil(async () => await PendingCount() == 0, "the delivered event's row to be removed");
     }
 
     /// <summary>

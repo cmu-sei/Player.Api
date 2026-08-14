@@ -1,6 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
+using System.Collections.Concurrent;
 using System.Net;
 
 namespace Player.Api.Tests.Support;
@@ -9,14 +10,22 @@ namespace Player.Api.Tests.Support;
 /// Answers outbound requests from a fixed table, for handlers that fetch over HTTP.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The alternative is substituting <see cref="IHttpClientFactory"/> to return a substituted client,
 /// which cannot be done — <see cref="HttpClient"/> is a concrete class with no virtual
 /// <c>GetAsync</c>. Replacing the message handler is the supported seam.
+/// </para>
+/// <para>
+/// The tables are concurrent because one instance answers the whole HTTP suite
+/// (<c>PlayerAppFactory.OutboundHttp</c>): a test registers a url while another test's request is
+/// reading, and a plain <see cref="Dictionary{TKey, TValue}"/> read during a write is undefined rather
+/// than merely stale.
+/// </para>
 /// </remarks>
 public sealed class StubHttpMessageHandler : HttpMessageHandler
 {
-    private readonly Dictionary<string, (HttpStatusCode Status, byte[] Content, string ContentType)> _responses = [];
-    private readonly Dictionary<string, Exception> _failures = [];
+    private readonly ConcurrentDictionary<string, (HttpStatusCode Status, byte[] Content, string ContentType)> _responses = [];
+    private readonly ConcurrentDictionary<string, Exception> _failures = [];
     private readonly Lock _recording = new();
 
     private readonly List<string> _requests = [];

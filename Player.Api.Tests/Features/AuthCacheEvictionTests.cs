@@ -31,7 +31,7 @@ namespace Player.Api.Tests.Features;
 /// strings; only presence matters, and the handlers never look at the value.
 /// </para>
 /// </remarks>
-public class AuthCacheEvictionTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class AuthCacheEvictionTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
 

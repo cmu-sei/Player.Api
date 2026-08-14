@@ -1,53 +1,74 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
+using System.Net;
+using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data.Models;
 using Player.Api.Features.Users;
-using Player.Api.Infrastructure.Exceptions;
+using Player.Api.Hubs;
 using Player.Api.Tests.Support;
+using Player.Api.ViewModels;
 
 namespace Player.Api.Tests.Features.Users;
 
 /// <summary>
-/// Covers the <c>Users</c> feature's request handlers.
+/// Covers the <c>Users</c> feature over HTTP: the real routes, the real middleware, the real claims
+/// transformer, the real handlers, the real AutoMapper profiles, a real database.
 /// </summary>
-public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
+    : ApiTestBase(fixture, factory)
 {
     // ---- Create ---------------------------------------------------------------------------------
 
     [Fact]
     public async Task Create_persists_the_user_and_returns_it()
     {
-        var created = await SendAsync(new Create.Command { Id = Guid.NewGuid(), Name = "New Person" });
+        var id = Guid.NewGuid();
 
+        var response = await RootClient.PostAsJsonAsync("api/users", new { id, name = "New Person" }, Ct);
+
+        await AssertStatus(HttpStatusCode.Created, response);
+        var created = await ReadAsync<User>(response);
+
+        Assert.Equal(id, created.Id);
         Assert.Equal("New Person", created.Name);
+
+        // The only assertion in this file on the route name CreatedAtRoute resolves, which is what makes
+        // the Location header point at something a client can follow. The host is the test server's, so
+        // only the path is the endpoint's own doing.
+        Assert.Equal($"/api/users/{created.Id}", response.Headers.Location?.AbsolutePath);
 
         await using var db = NewContext();
         Assert.True(await db.Users.AnyAsync(x => x.Id == created.Id, Ct));
     }
 
+    /// <summary>
+    /// The role reaches the response as a name as well as an id, which the projection resolves by
+    /// navigation rather than from the request.
+    /// </summary>
     [Fact]
     public async Task Create_assigns_the_named_role()
     {
-        var role = await Db.Roles.AsNoTracking().FirstAsync(Ct);
+        var role = await Db.Roles.AsNoTracking()
+            .SingleAsync(x => x.Id == TestData.Roles.ContentDeveloper, Ct);
 
-        var created = await SendAsync(new Create.Command
-        {
-            Id = Guid.NewGuid(),
-            Name = "With a role",
-            RoleId = role.Id
-        });
+        var created = await ReadAsync<User>(await RootClient.PostAsJsonAsync(
+            "api/users",
+            new { id = Guid.NewGuid(), name = "With a role", roleId = role.Id },
+            Ct));
 
+        Assert.Equal(role.Id, created.RoleId);
         Assert.Equal(role.Name, created.RoleName);
     }
 
     [Fact]
     public async Task Create_is_forbidden_without_ManageUsers()
     {
-        await Assert.ThrowsAsync<ForbiddenException>(() => SendAsync(
-            ClaimsPrincipalBuilder.Anonymous(),
-            new Create.Command { Id = Guid.NewGuid(), Name = "Nope" }));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsJsonAsync(
+            "api/users", new { id = Guid.NewGuid(), name = "Nope" }, Ct));
     }
 
     // ---- Get / GetAll ---------------------------------------------------------------------------
@@ -58,45 +79,59 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User(name: "Findable");
         await Seed(user);
 
-        Assert.Equal("Findable", (await SendAsync(new Get.Query { Id = user.Id })).Name);
+        var got = await ReadAsync<User>(await RootClient.GetAsync($"api/users/{user.Id}", Ct));
+
+        Assert.Equal("Findable", got.Name);
     }
 
     [Fact]
     public async Task Get_reports_a_missing_user_as_not_found()
     {
-        await Assert.ThrowsAsync<EntityNotFoundException<User>>(
-            () => SendAsync(new Get.Query { Id = Guid.NewGuid() }));
+        await AssertProblem(
+            HttpStatusCode.NotFound,
+            await RootClient.GetAsync($"api/users/{Guid.NewGuid()}", Ct));
     }
 
+    /// <summary>
+    /// Callers may always ask about themselves: the identity check short-circuits before the permission
+    /// check, so an actor holding nothing still gets an answer.
+    /// </summary>
     [Fact]
     public async Task Get_is_allowed_for_the_caller_asking_about_themselves()
     {
-        var builder = new ClaimsPrincipalBuilder();
-        await Seed(TestData.User(builder.UserId, "Me"));
+        var actor = await Actor().WithName("Me").SeedAsync();
 
-        Assert.Equal("Me", (await SendAsync(builder.Build(), new Get.Query { Id = builder.UserId })).Name);
+        var got = await ReadAsync<User>(await Client(actor).GetAsync($"api/users/{actor.Id}", Ct));
+
+        Assert.Equal("Me", got.Name);
     }
 
     /// <summary>
     /// The fallback branch: a caller with no user-level permission may still read a user they share a
     /// team with, provided they hold <c>ViewTeam</c> on it.
     /// </summary>
+    /// <remarks>
+    /// Issue 22 is what decides this one in practice — the fallback's empty required-system-permission
+    /// array succeeds for every caller, so the <c>ViewTeam</c> grant is not load-bearing. It goes red
+    /// when the fallback stops consulting the target user's teams at all.
+    /// </remarks>
     [Fact]
     public async Task Get_is_allowed_for_a_caller_holding_ViewTeam_on_a_team_the_user_belongs_to()
     {
         var view = TestData.View();
-        var team = TestData.Team(view.Id);
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
         var subject = TestData.User(name: "Teammate");
         var viewMembership = TestData.ViewMembership(view.Id, subject.Id);
         await Seed(
-            view, team, subject, viewMembership,
+            view, role, team, subject, viewMembership,
             TestData.TeamMembership(team.Id, subject.Id, viewMembership.Id));
 
-        var caller = new ClaimsPrincipalBuilder()
-            .WithTeam(view.Id, team.Id, teamPermissions: [TeamPermission.ViewTeam])
-            .Build();
+        var actor = await Actor().OnTeam(team, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
-        Assert.Equal("Teammate", (await SendAsync(caller, new Get.Query { Id = subject.Id })).Name);
+        var got = await ReadAsync<User>(await Client(actor).GetAsync($"api/users/{subject.Id}", Ct));
+
+        Assert.Equal("Teammate", got.Name);
     }
 
     [Fact]
@@ -105,25 +140,34 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User();
         await Seed(user);
 
-        await Assert.ThrowsAsync<ForbiddenException>(
-            () => SendAsync(ClaimsPrincipalBuilder.Anonymous(), new Get.Query { Id = user.Id }));
+        var actor = await Actor().SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/users/{user.Id}", Ct));
     }
 
+    /// <summary>
+    /// Unfiltered by design: the permission is global, so every user row is returned — the caller's own
+    /// included, since the claims transformer has already written it.
+    /// </summary>
     [Fact]
     public async Task GetAll_returns_every_user()
     {
         await Seed(TestData.User(name: "One"), TestData.User(name: "Two"));
 
-        var users = await SendAsync(new GetAll.Query());
+        var users = await ReadAsync<User[]>(await RootClient.GetAsync("api/users", Ct));
 
-        Assert.Equal(2, users.Length);
+        Assert.Equal(3, users.Length);
+        Assert.Contains(users, x => x.Id == Root.Id);
     }
 
     [Fact]
     public async Task GetAll_is_forbidden_without_ViewUsers()
     {
-        await Assert.ThrowsAsync<ForbiddenException>(
-            () => SendAsync(ClaimsPrincipalBuilder.Anonymous(), new GetAll.Query()));
+        var actor = await Actor().SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/users", Ct));
     }
 
     // ---- GetByTeam / GetByView ------------------------------------------------------------------
@@ -143,7 +187,7 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
             TestData.TeamMembership(team.Id, member.Id, memberView.Id),
             TestData.TeamMembership(other.Id, stranger.Id, strangerView.Id));
 
-        var users = await SendAsync(new GetByTeam.Query { TeamId = team.Id });
+        var users = await ReadAsync<User[]>(await RootClient.GetAsync($"api/teams/{team.Id}/users", Ct));
 
         Assert.Equal("Member", Assert.Single(users).Name);
     }
@@ -151,8 +195,9 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
     [Fact]
     public async Task GetByTeam_reports_a_missing_team_as_not_found()
     {
-        await Assert.ThrowsAsync<EntityNotFoundException<Player.Api.Features.Teams.Team>>(
-            () => SendAsync(new GetByTeam.Query { TeamId = Guid.NewGuid() }));
+        await AssertProblem(
+            HttpStatusCode.NotFound,
+            await RootClient.GetAsync($"api/teams/{Guid.NewGuid()}/users", Ct));
     }
 
     [Fact]
@@ -167,7 +212,7 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
             TestData.ViewMembership(view.Id, member.Id),
             TestData.ViewMembership(other.Id, stranger.Id));
 
-        var users = await SendAsync(new GetByView.Query { ViewId = view.Id });
+        var users = await ReadAsync<User[]>(await RootClient.GetAsync($"api/views/{view.Id}/users", Ct));
 
         Assert.Equal("Member", Assert.Single(users).Name);
     }
@@ -175,8 +220,9 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
     [Fact]
     public async Task GetByView_reports_a_missing_view_as_not_found()
     {
-        await Assert.ThrowsAsync<EntityNotFoundException<Player.Api.Features.Views.View>>(
-            () => SendAsync(new GetByView.Query { ViewId = Guid.NewGuid() }));
+        await AssertProblem(
+            HttpStatusCode.NotFound,
+            await RootClient.GetAsync($"api/views/{Guid.NewGuid()}/users", Ct));
     }
 
     // ---- Edit -----------------------------------------------------------------------------------
@@ -187,14 +233,20 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User(name: "Before");
         await Seed(user);
 
-        Assert.Equal("After", (await SendAsync(new Edit.Command { Id = user.Id, Name = "After" })).Name);
+        var edited = await ReadAsync<User>(await RootClient.PutAsJsonAsync(
+            $"api/users/{user.Id}", new { name = "After" }, Ct));
+
+        Assert.Equal("After", edited.Name);
+
+        await using var db = NewContext();
+        Assert.Equal("After", (await db.Users.SingleAsync(x => x.Id == user.Id, Ct)).Name);
     }
 
     [Fact]
     public async Task Edit_reports_a_missing_user_as_not_found()
     {
-        await Assert.ThrowsAsync<EntityNotFoundException<User>>(
-            () => SendAsync(new Edit.Command { Id = Guid.NewGuid(), Name = "Ghost" }));
+        await AssertProblem(HttpStatusCode.NotFound, await RootClient.PutAsJsonAsync(
+            $"api/users/{Guid.NewGuid()}", new { name = "Ghost" }, Ct));
     }
 
     [Fact]
@@ -203,9 +255,10 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User();
         await Seed(user);
 
-        await Assert.ThrowsAsync<ForbiddenException>(() => SendAsync(
-            ClaimsPrincipalBuilder.Anonymous(),
-            new Edit.Command { Id = user.Id, Name = "Nope" }));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/users/{user.Id}", new { name = "Nope" }, Ct));
     }
 
     // ---- Delete ---------------------------------------------------------------------------------
@@ -216,29 +269,37 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User();
         await Seed(user);
 
-        await SendAsync(new Delete.Command { Id = user.Id });
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await RootClient.DeleteAsync($"api/users/{user.Id}", Ct));
 
         await using var db = NewContext();
         Assert.False(await db.Users.AnyAsync(x => x.Id == user.Id, Ct));
     }
 
     /// <summary>
-    /// Refused before the lookup, so it holds even for a caller with no user row.
+    /// Refused by identity rather than by permission, and before the lookup: <c>Root</c> holds every
+    /// system permission and still cannot delete itself.
     /// </summary>
     [Fact]
     public async Task Delete_refuses_to_delete_the_caller_own_account()
     {
-        var exception = await Assert.ThrowsAsync<ForbiddenException>(
-            () => SendAsync(new Delete.Command { Id = RootHost.UserId }));
+        var problem = await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await RootClient.DeleteAsync($"api/users/{Root.Id}", Ct));
 
-        Assert.Contains("your own account", exception.Message);
+        Assert.Contains("your own account", problem.Title);
+
+        await using var db = NewContext();
+        Assert.True(await db.Users.AnyAsync(x => x.Id == Root.Id, Ct));
     }
 
     [Fact]
     public async Task Delete_reports_a_missing_user_as_not_found()
     {
-        await Assert.ThrowsAsync<EntityNotFoundException<User>>(
-            () => SendAsync(new Delete.Command { Id = Guid.NewGuid() }));
+        await AssertProblem(
+            HttpStatusCode.NotFound,
+            await RootClient.DeleteAsync($"api/users/{Guid.NewGuid()}", Ct));
     }
 
     [Fact]
@@ -247,8 +308,11 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User();
         await Seed(user);
 
-        await Assert.ThrowsAsync<ForbiddenException>(
-            () => SendAsync(ClaimsPrincipalBuilder.Anonymous(), new Delete.Command { Id = user.Id }));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).DeleteAsync($"api/users/{user.Id}", Ct));
     }
 
     // ---- AddToTeam ------------------------------------------------------------------------------
@@ -265,7 +329,7 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User();
         await Seed(view, team, user);
 
-        await SendAsync(new AddToTeam.Command { TeamId = team.Id, UserId = user.Id });
+        await AssertStatus(HttpStatusCode.OK, await AddToTeam(RootClient, team.Id, user.Id));
 
         await using var db = NewContext();
         var viewMembership = await db.ViewMemberships.SingleAsync(x => x.UserId == user.Id, Ct);
@@ -291,7 +355,7 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         viewMembership.PrimaryTeamMembershipId = firstMembership.Id;
         await Db.SaveChangesAsync(Ct);
 
-        await SendAsync(new AddToTeam.Command { TeamId = second.Id, UserId = user.Id });
+        await AssertStatus(HttpStatusCode.OK, await AddToTeam(RootClient, second.Id, user.Id));
 
         await using var db = NewContext();
         Assert.Single(await db.ViewMemberships.Where(x => x.UserId == user.Id).ToListAsync(Ct));
@@ -307,8 +371,9 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User();
         await Seed(user);
 
-        await Assert.ThrowsAsync<EntityNotFoundException<Player.Api.Features.Teams.Team>>(
-            () => SendAsync(new AddToTeam.Command { TeamId = Guid.NewGuid(), UserId = user.Id }));
+        await AssertProblem(
+            HttpStatusCode.NotFound,
+            await AddToTeam(RootClient, Guid.NewGuid(), user.Id));
     }
 
     [Fact]
@@ -318,25 +383,25 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var team = TestData.Team(view.Id);
         await Seed(view, team);
 
-        await Assert.ThrowsAsync<EntityNotFoundException<User>>(
-            () => SendAsync(new AddToTeam.Command { TeamId = team.Id, UserId = Guid.NewGuid() }));
+        await AssertProblem(
+            HttpStatusCode.NotFound,
+            await AddToTeam(RootClient, team.Id, Guid.NewGuid()));
     }
 
     [Fact]
     public async Task AddToTeam_is_forbidden_without_ManageTeam()
     {
         var view = TestData.View();
-        var team = TestData.Team(view.Id);
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
         var user = TestData.User();
-        await Seed(view, team, user);
+        await Seed(view, role, team, user);
 
-        var caller = new ClaimsPrincipalBuilder()
-            .WithTeam(view.Id, team.Id, teamPermissions: [TeamPermission.ViewTeam])
-            .Build();
+        var actor = await Actor().OnTeam(team, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
-        await Assert.ThrowsAsync<ForbiddenException>(() => SendAsync(
-            caller,
-            new AddToTeam.Command { TeamId = team.Id, UserId = user.Id }));
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await AddToTeam(Client(actor), team.Id, user.Id));
     }
 
     // ---- RemoveFromTeam -------------------------------------------------------------------------
@@ -357,7 +422,9 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         viewMembership.PrimaryTeamMembershipId = teamMembership.Id;
         await Db.SaveChangesAsync(Ct);
 
-        await SendAsync(new RemoveFromTeam.Command { TeamId = team.Id, UserId = user.Id });
+        await AssertStatus(
+            HttpStatusCode.OK,
+            await RootClient.DeleteAsync($"api/teams/{team.Id}/users/{user.Id}", Ct));
 
         await using var db = NewContext();
         Assert.False(await db.TeamMemberships.AnyAsync(x => x.UserId == user.Id, Ct));
@@ -382,7 +449,9 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         viewMembership.PrimaryTeamMembershipId = primaryMembership.Id;
         await Db.SaveChangesAsync(Ct);
 
-        await SendAsync(new RemoveFromTeam.Command { TeamId = primary.Id, UserId = user.Id });
+        await AssertStatus(
+            HttpStatusCode.OK,
+            await RootClient.DeleteAsync($"api/teams/{primary.Id}/users/{user.Id}", Ct));
 
         await using var db = NewContext();
         Assert.Equal(
@@ -408,7 +477,9 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         viewMembership.PrimaryTeamMembershipId = primaryMembership.Id;
         await Db.SaveChangesAsync(Ct);
 
-        await SendAsync(new RemoveFromTeam.Command { TeamId = secondary.Id, UserId = user.Id });
+        await AssertStatus(
+            HttpStatusCode.OK,
+            await RootClient.DeleteAsync($"api/teams/{secondary.Id}/users/{user.Id}", Ct));
 
         await using var db = NewContext();
         Assert.Equal(
@@ -427,7 +498,9 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User();
         await Seed(view, team, user);
 
-        await SendAsync(new RemoveFromTeam.Command { TeamId = team.Id, UserId = user.Id });
+        await AssertStatus(
+            HttpStatusCode.OK,
+            await RootClient.DeleteAsync($"api/teams/{team.Id}/users/{user.Id}", Ct));
 
         await using var db = NewContext();
         Assert.False(await db.TeamMemberships.AnyAsync(Ct));
@@ -439,8 +512,9 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User();
         await Seed(user);
 
-        await Assert.ThrowsAsync<EntityNotFoundException<Player.Api.Features.Teams.Team>>(
-            () => SendAsync(new RemoveFromTeam.Command { TeamId = Guid.NewGuid(), UserId = user.Id }));
+        await AssertProblem(
+            HttpStatusCode.NotFound,
+            await RootClient.DeleteAsync($"api/teams/{Guid.NewGuid()}/users/{user.Id}", Ct));
     }
 
     [Fact]
@@ -450,8 +524,9 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var team = TestData.Team(view.Id);
         await Seed(view, team);
 
-        await Assert.ThrowsAsync<EntityNotFoundException<User>>(
-            () => SendAsync(new RemoveFromTeam.Command { TeamId = team.Id, UserId = Guid.NewGuid() }));
+        await AssertProblem(
+            HttpStatusCode.NotFound,
+            await RootClient.DeleteAsync($"api/teams/{team.Id}/users/{Guid.NewGuid()}", Ct));
     }
 
     // ---- SendNotification -----------------------------------------------------------------------
@@ -463,24 +538,33 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User();
         await Seed(view, user, TestData.ViewMembership(view.Id, user.Id));
 
-        var result = await SendAsync(new SendNotification.Command
-        {
-            ViewId = view.Id,
-            UserId = user.Id,
-            Subject = "For you",
-            Text = "Something happened"
-        });
+        var result = await ReadAsync<string>(await RootClient.PostAsJsonAsync(
+            $"api/views/{view.Id}/users/{user.Id}/notifications",
+            new { subject = "For you", text = "Something happened" },
+            Ct));
 
         Assert.Contains(user.Id.ToString(), result);
 
         await using var db = NewContext();
         var notification = await db.Notifications.SingleAsync(Ct);
+        Assert.Equal("Something happened", notification.Text);
         Assert.Equal(user.Id, notification.ToId);
         Assert.Equal(NotificationType.User, notification.ToType);
+        Assert.Equal(Root.Id, notification.FromId);
 
-        RootHost.UserHub.Clients.Received().Group($"{view.Id}_{user.Id}");
+        // The recorder is shared by the whole run, so the assertion reads this pair's group — a name no
+        // other test uses — rather than everything that was broadcast.
+        var broadcast = Assert.Single(UserBroadcasts(view.Id, user.Id));
+
+        Assert.Equal("Reply", broadcast.Method);
+        Assert.Equal("Something happened", Assert.IsType<Notification>(broadcast.Argument).Text);
     }
 
+    /// <summary>
+    /// Rejected before anything is persisted, which is right — but <c>ArgumentException</c> is not an
+    /// <c>IApiException</c>, so the caller's own mistake is answered with a 500. Issue 50: wrong.
+    /// </summary>
+    /// <remarks>Turns red when the handler throws something that maps to a client error.</remarks>
     [Fact]
     public async Task SendNotification_rejects_a_notification_with_no_text()
     {
@@ -488,32 +572,62 @@ public class UserRequestTests(DatabaseFixture fixture) : ApiTestBase(fixture)
         var user = TestData.User();
         await Seed(view, user, TestData.ViewMembership(view.Id, user.Id));
 
-        await Assert.ThrowsAsync<ArgumentException>(() => SendAsync(new SendNotification.Command
-        {
-            ViewId = view.Id,
-            UserId = user.Id,
-            Subject = "No body"
-        }));
+        var problem = await AssertProblem(
+            HttpStatusCode.InternalServerError,
+            await RootClient.PostAsJsonAsync(
+                $"api/views/{view.Id}/users/{user.Id}/notifications", new { subject = "No body" }, Ct));
+
+        Assert.Equal("A server error occurred.", problem.Title);
+        Assert.Equal($"Message was NOT sent to user {user.Id} in view {view.Id}", problem.Detail);
+
+        await using var db = NewContext();
+        Assert.False(await db.Notifications.AnyAsync(Ct));
     }
 
     /// <summary>
-    /// Characterizes current behaviour, which is not the intended one. This handler authorizes against
-    /// <c>UserEntity</c>, a type <c>AuthorizationService.GetResourceResult</c> does not handle, so every
-    /// caller without <c>ManageViews</c> — including the view administrators the call's
-    /// <c>ManageView</c> argument was written for — gets a <c>NotImplementedException</c> rather than a
-    /// decision.
+    /// This handler authorizes against <c>UserEntity</c>, which
+    /// <c>AuthorizationService.GetResourceResult</c> does not handle, so every caller without
+    /// <c>ManageViews</c> gets a 500 rather than a decision. Issue 19: wrong — the view administrators
+    /// the call's <c>ManageView</c> argument was written for are refused along with everyone else.
     /// </summary>
+    /// <remarks>
+    /// Turns red when <c>GetResourceResult</c> learns <c>UserEntity</c>, or the call passes a type it
+    /// already knows. The <c>detail</c> is asserted because it is what proves the 500 came from the
+    /// unhandled type and not from somewhere else in the request.
+    /// </remarks>
     [Fact]
-    public async Task SendNotification_throws_for_a_caller_without_ManageViews()
+    public async Task SendNotification_is_a_server_error_for_a_caller_without_ManageViews()
     {
         var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
         var user = TestData.User();
-        await Seed(view, user, TestData.ViewMembership(view.Id, user.Id));
+        await Seed(view, role, team, user, TestData.ViewMembership(view.Id, user.Id));
 
-        var exception = await Assert.ThrowsAsync<NotImplementedException>(() => SendAsync(
-            ClaimsPrincipalBuilder.Anonymous(),
-            new SendNotification.Command { ViewId = view.Id, UserId = user.Id, Text = "Nope" }));
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
 
-        Assert.Contains("UserEntity", exception.Message);
+        var problem = await AssertProblem(
+            HttpStatusCode.InternalServerError,
+            await Client(actor).PostAsJsonAsync(
+                $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Nope" }, Ct));
+
+        Assert.Equal("A server error occurred.", problem.Title);
+        Assert.Equal("Handler for type UserEntity is not implemented.", problem.Detail);
     }
+
+    // ---- Helpers --------------------------------------------------------------------------------
+
+    /// <summary>
+    /// What the user notification handler broadcast to a user's group, which names the view as well —
+    /// the same user in two views is two audiences.
+    /// </summary>
+    private IReadOnlyList<HubBroadcast> UserBroadcasts(Guid viewId, Guid userId) =>
+        Factory.Hub<UserHub>().ToGroup($"{viewId}_{userId}");
+
+    /// <summary>
+    /// <c>POST teams/{teamId}/users/{userId}</c>, which carries no body — both members of its command
+    /// come from the route, and the endpoint binds nothing else.
+    /// </summary>
+    private static Task<HttpResponseMessage> AddToTeam(HttpClient client, Guid teamId, Guid userId) =>
+        client.PostAsync($"api/teams/{teamId}/users/{userId}", content: null, Ct);
 }

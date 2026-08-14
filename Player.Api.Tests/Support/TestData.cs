@@ -87,6 +87,34 @@ public static class TestData
         };
 
     /// <summary>
+    /// A system role granting nothing. Add <see cref="RolePermissionEntity"/> rows, or set
+    /// <paramref name="allPermissions"/>, to make it grant something.
+    /// </summary>
+    /// <remarks>
+    /// The default name carries a Guid because role names are unique and the seeded
+    /// <c>Administrator</c> and <c>Content Developer</c> rows are already there.
+    /// </remarks>
+    public static RoleEntity Role(string name = null, bool allPermissions = false) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = name ?? $"Test Role {Guid.NewGuid():N}",
+            AllPermissions = allPermissions
+        };
+
+    /// <summary>
+    /// A team role granting nothing, for the team that must grant its members no permissions —
+    /// <see cref="Team"/> defaults to the seeded <c>View Member</c> role, which grants four.
+    /// </summary>
+    public static TeamRoleEntity TeamRole(string name = null, bool allPermissions = false) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = name ?? $"Test Team Role {Guid.NewGuid():N}",
+            AllPermissions = allPermissions
+        };
+
+    /// <summary>
     /// A user. <see cref="UserEntity.Key"/> is an <c>int</c> identity column and is left unset so
     /// the store assigns it; <see cref="UserEntity.Id"/> is the Guid the rest of the domain keys off.
     /// </summary>

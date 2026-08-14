@@ -4,14 +4,12 @@
 using System.Security.Claims;
 using System.Security.Principal;
 using AutoMapper;
-using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Player.Api.Data.Data;
-using Player.Api.Extensions;
 using Player.Api.Hubs;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Options;
@@ -22,21 +20,21 @@ using XApiOptions = Player.Api.Infrastructure.Options.XApiOptions;
 namespace Player.Api.Tests.Support;
 
 /// <summary>
-/// The application's request pipeline without the web host: real MediatR, real handlers, real
-/// services, real AutoMapper profiles and the real authorization stack, over one test's database and
-/// acting as one test's user.
+/// The application's services without the web host: real services, real AutoMapper profiles and the
+/// real authorization stack, over one test's database and acting as one test's user. Resolve something
+/// out of it and call the service directly.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Handlers are resolved from a container, not constructed by hand: there are ninety, and hand-wiring
-/// would mean ninety call sites to update per added dependency, each one a chance to pass a substitute
-/// where production passes the real thing.
+/// This is not how a request is tested — <see cref="ApiTestBase"/> is, over HTTP. What is left here is
+/// the case that has no request to send: constructing a service with options a test chose, which
+/// configuration supplies for the whole run in the hosted application.
 /// </para>
 /// <para>
-/// The registrations mirror <c>Startup.ConfigureServices</c>. Only out-of-process collaborators are
-/// substituted — the hub contexts, the webhook queue, <see cref="IHttpClientFactory"/>.
-/// <see cref="ApiTestHostTests"/> asserts every handler can be constructed, so a new production
-/// dependency fails one test by name instead of whichever test happened to touch that handler.
+/// The registrations mirror <c>Startup.ConfigureServices</c>, MediatR included, which is what lets
+/// <see cref="ApiTestHostTests"/> construct every handler in the assembly. A production dependency the
+/// container does not register then fails one test by name — including for the handlers no test sends a
+/// request to yet.
 /// </para>
 /// <para>
 /// Everything shares one <see cref="PlayerContext"/>, as a request does. Its <c>ServiceProvider</c>
@@ -49,28 +47,10 @@ public sealed class ApiTestHost : IDisposable
 {
     private readonly ServiceProvider _services;
 
-    private ApiTestHost(ServiceProvider services, ClaimsPrincipal user)
-    {
-        _services = services;
-        User = user;
-    }
-
-    /// <summary>The principal every resolved service acts as.</summary>
-    public ClaimsPrincipal User { get; }
-
-    public Guid UserId => User.GetId();
-
-    public IMediator Mediator => Resolve<IMediator>();
+    private ApiTestHost(ServiceProvider services) => _services = services;
 
     /// <summary>The substituted view hub, for asserting on broadcast notifications.</summary>
     public IHubContext<ViewHub> ViewHub => Resolve<IHubContext<ViewHub>>();
-
-    public IHubContext<TeamHub> TeamHub => Resolve<IHubContext<TeamHub>>();
-
-    public IHubContext<UserHub> UserHub => Resolve<IHubContext<UserHub>>();
-
-    /// <summary>The substituted webhook queue, which stands in for the background sender.</summary>
-    public IBackgroundWebhookService Webhooks => Resolve<IBackgroundWebhookService>();
 
     public T Resolve<T>() where T : notnull => _services.GetRequiredService<T>();
 
@@ -109,7 +89,7 @@ public sealed class ApiTestHost : IDisposable
         AddSubstitutedCollaborators(services);
         AddAuthorization(services);
 
-        return new ApiTestHost(services.BuildServiceProvider(), user);
+        return new ApiTestHost(services.BuildServiceProvider());
     }
 
     public void Dispose() => _services.Dispose();
@@ -235,8 +215,8 @@ public sealed class ApiTestHost : IDisposable
 public sealed class ApiTestHostOptions
 {
     /// <summary>
-    /// Names seeded roles: a create-team request with no role looks up <c>DefaultTeamRole</c> and fails
-    /// if it does not resolve.
+    /// Names seeded roles. <c>DefaultTeamRole</c> has to resolve to a seeded row, or a service that
+    /// falls back to it fails.
     /// </summary>
     public RoleOptions Roles { get; } = new()
     {

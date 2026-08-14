@@ -22,7 +22,7 @@ namespace Player.Api.Tests.Infrastructure.Extensions;
 /// <c>InitializeDatabase</c> seeds. Seeding is how a deployment arrives with its roles, users and views
 /// already in place, and it runs against a database that may already hold them.
 /// </summary>
-public class DatabaseExtensionsTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     // ---- Provider selection ---------------------------------------------------------------------
 

@@ -17,7 +17,7 @@ namespace Player.Api.Tests.Services;
 /// produces is the input to <c>SystemPermissionsHandler</c> and <c>TeamPermissionsHandler</c>, so a
 /// permission that never becomes a claim here can never be granted.
 /// </summary>
-public class UserClaimsServiceTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     // ---- Membership claims ------------------------------------------------------------------------
 

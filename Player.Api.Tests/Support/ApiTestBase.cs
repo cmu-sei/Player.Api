@@ -1,86 +1,184 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-using System.Security.Claims;
-using MediatR;
-using Player.Api.Data.Data.Models;
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Player.Api.Tests.Support;
 
 /// <summary>
-/// Base class for tests that drive the real request handlers, over a real database, through MediatR.
+/// Base class for tests that drive the application over HTTP: the real routes, the real middleware, the
+/// real claims transformer, the real handlers, over a database no other test can see.
 /// </summary>
 /// <remarks>
-/// A host is built per principal and reused, so several requests as the same user share one container,
-/// one <see cref="DatabaseTestBase.Db"/> and one change tracker — which a sequence of production
-/// requests would not. Where that matters, re-read through <see cref="DatabaseTestBase.NewContext"/>.
+/// <para>
+/// One host serves the whole run (<see cref="PlayerAppFactory"/>) and each test owns one database
+/// (<see cref="DatabaseTestBase.Session"/>). The two are joined by a session id this class registers
+/// with <see cref="TestDatabaseScope"/> and puts on every request its clients send.
+/// </para>
+/// <para>
+/// A request runs in its own scope with its own <c>PlayerContext</c>, so what a test reads through
+/// <see cref="DatabaseTestBase.Db"/> after acting comes from a change tracker that never saw the write.
+/// Re-read through <see cref="DatabaseTestBase.NewContext"/> when asserting on what was stored.
+/// </para>
+/// <para>
+/// The fixtures arrive by constructor injection from the <c>[assembly: AssemblyFixture(...)]</c>
+/// declarations in <c>AssemblyFixtures.cs</c>. Derived classes forward both:
+/// <c>MyTests(DatabaseFixture fixture, PlayerAppFactory factory) : ApiTestBase(fixture, factory)</c>.
+/// </para>
 /// </remarks>
-public abstract class ApiTestBase(DatabaseFixture fixture) : DatabaseTestBase(fixture)
+public abstract class ApiTestBase(DatabaseFixture fixture, PlayerAppFactory factory)
+    : DatabaseTestBase(fixture)
 {
-    private readonly Dictionary<ClaimsPrincipal, ApiTestHost> _hosts = [];
-
     /// <summary>
-    /// A principal holding every system permission, for the tests that are about what a handler does
-    /// rather than who may call it. Authorization tests build a narrower principal.
+    /// What the minimal-API endpoints serialize with: web defaults plus the string enum converter
+    /// <c>Startup</c> adds to <c>JsonOptions</c>. A DTO's enums are names on the wire, not numbers.
     /// </summary>
-    protected ClaimsPrincipal Root => _root ??= new ClaimsPrincipalBuilder()
-        .WithSystemPermissions(Enum.GetValues<SystemPermission>())
-        .Build();
-
-    private ClaimsPrincipal _root;
-
-    /// <summary>The host for <see cref="Root"/>, built on first use.</summary>
-    protected ApiTestHost RootHost => HostFor(Root);
-
-    /// <summary>
-    /// The host for <paramref name="user"/>. Repeated calls with the same principal return the same
-    /// host; <paramref name="configure"/> is honored only on the call that builds it.
-    /// </summary>
-    protected ApiTestHost HostFor(ClaimsPrincipal user, Action<ApiTestHostOptions> configure = null)
+    private static readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web)
     {
-        if (!_hosts.TryGetValue(user, out var host))
+        Converters = { new JsonStringEnumConverter() }
+    };
+
+    private readonly Dictionary<Guid, HttpClient> _clients = [];
+    private readonly Guid _sessionId = Guid.NewGuid();
+    private HttpClient _unauthenticated;
+
+    protected PlayerAppFactory Factory { get; } = factory;
+
+    /// <summary>
+    /// An actor holding every system permission, for the tests that are about what an endpoint does
+    /// rather than who may call it. Seeded before each test, so every test has this one user row.
+    /// </summary>
+    protected TestActor Root { get; private set; } = null!;
+
+    /// <summary>A client that acts as <see cref="Root"/>.</summary>
+    protected HttpClient RootClient => Client(Root);
+
+    /// <summary>
+    /// Starts describing an actor to seed. <c>await Actor().WithSystemPermissions(...).SeedAsync()</c>.
+    /// </summary>
+    protected TestActorBuilder Actor() => new(Db, Ct);
+
+    /// <summary>
+    /// A client that acts as <paramref name="actor"/>. Cached, so repeated calls share one client and
+    /// its headers.
+    /// </summary>
+    protected HttpClient Client(TestActor actor)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+
+        if (!_clients.TryGetValue(actor.Id, out var client))
         {
-            host = ApiTestHost.Create(Db, user, configure);
-            _hosts.Add(user, host);
+            client = CreateClient();
+            client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, actor.Id.ToString());
+            client.DefaultRequestHeaders.Add(TestAuthHandler.NameHeader, actor.Name);
+            _clients.Add(actor.Id, client);
         }
 
-        return host;
+        return client;
     }
 
-    /// <summary>Sends a request as <see cref="Root"/>.</summary>
-    protected Task<TResponse> SendAsync<TResponse>(IRequest<TResponse> request) =>
-        RootHost.Mediator.Send(request, Ct);
-
-    /// <summary>Sends a request as <paramref name="user"/>.</summary>
-    protected Task<TResponse> SendAsync<TResponse>(ClaimsPrincipal user, IRequest<TResponse> request) =>
-        HostFor(user).Mediator.Send(request, Ct);
+    /// <summary>
+    /// A client carrying no identity, whose requests to an <c>/api/</c> route are answered with 401.
+    /// </summary>
+    protected HttpClient Client() => _unauthenticated ??= CreateClient();
 
     /// <summary>
-    /// Sends a request with no response as <see cref="Root"/>. Separate overloads because MediatR's
-    /// <c>IRequest</c> and <c>IRequest&lt;T&gt;</c> are unrelated interfaces.
+    /// Asserts <paramref name="response"/> succeeded and returns its body. The failure message carries
+    /// the status and the body, which is where a 500's detail is.
     /// </summary>
-    protected Task SendAsync(IRequest request) => RootHost.Mediator.Send(request, Ct);
-
-    /// <summary>Sends a request with no response as <paramref name="user"/>.</summary>
-    protected Task SendAsync(ClaimsPrincipal user, IRequest request) =>
-        HostFor(user).Mediator.Send(request, Ct);
-
-    /// <summary>
-    /// Adds entities and saves. Returns nothing, so a test keeps using the references it already holds.
-    /// </summary>
-    protected async Task Seed(params object[] entities)
+    protected static async Task<TValue> ReadAsync<TValue>(HttpResponseMessage response)
     {
-        Db.AddRange(entities);
-        await Db.SaveChangesAsync(Ct);
+        await AssertSuccess(response);
+
+        return await response.Content.ReadFromJsonAsync<TValue>(_json, Ct);
+    }
+
+    /// <summary>
+    /// Asserts the response status, naming the body when it is not the expected one.
+    /// </summary>
+    protected static async Task AssertStatus(HttpStatusCode expected, HttpResponseMessage response)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+
+        if (response.StatusCode != expected)
+        {
+            Assert.Fail(
+                $"Expected {(int)expected} {expected} from {Describe(response)}, got " +
+                $"{(int)response.StatusCode} {response.StatusCode}: {await Body(response)}");
+        }
+    }
+
+    /// <summary>
+    /// Asserts the response is a <c>ProblemDetails</c> with <paramref name="expected"/> as its status,
+    /// which is the shape <c>ExceptionMiddleware</c> answers a handled exception with, and returns it —
+    /// a 500's <c>Detail</c> is the exception message, which is what says which failure was reached.
+    /// </summary>
+    protected static async Task<ProblemDetails> AssertProblem(
+        HttpStatusCode expected,
+        HttpResponseMessage response)
+    {
+        await AssertStatus(expected, response);
+
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        return await response.Content.ReadFromJsonAsync<ProblemDetails>(_json, Ct);
+    }
+
+    private static async Task AssertSuccess(HttpResponseMessage response)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            Assert.Fail(
+                $"Expected success from {Describe(response)}, got {(int)response.StatusCode} " +
+                $"{response.StatusCode}: {await Body(response)}");
+        }
+    }
+
+    private static string Describe(HttpResponseMessage response) =>
+        $"{response.RequestMessage?.Method} {response.RequestMessage?.RequestUri?.PathAndQuery}";
+
+    private static async Task<string> Body(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync(Ct);
+
+        return string.IsNullOrWhiteSpace(body) ? "(empty body)" : body;
+    }
+
+    private HttpClient CreateClient()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Add(TestDatabaseScope.HeaderName, _sessionId.ToString());
+
+        return client;
+    }
+
+    public override async ValueTask InitializeAsync()
+    {
+        await base.InitializeAsync();
+
+        TestDatabaseScope.Register(_sessionId, Session);
+
+        Root = await Actor().WithName("Root").WithAllSystemPermissions().SeedAsync();
     }
 
     public override async ValueTask DisposeAsync()
     {
-        // Before the base disposes Db, since a container tears down scoped services that hold it.
-        foreach (var host in _hosts.Values)
+        // Released first: a request that outlives its test then fails naming the header it could not
+        // route, rather than reaching a database being torn down underneath it.
+        TestDatabaseScope.Release(_sessionId);
+
+        foreach (var client in _clients.Values)
         {
-            host.Dispose();
+            client.Dispose();
         }
+
+        _unauthenticated?.Dispose();
 
         await base.DisposeAsync();
     }

@@ -23,7 +23,7 @@ namespace Player.Api.Tests.Features.Views;
 /// the successful round trip — are in <c>ViewRequestTests</c>; the mapping the importer runs on is in
 /// <c>ViewExportRoundTripTests</c>.
 /// </remarks>
-public class ViewImporterTests(DatabaseFixture fixture) : ApiTestBase(fixture)
+public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
     /// <summary>
     /// Where the importer's file writes land. Only the file tests reach the disk, and what they assert

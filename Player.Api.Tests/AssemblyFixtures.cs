@@ -8,3 +8,7 @@ using Player.Api.Tests.Support;
 // disposes it after the last test, and injects it into any test class with a matching constructor
 // parameter — see DatabaseTestBase.
 [assembly: AssemblyFixture(typeof(DatabaseFixture))]
+
+// Starting the application costs about a second, and everything it registers as a singleton is shared
+// by every test that uses it — see PlayerAppFactory, which says how each shared surface is dealt with.
+[assembly: AssemblyFixture(typeof(PlayerAppFactory))]

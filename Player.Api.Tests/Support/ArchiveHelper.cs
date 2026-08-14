@@ -1,6 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
+using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Player.Api.Data.Models;
@@ -63,5 +64,42 @@ public static class ArchiveHelper
         stream.Position = 0;
 
         return archiveService.ExtractArchive(stream, archive.Name);
+    }
+
+    /// <summary>
+    /// The entries of the archive an HTTP response carried, by name. <paramref name="name"/> is the
+    /// file name the response gave it, which is how the extractor chooses between zip and tgz.
+    /// </summary>
+    /// <remarks>
+    /// The real <see cref="ArchiveService"/> is constructed here rather than resolved: it has no
+    /// constructor dependencies, so a test reading a response body does not need a container.
+    /// </remarks>
+    public static Dictionary<string, byte[]> ExtractFiles(byte[] archive, string name)
+    {
+        using var stream = new MemoryStream(archive);
+
+        return new ArchiveService().ExtractArchive(stream, name);
+    }
+
+    /// <summary>
+    /// Reads the exported views out of the bytes a response carried.
+    /// </summary>
+    public static ViewExport[] ReadExportedViews(byte[] archive, string name) =>
+        JsonSerializer.Deserialize<ViewExport[]>(ExtractFiles(archive, name)[ViewConstants.ExportFileName]);
+
+    /// <summary>
+    /// A multipart body whose file part is named "Archive", which is what <c>[AsParameters]</c> binds
+    /// <c>Import.Command.Archive</c> from. Disposable, so scope it with <c>using</c>.
+    /// </summary>
+    /// <remarks>
+    /// The part's file name carries the extension the importer picks zip or tgz from, so it must be the
+    /// name the export gave the archive rather than an invented one.
+    /// </remarks>
+    public static MultipartFormDataContent AsUpload(byte[] archive, string name)
+    {
+        var content = new ByteArrayContent(archive);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+        return new MultipartFormDataContent { { content, "Archive", name } };
     }
 }

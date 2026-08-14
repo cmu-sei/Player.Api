@@ -40,6 +40,8 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="NSubstitute" />
+    <!-- Hosts Player.Api in-process over TestServer, so the tests drive the real Startup. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <!-- The version comes from Directory.Packages.props, the same entry Player.Api uses: the SQLite
          fallback approximates production's PostgreSQL, so the two must not run on different EF patches. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
