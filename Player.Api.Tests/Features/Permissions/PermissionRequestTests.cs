@@ -36,8 +36,12 @@ public class PermissionRequestTests(DatabaseFixture fixture, PlayerAppFactory fa
         // the Location header point at something a client can follow.
         Assert.Equal($"/api/permissions/{created.Id}", response.Headers.Location?.AbsolutePath);
 
+        // The stored row rather than the response, since the response is mapped from the entity the
+        // handler holds in memory and would read the same whether or not the save took the values with it.
         await using var db = NewContext();
-        Assert.True(await db.Permissions.AnyAsync(x => x.Id == created.Id, Ct));
+        var stored = await db.Permissions.SingleAsync(x => x.Id == created.Id, Ct);
+        Assert.Equal("Custom", stored.Name);
+        Assert.Equal("A custom one", stored.Description);
     }
 
     /// <summary>

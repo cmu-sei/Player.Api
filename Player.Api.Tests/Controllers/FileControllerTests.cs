@@ -48,7 +48,9 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Equal(team.Id, Assert.Single(uploaded[0].teamIds));
 
         await using var db = NewContext();
-        Assert.Equal(2, await db.Files.CountAsync(x => x.View.Id == view.Id, Ct));
+        Assert.Equal(
+            ["first.txt", "second.txt"],
+            await db.Files.Where(x => x.View.Id == view.Id).Select(x => x.Name).Order().ToListAsync(Ct));
     }
 
     /// <summary>
@@ -199,7 +201,9 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
         var files = await ReadAsync<FileModel[]>(
             await Client(actor).GetAsync($"api/views/{view.Id}/files", Ct));
 
-        Assert.Equal(2, files.Length);
+        // Named, since a count of two also holds if the caller was answered with its own team's file twice
+        // while the other team's stayed hidden — which is the opposite of what this test is about.
+        Assert.Equal(["mine.txt", "theirs.txt"], files.Select(x => x.Name).Order());
     }
 
     [Fact]
@@ -213,7 +217,7 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
         var files = await ReadAsync<FileModel[]>(await RootClient
             .GetAsync($"api/views/{view.Id}/files?includeAllViewFiles=true", Ct));
 
-        Assert.Equal(2, files.Length);
+        Assert.Equal(["mine.txt", "theirs.txt"], files.Select(x => x.Name).Order());
     }
 
     /// <summary>

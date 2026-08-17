@@ -213,7 +213,7 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
         var views = await ReadAsync<View[]>(await RootClient.GetAsync("api/views", Ct));
 
-        Assert.Equal(2, views.Length);
+        Assert.Equal(["One", "Two"], views.Select(x => x.Name).Order());
     }
 
     [Fact]
@@ -711,7 +711,7 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         var views = ArchiveHelper.ReadExportedViews(
             await response.Content.ReadAsByteArrayAsync(Ct), ArchiveName(response));
 
-        Assert.Equal(2, views.Length);
+        Assert.Equal(["One", "Two"], views.Select(x => x.Name).Order());
     }
 
     /// <summary>

@@ -42,8 +42,13 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         Assert.Equal(view.Id, created.ViewId);
         Assert.Equal($"/api/applications/{created.Id}", response.Headers.Location?.AbsolutePath);
 
+        // The stored row rather than the response, since the response is mapped from the entity the
+        // handler holds in memory and would read the same whether or not the save took the values with it.
         await using var db = NewContext();
-        Assert.True(await db.Applications.AnyAsync(x => x.Id == created.Id, Ct));
+        var stored = await db.Applications.SingleAsync(x => x.Id == created.Id, Ct);
+        Assert.Equal("Console", stored.Name);
+        Assert.Equal("https://example.test/console", stored.Url);
+        Assert.Equal(view.Id, stored.ViewId);
     }
 
     /// <summary>
@@ -340,8 +345,14 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         Assert.Equal("Console", created.Name);
         Assert.Equal($"/api/application-instances/{created.Id}", response.Headers.Location?.AbsolutePath);
 
+        // The stored row rather than the response, since the response is mapped from the entity the
+        // handler holds in memory and would read the same whether or not the save took the values with it.
+        // TeamId is the "places it on the team" in the name, and the response model does not carry it.
         await using var db = NewContext();
-        Assert.True(await db.ApplicationInstances.AnyAsync(x => x.Id == created.Id, Ct));
+        var stored = await db.ApplicationInstances.SingleAsync(x => x.Id == created.Id, Ct);
+        Assert.Equal(team.Id, stored.TeamId);
+        Assert.Equal(application.Id, stored.ApplicationId);
+        Assert.Equal(3, stored.DisplayOrder);
     }
 
     /// <summary>

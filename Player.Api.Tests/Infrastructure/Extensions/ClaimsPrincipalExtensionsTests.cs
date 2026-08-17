@@ -143,7 +143,7 @@ public class ClaimsPrincipalExtensionsTests
         var rebuilt = Assert.Single(normalized.Identities);
         Assert.Equal("Bearer", rebuilt.AuthenticationType);
         Assert.Equal("tester", rebuilt.Name);
-        Assert.Equal(2, normalized.FindAll("scope").Count());
+        Assert.Equal(["a", "b"], normalized.FindAll("scope").Select(x => x.Value));
     }
 
     [Fact]

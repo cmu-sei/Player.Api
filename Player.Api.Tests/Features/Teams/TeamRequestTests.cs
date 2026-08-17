@@ -195,7 +195,7 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
         var teams = await ReadAsync<Team[]>(await RootClient.GetAsync("api/teams", Ct));
 
-        Assert.Equal(2, teams.Length);
+        Assert.Equal(["A", "B"], teams.Select(x => x.Name).Order());
     }
 
     [Fact]
@@ -242,7 +242,9 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         var teams = await ReadAsync<Team[]>(
             await RootClient.GetAsync($"api/users/{subject.Id}/views/{view.Id}/teams", Ct));
 
-        Assert.Equal(2, teams.Length);
+        // The team the subject is not on is the whole point of the privileged branch, so it is named rather
+        // than counted: a count of two also holds if the membership team came back twice.
+        Assert.Equal(["Member of", "Not a member of"], teams.Select(x => x.Name).Order());
     }
 
     /// <summary>

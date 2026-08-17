@@ -39,8 +39,11 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         // only the path is the endpoint's own doing.
         Assert.Equal($"/api/users/{created.Id}", response.Headers.Location?.AbsolutePath);
 
+        // The stored row rather than the response, since the response is mapped from the entity the
+        // handler holds in memory and would read the same whether or not the save took the values with it.
         await using var db = NewContext();
-        Assert.True(await db.Users.AnyAsync(x => x.Id == created.Id, Ct));
+        var stored = await db.Users.SingleAsync(x => x.Id == created.Id, Ct);
+        Assert.Equal("New Person", stored.Name);
     }
 
     /// <summary>

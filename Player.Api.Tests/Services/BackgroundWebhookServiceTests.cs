@@ -183,12 +183,17 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
         _http.RespondWithStatus(CallbackUri, HttpStatusCode.OK);
 
         using var sender = await Start();
+        var before = DateTime.UtcNow;
         await sender.AddEvent(ViewCreated("Sales"));
 
         await WaitUntil(async () => _http.Requests.Contains(CallbackUri), "the event to be delivered");
         var body = JsonNode.Parse(Assert.Single(_http.Sent, x => x.Uri == CallbackUri).Body);
         Assert.Equal((int)EventType.ViewCreated, body["Type"].GetValue<int>());
-        Assert.NotEqual(default, body["Timestamp"].GetValue<DateTime>());
+
+        // Bounded by the run rather than only non-default, since a subscriber orders and expires events by
+        // this field: WebhookEvent's constructor stamps DateTime.UtcNow, so a stamp outside the window
+        // between constructing the event and observing its delivery is the wrong clock or the wrong event.
+        Assert.InRange(body["Timestamp"].GetValue<DateTime>(), before, DateTime.UtcNow);
         var payload = JsonNode.Parse(body["Payload"].GetValue<string>());
         Assert.Equal("Sales", payload["ViewName"].GetValue<string>());
 
@@ -352,18 +357,12 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
 
     /// <summary>
     /// What counts as delivered: only the two codes that mean the subscriber took responsibility for the
-    /// event. Anything else keeps the row, which is safe but — see issue 30 — never gives up, so a
-    /// subscriber answering <c>201</c> or <c>204</c> is retried forever.
+    /// event.
     /// </summary>
     [Theory]
-    [InlineData(200, true)]
-    [InlineData(202, true)]
-    [InlineData(201, false)]
-    [InlineData(204, false)]
-    [InlineData(400, false)]
-    [InlineData(404, false)]
-    [InlineData(500, false)]
-    public async Task Only_ok_and_accepted_count_as_delivered(int status, bool delivered)
+    [InlineData(200)]
+    [InlineData(202)]
+    public async Task An_ok_or_accepted_response_delivers_the_event(int status)
     {
         var webhook = await Subscriber();
         await Seed(TestData.PendingEvent(webhook.Id));
@@ -372,16 +371,32 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
 
         using var sender = await Start();
 
-        if (delivered)
-        {
-            await WaitUntil(async () => await PendingCount() == 0, "the event to be removed");
-            Assert.Null((await Read(webhook)).LastError);
-        }
-        else
-        {
-            await WaitUntil(async () => (await Read(webhook)).LastError != null, "the failure to be recorded");
-            Assert.Equal(1, await PendingCount());
-        }
+        await WaitUntil(async () => await PendingCount() == 0, "the event to be removed");
+        Assert.Null((await Read(webhook)).LastError);
+    }
+
+    /// <summary>
+    /// Every other code keeps the row, which is safe but — see issue 30 — never gives up, so a subscriber
+    /// answering <c>201</c> or <c>204</c> is retried forever. Those two are the cases worth reading twice:
+    /// both are successes to the subscriber that sent them, and neither is treated as one here.
+    /// </summary>
+    [Theory]
+    [InlineData(201)]
+    [InlineData(204)]
+    [InlineData(400)]
+    [InlineData(404)]
+    [InlineData(500)]
+    public async Task Any_other_response_keeps_the_event_queued(int status)
+    {
+        var webhook = await Subscriber();
+        await Seed(TestData.PendingEvent(webhook.Id));
+        RespondToToken();
+        _http.RespondWithStatus(CallbackUri, (HttpStatusCode)status);
+
+        using var sender = await Start();
+
+        await WaitUntil(async () => (await Read(webhook)).LastError != null, "the failure to be recorded");
+        Assert.Equal(1, await PendingCount());
     }
 
     /// <summary>

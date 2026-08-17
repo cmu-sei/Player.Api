@@ -103,7 +103,8 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
             Ct);
 
         Assert.Equal(["first.txt", "second.txt"], uploaded.Select(x => x.Name));
-        Assert.Equal(2, (await Stored()).Count);
+        // The rows as well as the return value, since the two are produced separately.
+        Assert.Equal(["first.txt", "second.txt"], (await Stored()).Select(x => x.Name).Order());
     }
 
     /// <summary>

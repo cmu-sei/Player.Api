@@ -55,8 +55,13 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
             $"/api/application-templates/{created.Id}",
             response.Headers.Location?.AbsolutePath);
 
+        // The stored row rather than the response, since the response is mapped from the entity the
+        // handler holds in memory and would read the same whether or not the save took the values with it.
         await using var db = NewContext();
-        Assert.True(await db.ApplicationTemplates.AnyAsync(x => x.Id == created.Id, Ct));
+        var stored = await db.ApplicationTemplates.SingleAsync(x => x.Id == created.Id, Ct);
+        Assert.Equal("Console", stored.Name);
+        Assert.True(stored.Embeddable);
+        Assert.True(stored.LoadInBackground);
     }
 
     /// <summary>
@@ -327,7 +332,9 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
     {
         await Seed(TestData.ApplicationTemplate("First"), TestData.ApplicationTemplate("Second"));
 
-        Assert.Equal(2, (await ReadTemplates(await Export())).Length);
+        Assert.Equal(
+            ["First", "Second"],
+            (await ReadTemplates(await Export())).Select(x => x.Name).Order());
     }
 
     [Fact]

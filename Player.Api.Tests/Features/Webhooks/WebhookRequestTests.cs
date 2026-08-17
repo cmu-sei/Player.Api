@@ -45,7 +45,9 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
         await using var db = NewContext();
         var entity = await db.Webhooks.Include(x => x.EventTypes).SingleAsync(Ct);
         Assert.Equal("secret", entity.ClientSecret);
-        Assert.Equal(2, entity.EventTypes.Count);
+        Assert.Equal(
+            [EventType.ViewCreated, EventType.ViewDeleted],
+            entity.EventTypes.Select(x => x.EventType).Order());
     }
 
     /// <summary>
@@ -279,7 +281,9 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
             HttpStatusCode.Forbidden,
             await Client(actor).DeleteAsync($"api/webhooks/{webhook.Id}", Ct));
 
+        // The subscription this request tried to delete, not merely that some subscription is left: an
+        // unpredicated count holds if the refused delete removed this one and left another behind.
         await using var db = NewContext();
-        Assert.True(await db.Webhooks.AnyAsync(Ct));
+        Assert.True(await db.Webhooks.AnyAsync(x => x.Id == webhook.Id, Ct));
     }
 }

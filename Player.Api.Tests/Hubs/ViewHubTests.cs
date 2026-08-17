@@ -187,7 +187,7 @@ public class ViewHubTests
     }
 
     [Fact]
-    public async Task A_dropped_connection_with_no_presence_does_nothing()
+    public async Task A_dropped_connection_that_never_joined_releases_no_presence()
     {
         await Hub().OnDisconnectedAsync(null);
 

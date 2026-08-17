@@ -261,8 +261,11 @@ public class TeamPermissionScopeRequestTests(DatabaseFixture fixture, PlayerAppF
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync(
             $"api/teams/{team.Id}/scopes/{target.Id}", Ct));
 
+        // The scope this request tried to remove, not merely that some scope is left: an unpredicated
+        // count holds if the refused delete removed this one and left another behind.
         await using var db = NewContext();
-        Assert.True(await db.TeamPermissionScopes.AnyAsync(Ct));
+        Assert.True(await db.TeamPermissionScopes.AnyAsync(
+            x => x.TeamId == team.Id && x.TargetTeamId == target.Id, Ct));
     }
 
     /// <summary>

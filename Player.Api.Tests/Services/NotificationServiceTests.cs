@@ -26,9 +26,16 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     public async Task GetAsync_returns_every_notification()
     {
         var view = TestData.View();
-        await Seed(view, TestData.Notification(view.Id), TestData.Notification(Guid.NewGuid()));
+        await Seed(
+            view,
+            TestData.Notification(view.Id, text: "For this view"),
+            TestData.Notification(Guid.NewGuid(), text: "For another view"));
 
-        Assert.Equal(2, (await Service().GetAsync(Ct)).Count());
+        // "Every" means both recipients, including the one whose view does not exist, so the two are named
+        // rather than counted.
+        Assert.Equal(
+            ["For another view", "For this view"],
+            (await Service().GetAsync(Ct)).Select(x => x.Text).Order());
     }
 
     /// <summary>

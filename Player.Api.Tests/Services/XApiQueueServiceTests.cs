@@ -134,10 +134,7 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ServiceTestBase(fi
     [Fact]
     public async Task DequeueAsync_defaults_to_a_batch_of_ten()
     {
-        for (var i = 0; i < 12; i++)
-        {
-            await Seed(TestData.QueuedStatement(queuedAt: Noon.AddSeconds(i)));
-        }
+        await SeedBacklog(12);
 
         Assert.Equal(10, (await Service.DequeueAsync(ct: Ct)).Count);
     }
@@ -375,6 +372,15 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ServiceTestBase(fi
     }
 
     // ---- Helpers ----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// <paramref name="count"/> pending statements queued a second apart from <see cref="Noon"/>, so that
+    /// the order a batch comes back in is decided by the queue rather than by whatever order the rows
+    /// happen to be stored in.
+    /// </summary>
+    private Task SeedBacklog(int count) =>
+        Seed([.. Enumerable.Range(0, count)
+            .Select(i => TestData.QueuedStatement(queuedAt: Noon.AddSeconds(i)))]);
 
     /// <summary>
     /// The queue as it is on disk. The service writes through the context the test holds, so a re-read

@@ -41,8 +41,11 @@ public class TeamRoleRequestTests(DatabaseFixture fixture, PlayerAppFactory fact
         // follow. The host is the test server's, so only the path is the endpoint's own doing.
         Assert.Equal($"/api/team-roles/{created.Id}", response.Headers.Location?.AbsolutePath);
 
+        // The stored row rather than the response, since the response is mapped from the entity the
+        // handler holds in memory and would read the same whether or not the save took the values with it.
         await using var db = NewContext();
-        Assert.True(await db.TeamRoles.AnyAsync(x => x.Id == created.Id, Ct));
+        var stored = await db.TeamRoles.SingleAsync(x => x.Id == created.Id, Ct);
+        Assert.Equal("Red Team", stored.Name);
     }
 
     /// <summary>

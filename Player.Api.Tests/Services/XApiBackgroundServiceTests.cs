@@ -141,15 +141,7 @@ public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ServiceTestBa
         var (host, lrs) = Configured();
         lrs.RespondWithStatus(StatementsUri, HttpStatusCode.OK);
 
-        var statements = new List<XApiQueuedStatementEntity>();
-        for (var i = 0; i < 12; i++)
-        {
-            var statement = Pending(DateTime.UtcNow.AddSeconds(i - 100));
-            statement.StatementJson = $$"""{"n":{{i}}}""";
-            statements.Add(statement);
-        }
-
-        await Seed([.. statements]);
+        await Seed([.. Backlog(12)]);
 
         await RunOnce(
             host,
@@ -157,9 +149,7 @@ public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ServiceTestBa
                 .CountAsync(x => x.Status == XApiQueueStatus.Completed, Ct) == 10,
             "ten statements to be sent");
 
-        Assert.Equal(
-            [.. Enumerable.Range(0, 10).Select(i => $$"""{"n":{{i}}}""")],
-            lrs.Sent.Select(x => x.Body));
+        Assert.Equal([.. Enumerable.Range(0, 10).Select(Body)], lrs.Sent.Select(x => x.Body));
 
         var untouched = (await Stored()).Where(x => x.Status == XApiQueueStatus.Pending).ToList();
         Assert.Equal(2, untouched.Count);
@@ -384,6 +374,22 @@ public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ServiceTestBa
     /// </summary>
     private static XApiQueuedStatementEntity Pending(DateTime? queuedAt = null) =>
         TestData.QueuedStatement(queuedAt: queuedAt ?? DateTime.UtcNow);
+
+    /// <summary>
+    /// A backlog of <paramref name="count"/> pending statements, oldest first, each carrying its own index
+    /// as its body so that what the LRS received says which statements were taken and in what order.
+    /// </summary>
+    private static List<XApiQueuedStatementEntity> Backlog(int count) =>
+        [.. Enumerable.Range(0, count).Select(i =>
+        {
+            var statement = Pending(DateTime.UtcNow.AddSeconds(i - 100));
+            statement.StatementJson = Body(i);
+
+            return statement;
+        })];
+
+    /// <summary>The body of the <paramref name="n"/>th statement of a <see cref="Backlog"/>.</summary>
+    private static string Body(int n) => $$"""{"n":{{n}}}""";
 
     private async Task<XApiQueuedStatementEntity> Read(XApiQueuedStatementEntity statement)
     {
