@@ -74,4 +74,38 @@ public class ApiTestHostTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         Assert.True(host.Resolve<Player.Api.Infrastructure.Authorization.IPlayerAuthorizationService>()
             .IsCurrentUser(builder.UserId));
     }
+
+    /// <summary>
+    /// One host per principal is what lets a test resolve a service more than once and get the same
+    /// container, so a service that reads its own earlier writes sees them.
+    /// </summary>
+    [Fact]
+    public void A_principal_gets_one_host_however_many_times_it_is_asked_for()
+    {
+        var user = new ClaimsPrincipalBuilder().Build();
+
+        Assert.Same(HostFor(user), HostFor(user));
+    }
+
+    /// <summary>
+    /// Options are applied when the host is built, so a second set for an already-hosted principal cannot
+    /// take effect.
+    /// </summary>
+    /// <remarks>
+    /// Returning the first host silently is the failure this guards: the test would then assert against a
+    /// configuration it did not set, and pass or fail for a reason written nowhere in it — the worst kind,
+    /// since the arrange step reads as though it is in force. Asserting the message too, because the way out
+    /// (build a principal per configuration) is not guessable from the exception type alone.
+    /// </remarks>
+    [Fact]
+    public void Configuring_a_principal_that_already_has_a_host_throws()
+    {
+        var user = new ClaimsPrincipalBuilder().Build();
+        HostFor(user, options => options.FileUpload.maxSize = 16);
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => HostFor(user, options => options.FileUpload.maxSize = 32));
+
+        Assert.Contains("already been built", ex.Message);
+    }
 }

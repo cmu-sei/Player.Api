@@ -248,6 +248,11 @@ public class ViewHubTests
             HubHarness.ConnectionId, "group-b", Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// The group has to be named, not merely counted: a call count alone holds just as well if the hub
+    /// joined the group instead of leaving it, or left a group it was not asked about — and either would
+    /// leave a caller subscribed to a team's presence after it left.
+    /// </summary>
     [Fact]
     public async Task LeavePresenceForTeam_leaves_only_that_teams_groups()
     {
@@ -256,6 +261,9 @@ public class ViewHubTests
 
         await Hub().LeavePresenceForTeam(_viewId, teamId);
 
+        await _harness.Groups.Received(1).RemoveFromGroupAsync(
+            HubHarness.ConnectionId, "team-group", Arg.Any<CancellationToken>());
+        // And nothing beyond it, which is the "only" in the name.
         Assert.Single(_harness.Groups.ReceivedCalls());
         await _presence.DidNotReceive().GetGroupsByViewId(_viewId);
     }

@@ -585,6 +585,11 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.False(await db.Notifications.AnyAsync(Ct));
     }
 
+    /// <summary>
+    /// Asserted by text rather than by comparing the two broadcast times to each other: a comparison holds
+    /// on a tie whichever order the rows came back in, and it never says which notification is which, so it
+    /// would also hold if the same one were returned twice.
+    /// </summary>
     [Fact]
     public async Task GetNotifications_returns_the_view_notifications_newest_first()
     {
@@ -597,8 +602,7 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         var notifications = await ReadAsync<Notification[]>(
             await RootClient.GetAsync($"api/views/{view.Id}/notifications", Ct));
 
-        Assert.Equal(2, notifications.Length);
-        Assert.True(notifications[0].BroadcastTime >= notifications[1].BroadcastTime);
+        Assert.Equal(["Second", "First"], notifications.Select(x => x.Text));
     }
 
     /// <summary>

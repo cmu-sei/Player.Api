@@ -39,16 +39,32 @@ public abstract class ServiceTestBase(DatabaseFixture fixture) : DatabaseTestBas
     protected ApiTestHost RootHost => HostFor(Root);
 
     /// <summary>
-    /// The host for <paramref name="user"/>. Repeated calls with the same principal return the same
-    /// host; <paramref name="configure"/> is honored only on the call that builds it.
+    /// The host for <paramref name="user"/>. Repeated calls with the same principal return the same host,
+    /// and asking for options against a principal already hosted throws.
     /// </summary>
+    /// <remarks>
+    /// A host is built once per principal, so a second <paramref name="configure"/> for the same one has
+    /// nothing to configure. Handing back the first host silently would leave the test asserting against a
+    /// configuration it did not set — passing or failing for a reason that is nowhere in the test. Throwing
+    /// names it instead. Build a principal per configuration; <see cref="ClaimsPrincipalBuilder"/> produces
+    /// a new instance each time, and the dictionary keys on the instance.
+    /// </remarks>
     protected ApiTestHost HostFor(ClaimsPrincipal user, Action<ApiTestHostOptions> configure = null)
     {
-        if (!_hosts.TryGetValue(user, out var host))
+        if (_hosts.TryGetValue(user, out var host))
         {
-            host = ApiTestHost.Create(Db, user, configure);
-            _hosts.Add(user, host);
+            if (configure != null)
+            {
+                throw new InvalidOperationException(
+                    "A host for this principal has already been built, so these options would be " +
+                    "ignored. Build a distinct principal for each configuration.");
+            }
+
+            return host;
         }
+
+        host = ApiTestHost.Create(Db, user, configure);
+        _hosts.Add(user, host);
 
         return host;
     }

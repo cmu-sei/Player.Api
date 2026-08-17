@@ -331,12 +331,21 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
         using var sender = await Start();
         await WaitUntil(async () => (await Read(rejecting)).LastError != null, "the rejection to be recorded");
 
-        // The rejected event's own retry is five seconds away, so the second delivery's token request is
-        // the only one that can land in between.
+        var tokensBeforeSecondDelivery = _http.Requests.Count(x => x == TokenUri);
+
+        // The behaviour is that the cache no longer holds a token, so the next delivery has to fetch one.
+        // Counted rather than pinned: the rejected event's own retry is five seconds out, and on a loaded
+        // machine it can fetch a token of its own before the second delivery is observed. An exact count
+        // then fails as a wrong value, which reads like a regression in token caching rather than a slow
+        // run. What must hold either way is that a token was fetched again at all.
         await sender.AddEvent(new WebhookEvent(EventType.ViewDeleted, new ViewDeleted()));
         await WaitUntil(async () => _http.Requests.Contains(OtherCallbackUri), "the second event to be delivered");
 
-        Assert.Equal(2, _http.Requests.Count(x => x == TokenUri));
+        var tokensAfterSecondDelivery = _http.Requests.Count(x => x == TokenUri);
+        Assert.True(
+            tokensAfterSecondDelivery > tokensBeforeSecondDelivery,
+            $"the rejection did not clear the cached token: {tokensBeforeSecondDelivery} token " +
+                $"request(s) before the second delivery, {tokensAfterSecondDelivery} after.");
     }
 
     // ---- Failed deliveries -------------------------------------------------------------------------

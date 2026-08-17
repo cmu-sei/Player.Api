@@ -55,8 +55,9 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         var team = TestData.Team(view.Id);
         await Seed(view, team);
 
-        await Service().UploadAsync(Form(view.Id, [team.Id], ("notes.txt", "one")), Ct);
-        await Service().UploadAsync(Form(view.Id, [team.Id], ("notes.txt", "two")), Ct);
+        var service = Service();
+        await service.UploadAsync(Form(view.Id, [team.Id], ("notes.txt", "one")), Ct);
+        await service.UploadAsync(Form(view.Id, [team.Id], ("notes.txt", "two")), Ct);
 
         using var db = NewContext();
         var paths = db.Files.Select(x => x.Path).ToList();
