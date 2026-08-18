@@ -45,6 +45,35 @@ public class TeamPermissionRequestTests(DatabaseFixture fixture, PlayerAppFactor
         Assert.Equal("A custom one", stored.Description);
     }
 
+    /// <summary>
+    /// Names are uniquely indexed because team authorization resolves a permission by name, but the
+    /// handler saves without looking, so a client's duplicate comes back as a server error rather than a
+    /// 409. Wrong, and the same omission as <c>Permissions/Requests/Create.cs</c>.
+    /// </summary>
+    /// <remarks>
+    /// Turns red when the handler checks the name first. The detail is asserted because it is what says
+    /// the failure reached the save rather than a check; the count, because the rollback is what keeps a
+    /// name from resolving to two permissions.
+    /// </remarks>
+    [Fact]
+    public async Task Create_reports_a_duplicate_name_as_a_server_error()
+    {
+        var problem = await AssertProblem(
+            HttpStatusCode.InternalServerError,
+            await RootClient.PostAsJsonAsync(
+                "api/team-permissions",
+                new { name = "UploadViewIsos", description = "A second one" },
+                Ct));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", problem.Detail);
+
+        await using var db = NewContext();
+        Assert.Equal(
+            1,
+            await db.TeamPermissions.CountAsync(
+                x => x.Name == "UploadViewIsos", Ct));
+    }
+
     [Fact]
     public async Task Create_is_forbidden_without_ManageRoles()
     {
@@ -70,6 +99,34 @@ public class TeamPermissionRequestTests(DatabaseFixture fixture, PlayerAppFactor
         Assert.Equal(
             "Reworded",
             (await db.TeamPermissions.SingleAsync(x => x.Id == permissionId, Ct)).Description);
+    }
+
+    /// <summary>
+    /// A rename onto a name another team permission holds is the same server error as the duplicate
+    /// <c>Create</c> above: neither handler reads the name before saving it.
+    /// </summary>
+    /// <remarks>
+    /// Turns red when <c>Edit</c> checks the name first. The stored name is asserted because the rollback
+    /// is what keeps the claim key intact — see <c>Edit_refuses_an_immutable_permission</c> below for why
+    /// the name matters.
+    /// </remarks>
+    [Fact]
+    public async Task Edit_reports_a_rename_onto_a_taken_name_as_a_server_error()
+    {
+        var problem = await AssertProblem(
+            HttpStatusCode.InternalServerError,
+            await RootClient.PutAsJsonAsync(
+                $"api/team-permissions/{TestData.TeamPermissions.UploadViewIsos}",
+                new { name = "ViewTeam" },
+                Ct));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", problem.Detail);
+
+        await using var db = NewContext();
+        Assert.Equal(
+            "UploadViewIsos",
+            (await db.TeamPermissions.SingleAsync(
+                x => x.Id == TestData.TeamPermissions.UploadViewIsos, Ct)).Name);
     }
 
     /// <summary>
@@ -371,6 +428,39 @@ public class TeamPermissionRequestTests(DatabaseFixture fixture, PlayerAppFactor
             x => x.RoleId == roleId && x.PermissionId == permissionId, Ct));
     }
 
+    /// <summary>
+    /// Granting the same permission twice is a server error, because the grant is inserted without
+    /// looking and <c>(RoleId, PermissionId)</c> is uniquely indexed. Wrong, and asymmetric:
+    /// <c>RemoveFromRole_does_nothing_when_the_role_does_not_hold_the_permission</c> shows revoking twice
+    /// is a success, so a provisioning script that re-runs cannot tell "already granted" from a broken
+    /// server.
+    /// </summary>
+    /// <remarks>
+    /// Turns red when the handler checks the grant — as a 409, or as the no-op its counterpart already
+    /// promises. The count is asserted because the single grant surviving is what makes this a status-code
+    /// bug rather than a data one.
+    /// </remarks>
+    [Fact]
+    public async Task AddToRole_reports_a_grant_the_role_already_holds_as_a_server_error()
+    {
+        var roleId = TestData.TeamRoles.Observer;
+        var permissionId = TestData.TeamPermissions.UploadViewIsos;
+        var route = $"api/team-roles/{roleId}/permissions/{permissionId}";
+
+        await AssertStatus(HttpStatusCode.OK, await RootClient.PostAsync(route, null, Ct));
+
+        var problem = await AssertProblem(
+            HttpStatusCode.InternalServerError, await RootClient.PostAsync(route, null, Ct));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", problem.Detail);
+
+        await using var db = NewContext();
+        Assert.Equal(
+            1,
+            await db.TeamRolePermissions.CountAsync(
+                x => x.RoleId == roleId && x.PermissionId == permissionId, Ct));
+    }
+
     [Fact]
     public async Task AddToRole_reports_a_missing_role_as_not_found()
     {
@@ -468,6 +558,35 @@ public class TeamPermissionRequestTests(DatabaseFixture fixture, PlayerAppFactor
         await using var db = NewContext();
         Assert.True(await db.TeamPermissionAssignments.AnyAsync(
             x => x.TeamId == team.Id && x.PermissionId == permissionId, Ct));
+    }
+
+    /// <summary>
+    /// The same duplicate insert as <c>AddToRole</c>, on the team's own grants — <c>(TeamId,
+    /// PermissionId)</c> is uniquely indexed and nothing checks first. <c>RemoveFromTeam</c> no-ops on an
+    /// absent grant, so this pair is asymmetric in the same way.
+    /// </summary>
+    [Fact]
+    public async Task AddToTeam_reports_an_assignment_the_team_already_holds_as_a_server_error()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        var permissionId = TestData.TeamPermissions.UploadViewIsos;
+        var route = $"api/teams/{team.Id}/permissions/{permissionId}";
+
+        await AssertStatus(HttpStatusCode.OK, await RootClient.PostAsync(route, null, Ct));
+
+        var problem = await AssertProblem(
+            HttpStatusCode.InternalServerError, await RootClient.PostAsync(route, null, Ct));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", problem.Detail);
+
+        await using var db = NewContext();
+        Assert.Equal(
+            1,
+            await db.TeamPermissionAssignments.CountAsync(
+                x => x.TeamId == team.Id && x.PermissionId == permissionId, Ct));
     }
 
     [Fact]

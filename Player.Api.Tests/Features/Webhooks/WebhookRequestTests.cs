@@ -51,6 +51,68 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
     }
 
     /// <summary>
+    /// The same event type twice in one request is a server error: the form's list is mapped straight to a
+    /// row each (<c>Webhooks/MappingProfile.cs:24</c>) and <c>(SubscriptionId, EventType)</c> is uniquely
+    /// indexed. Wrong — a malformed request answered as a server fault, and the subscription is lost
+    /// rather than created with the type once.
+    /// </summary>
+    /// <remarks>
+    /// Turns red when the list is deduplicated or validated. Nothing stored is asserted because the whole
+    /// insert rolls back, which is what makes this a diagnosability bug and not a data one.
+    /// </remarks>
+    [Fact]
+    public async Task Create_reports_a_repeated_event_type_as_a_server_error()
+    {
+        var problem = await AssertProblem(
+            HttpStatusCode.InternalServerError,
+            await RootClient.PostAsJsonAsync(
+                CreateRoute,
+                new
+                {
+                    name = "Listener",
+                    callbackUri = "https://example.test/hook",
+                    eventTypes = new[] { EventType.ViewCreated, EventType.ViewCreated }
+                },
+                Ct));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", problem.Detail);
+
+        await using var db = NewContext();
+        Assert.Empty(await db.Webhooks.ToListAsync(Ct));
+    }
+
+    /// <summary>
+    /// The same on edit, because all four maps in <c>Webhooks/MappingProfile.cs</c> build the rows the same
+    /// way — so the repeated type is the mapping's doing rather than one handler's.
+    /// </summary>
+    /// <remarks>
+    /// The stored types are asserted because the rollback is the difference between a subscription that
+    /// keeps the types it had and one left with none.
+    /// </remarks>
+    [Fact]
+    public async Task Edit_reports_a_repeated_event_type_as_a_server_error()
+    {
+        var webhook = TestData.Webhook(eventTypes: [EventType.ViewCreated]);
+        await Seed(webhook);
+
+        await AssertProblem(
+            HttpStatusCode.InternalServerError,
+            await RootClient.PutAsJsonAsync(
+                $"api/webhooks/{webhook.Id}",
+                new
+                {
+                    name = "Renamed",
+                    callbackUri = "https://example.test/hook",
+                    eventTypes = new[] { EventType.ViewDeleted, EventType.ViewDeleted }
+                },
+                Ct));
+
+        await using var db = NewContext();
+        var stored = await db.Webhooks.Include(x => x.EventTypes).SingleAsync(Ct);
+        Assert.Equal(EventType.ViewCreated, Assert.Single(stored.EventTypes).EventType);
+    }
+
+    /// <summary>
     /// The response reports only that a secret is set. Returning the value would hand it back to every
     /// caller allowed to list subscriptions.
     /// </summary>

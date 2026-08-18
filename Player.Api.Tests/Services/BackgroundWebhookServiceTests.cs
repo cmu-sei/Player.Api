@@ -439,6 +439,41 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
     }
 
     /// <summary>
+    /// The retry is deferred rather than immediate, which is what keeps a failing subscriber from being
+    /// hammered as fast as the loop can turn.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The floor of the first wait is the only part of the schedule a test can observe without spending
+    /// it. <c>Wait</c> awaits <c>Task.Delay</c> directly (<c>BackgroundWebhookService.cs:225</c>) with no
+    /// clock to substitute, so confirming the documented 5s → 10s → … → 60s would cost three and a half
+    /// minutes of wall clock and confirming the cap alone still costs five — see issue 30.
+    /// </para>
+    /// <para>
+    /// One second against a five-second initial wait: a loop that retried without waiting posts again
+    /// within milliseconds of recording the error, so the margin is what makes the second post's absence
+    /// mean something rather than being a slow machine.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_refused_delivery_is_not_retried_immediately()
+    {
+        var webhook = await Subscriber();
+        await Seed(TestData.PendingEvent(webhook.Id));
+        RespondToToken();
+        _http.RespondWithStatus(CallbackUri, HttpStatusCode.InternalServerError);
+
+        using var sender = await Start();
+        await WaitUntil(
+            async () => (await Read(webhook)).LastError != null, "the first failure to be recorded");
+
+        await Task.Delay(TimeSpan.FromSeconds(1), Ct);
+
+        Assert.Single(_http.Sent, x => x.Uri == CallbackUri);
+        Assert.Equal(1, await PendingCount());
+    }
+
+    /// <summary>
     /// A recovered subscription stops reporting an error, so the field means "currently failing" rather
     /// than "has ever failed".
     /// </summary>

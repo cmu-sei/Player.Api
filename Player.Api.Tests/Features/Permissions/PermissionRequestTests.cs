@@ -99,6 +99,34 @@ public class PermissionRequestTests(DatabaseFixture fixture, PlayerAppFactory fa
     }
 
     /// <summary>
+    /// A rename onto a name another permission holds is the same server error as the duplicate
+    /// <c>Create</c> above, for the same reason: neither handler in this feature reads the name before
+    /// saving it. Wrong — the caller's mistake, reported as a server fault.
+    /// </summary>
+    /// <remarks>
+    /// Turns red when <c>Edit</c> checks the name first. The stored name is asserted because the rollback
+    /// is what keeps authorization working: permission names are the claim keys, so a rename that half
+    /// landed would revoke the permission from every role granting it.
+    /// </remarks>
+    [Fact]
+    public async Task Edit_reports_a_rename_onto_a_taken_name_as_a_server_error()
+    {
+        var problem = await AssertProblem(
+            HttpStatusCode.InternalServerError,
+            await RootClient.PutAsJsonAsync(
+                $"api/permissions/{TestData.Permissions.ViewNetworks}",
+                new { name = SystemPermission.CreateViews.ToString() },
+                Ct));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", problem.Detail);
+
+        await using var db = NewContext();
+        Assert.Equal(
+            "ViewNetworks",
+            (await db.Permissions.SingleAsync(x => x.Id == TestData.Permissions.ViewNetworks, Ct)).Name);
+    }
+
+    /// <summary>
     /// The immutable flag protects the permissions the application's own authorization depends on:
     /// renaming one would silently revoke it from every role that grants it.
     /// </summary>

@@ -73,6 +73,27 @@ public sealed class PlayerAppFactory : WebApplicationFactory<Program>
 
     private readonly ConcurrentDictionary<Type, object> _hubs = new();
 
+    private volatile ServiceDescriptor[] _production;
+
+    /// <summary>
+    /// What <c>Startup.ConfigureServices</c> registered, before anything this factory replaces. For the
+    /// tests that compare the hosted application's composition with <see cref="ApiTestHost"/>'s.
+    /// </summary>
+    /// <remarks>
+    /// Snapshotted at the top of <c>ConfigureTestServices</c>, which runs after <c>Startup</c> and before
+    /// the three replacements below, so this is the production composition and not the tested one. Reading
+    /// it forces the host to be built, since nothing is registered until then.
+    /// </remarks>
+    public IReadOnlyList<ServiceDescriptor> ProductionRegistrations
+    {
+        get
+        {
+            _ = Services;
+
+            return _production;
+        }
+    }
+
     /// <summary>
     /// What the application broadcast through a hub. Held here rather than resolved from the container,
     /// so a test reads the instance the request wrote to.
@@ -94,6 +115,8 @@ public sealed class PlayerAppFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
+            _production = [.. services];
+
             AddTestAuthentication(services);
             AddPerTestDatabase(services);
             AddStubbedCollaborators(services);

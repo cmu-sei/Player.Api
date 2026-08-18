@@ -273,6 +273,32 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal(["Own", "Scoped onto"], teams.Select(x => x.Name).OrderBy(x => x, StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// The <c>me</c> route takes the subject from the token rather than the path, so it answers the self
+    /// branch for whoever is calling.
+    /// </summary>
+    /// <remarks>
+    /// The only test on <c>getMyViewTeams</c>; nothing but the route contract reached it before. The team
+    /// the other member is on is what makes the identity claim concrete — a route resolving the wrong
+    /// subject, or falling through to the privileged branch, would return it too.
+    /// </remarks>
+    [Fact]
+    public async Task GetMyViewTeams_answers_for_the_caller_the_token_names()
+    {
+        var view = TestData.View();
+        var own = TestData.Team(view.Id, "Own");
+        var theirs = TestData.Team(view.Id, "Someone else's");
+        await Seed(view, own, theirs);
+
+        await Actor().WithName("Other member").OnTeam(theirs, primary: true).SeedAsync();
+        var actor = await Actor().OnTeam(own, primary: true).SeedAsync();
+
+        var teams = await ReadAsync<Team[]>(
+            await Client(actor).GetAsync($"api/me/views/{view.Id}/teams", Ct));
+
+        Assert.Equal("Own", Assert.Single(teams).Name);
+    }
+
     [Fact]
     public async Task GetByUserView_reports_a_missing_view_as_not_found()
     {

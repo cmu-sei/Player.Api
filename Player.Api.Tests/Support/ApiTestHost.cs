@@ -47,7 +47,17 @@ public sealed class ApiTestHost : IDisposable
 {
     private readonly ServiceProvider _services;
 
-    private ApiTestHost(ServiceProvider services) => _services = services;
+    private ApiTestHost(ServiceProvider services, ServiceDescriptor[] registrations)
+    {
+        _services = services;
+        Registrations = registrations;
+    }
+
+    /// <summary>
+    /// What this host registered, for the tests that compare it with the hosted application's own
+    /// composition.
+    /// </summary>
+    public IReadOnlyList<ServiceDescriptor> Registrations { get; }
 
     /// <summary>The substituted view hub, for asserting on broadcast notifications.</summary>
     public IHubContext<ViewHub> ViewHub => Resolve<IHubContext<ViewHub>>();
@@ -89,7 +99,7 @@ public sealed class ApiTestHost : IDisposable
         AddSubstitutedCollaborators(services);
         AddAuthorization(services);
 
-        return new ApiTestHost(services.BuildServiceProvider());
+        return new ApiTestHost(services.BuildServiceProvider(), [.. services]);
     }
 
     public void Dispose() => _services.Dispose();

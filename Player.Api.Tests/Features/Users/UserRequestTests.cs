@@ -368,6 +368,39 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             (await db.ViewMemberships.SingleAsync(x => x.Id == viewMembership.Id, Ct)).PrimaryTeamMembershipId);
     }
 
+    /// <summary>
+    /// Adding a user to a team they are already on is a server error: the membership is inserted without
+    /// looking and <c>(TeamId, UserId)</c> is uniquely indexed. Wrong — a repeated add is what a retry or a
+    /// re-run of a roster import produces, and 500 tells the caller nothing about which of the two ids was
+    /// the problem.
+    /// </summary>
+    /// <remarks>
+    /// Turns red when the handler checks the membership first, as a 409 or as a no-op. The membership count
+    /// is asserted because the rollback is what keeps the duplicate out; the claims cache is not, since the
+    /// refresh never runs.
+    /// </remarks>
+    [Fact]
+    public async Task AddToTeam_reports_a_membership_the_user_already_has_as_a_server_error()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var user = TestData.User();
+        await Seed(view, team, user);
+
+        await AssertStatus(HttpStatusCode.OK, await AddToTeam(RootClient, team.Id, user.Id));
+
+        var problem = await AssertProblem(
+            HttpStatusCode.InternalServerError, await AddToTeam(RootClient, team.Id, user.Id));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", problem.Detail);
+
+        await using var db = NewContext();
+        Assert.Equal(1, await db.TeamMemberships.CountAsync(
+            x => x.TeamId == team.Id && x.UserId == user.Id, Ct));
+        Assert.Equal(1, await db.ViewMemberships.CountAsync(
+            x => x.ViewId == view.Id && x.UserId == user.Id, Ct));
+    }
+
     [Fact]
     public async Task AddToTeam_reports_a_missing_team_as_not_found()
     {

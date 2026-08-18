@@ -23,6 +23,12 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     private readonly string _basePath =
         Path.Combine(Path.GetTempPath(), $"player-file-tests-{Guid.NewGuid():N}");
 
+    /// <summary>
+    /// The upload limit the boundary tests configure. Small enough that a case can allocate the byte over
+    /// it, and named here so that those cases read as offsets from a limit rather than as magic sizes.
+    /// </summary>
+    private const int Limit = 64;
+
     // ---- Upload -----------------------------------------------------------------------------------
 
     [Fact]
@@ -161,6 +167,103 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     }
 
     /// <summary>
+    /// Characterizes issue 61. The allow-list is matched with a case-sensitive
+    /// <see cref="string.EndsWith(string)"/> (<c>FileService.cs:302</c>), so the file refused here uploads
+    /// fine once its extension is lower-cased. Cameras, scanners and Windows clients all produce
+    /// upper-case extensions, and the caller is told only that the extension is invalid.
+    /// </summary>
+    /// <remarks>Turns red when the comparison becomes case-insensitive.</remarks>
+    [Theory]
+    [InlineData("NOTES.TXT")]
+    [InlineData("notes.Txt")]
+    public async Task UploadAsync_refuses_an_allowed_extension_in_the_wrong_case(string name)
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service().UploadAsync(Form(view.Id, [team.Id], (name, "hello")), Ct));
+    }
+
+    /// <summary>
+    /// The allow-list is a suffix match on the name rather than a comparison against
+    /// <see cref="Path.GetExtension(string)"/>, but for a double extension the two agree: the last one is
+    /// what decides, so <c>notes.exe.txt</c> is a text file the way a file system reads it.
+    /// </summary>
+    [Fact]
+    public async Task UploadAsync_decides_a_double_extension_on_the_last_one()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        var uploaded = await Service().UploadAsync(
+            Form(view.Id, [team.Id], ("notes.exe.txt", "hello")),
+            Ct);
+
+        Assert.Equal("notes.exe.txt", Assert.Single(uploaded).Name);
+        Assert.EndsWith("..txt", Assert.Single(await Stored()).Path);
+    }
+
+    /// <summary>
+    /// An allowed extension anywhere but the end does not let the file through, which is the case the
+    /// allow-list exists for.
+    /// </summary>
+    [Fact]
+    public async Task UploadAsync_refuses_an_allowed_extension_that_is_not_the_last_one()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service().UploadAsync(Form(view.Id, [team.Id], ("notes.txt.exe", "hello")), Ct));
+    }
+
+    /// <summary>
+    /// A name with no extension has nothing for the suffix match to match, so it is refused rather than
+    /// treated as a type nobody named.
+    /// </summary>
+    [Fact]
+    public async Task UploadAsync_refuses_a_name_with_no_extension()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service().UploadAsync(Form(view.Id, [team.Id], ("readme", "hello")), Ct));
+    }
+
+    /// <summary>
+    /// Characterizes issue 61. <c>ValidateFileExtension</c> compares with
+    /// <see cref="string.EndsWith(string)"/>, whose default is culture-sensitive, so characters the
+    /// collation gives no weight are not read at all: this name matches <c>.txt</c> without ending in it
+    /// under any ordinal reading. A soft hyphen is not an invalid file-name character, so it survives
+    /// <c>SanitizeFileName</c> and the file lands on disk under an extension the allow-list does not
+    /// contain. Nothing dangerous gets through this way — the tail still has to spell an allowed
+    /// extension — but the check does not mean what it reads as, and the guidance for a non-linguistic
+    /// comparison like this one is <see cref="StringComparison.Ordinal"/>.
+    /// </summary>
+    /// <remarks>Turns red when the comparison becomes ordinal.</remarks>
+    [Fact]
+    public async Task UploadAsync_accepts_an_extension_that_matches_only_under_the_current_culture()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        // notes.t<soft hyphen>xt
+        const string name = "notes.t­xt";
+
+        var uploaded = await Service().UploadAsync(Form(view.Id, [team.Id], (name, "hello")), Ct);
+
+        Assert.Equal(name, Assert.Single(uploaded).Name);
+        Assert.EndsWith("..t­xt", Assert.Single(await Stored()).Path);
+    }
+
+    /// <summary>
     /// The name is stored and later handed back as a download filename, so the characters a path cannot
     /// carry are dropped rather than rejected.
     /// </summary>
@@ -178,21 +281,45 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         Assert.Equal("..escaped.txt", Assert.Single(uploaded).Name);
     }
 
-    [Fact]
-    public async Task UploadAsync_refuses_a_file_over_the_configured_limit()
+    /// <summary>
+    /// The limit is <c>stream.Length > maxSize</c> (<c>FileService.cs:323</c>), so a file of exactly the
+    /// limit is accepted and the first refused byte is the one past it. An empty file is not a special
+    /// case either: nothing looks for one, so it is written and pointed at like any other.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(Limit - 1)]
+    [InlineData(Limit)]
+    public async Task UploadAsync_accepts_a_file_up_to_the_limit(int size)
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
         await Seed(view, team);
 
-        var oversized = new FileForm
-        {
-            viewId = view.Id,
-            teamIds = [team.Id],
-            ToUpload = [FormFile("big.txt", new byte[2 * 1024 * 1024])]
-        };
+        await Service(maxSize: Limit).UploadAsync(SizedForm(view.Id, team.Id, size), Ct);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => Service().UploadAsync(oversized, Ct));
+        // The bytes rather than the row, since the limit is applied to the stream that produced them.
+        Assert.Equal(size, new FileInfo(Assert.Single(await Stored()).Path).Length);
+    }
+
+    /// <summary>
+    /// The size is checked before anything is created, so a refused upload leaves neither a row nor a
+    /// directory for the view behind it.
+    /// </summary>
+    [Theory]
+    [InlineData(Limit + 1)]
+    [InlineData(Limit * 32)]
+    public async Task UploadAsync_refuses_a_file_over_the_limit(int size)
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Service(maxSize: Limit).UploadAsync(SizedForm(view.Id, team.Id, size), Ct));
+
+        Assert.Empty(await Stored());
+        Assert.False(Directory.Exists(Path.Combine(_basePath, view.Id.ToString())));
     }
 
     /// <summary>
@@ -656,11 +783,25 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     }
 
     /// <summary>
-    /// The service as <paramref name="user"/>, over this test's upload directory.
+    /// The service as <paramref name="user"/>, over this test's upload directory. <paramref name="maxSize"/>
+    /// replaces the configured upload limit; left alone, the host's own default stands.
     /// </summary>
-    private IFileService Service(ClaimsPrincipal user = null) =>
-        HostFor(user ?? Root, options => options.FileUpload.basePath = _basePath)
-            .Resolve<IFileService>();
+    private IFileService Service(ClaimsPrincipal user = null, long? maxSize = null) =>
+        HostFor(user ?? Root, options =>
+        {
+            options.FileUpload.basePath = _basePath;
+            options.FileUpload.maxSize = maxSize ?? options.FileUpload.maxSize;
+        })
+        .Resolve<IFileService>();
+
+    /// <summary>An upload of <paramref name="size"/> bytes, for the tests about the limit.</summary>
+    private static FileForm SizedForm(Guid viewId, Guid teamId, int size) =>
+        new()
+        {
+            viewId = viewId,
+            teamIds = [teamId],
+            ToUpload = [FormFile("notes.txt", new byte[size])]
+        };
 
     private static FileForm Form(Guid viewId, List<Guid> teamIds, params (string Name, string Content)[] files) =>
         new()

@@ -135,24 +135,39 @@ public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ServiceTestBa
     /// A pass sends at most ten, oldest first, so a large backlog drains in order over several passes
     /// instead of one pass holding the LRS open.
     /// </summary>
-    [Fact]
-    public async Task A_pass_sends_the_ten_oldest_statements()
+    /// <remarks>
+    /// <c>BatchSize</c> is a private constant (<c>XApiBackgroundService.cs:21</c>) and these cases are its
+    /// boundary: one under it, exactly it — which has to leave *nothing* behind, the off-by-one a
+    /// <c>Take(BatchSize - 1)</c> would produce — and one over. Twelve stays because it is where "at most
+    /// ten" and "the ten oldest" are both legible at once. What is left over is named by body rather than
+    /// counted, so a pass that took the newest ten fails here rather than passing on arithmetic.
+    /// </remarks>
+    [Theory]
+    [InlineData(9, 9, 0)]
+    [InlineData(10, 10, 0)]
+    [InlineData(11, 10, 1)]
+    [InlineData(12, 10, 2)]
+    public async Task A_pass_sends_the_ten_oldest_statements(int queued, int sent, int left)
     {
         var (host, lrs) = Configured();
         lrs.RespondWithStatus(StatementsUri, HttpStatusCode.OK);
 
-        await Seed([.. Backlog(12)]);
+        await Seed([.. Backlog(queued)]);
 
         await RunOnce(
             host,
             async db => await db.XApiQueuedStatements.AsNoTracking()
-                .CountAsync(x => x.Status == XApiQueueStatus.Completed, Ct) == 10,
-            "ten statements to be sent");
+                .CountAsync(x => x.Status == XApiQueueStatus.Completed, Ct) == sent,
+            $"{sent} statements to be sent");
 
-        Assert.Equal([.. Enumerable.Range(0, 10).Select(Body)], lrs.Sent.Select(x => x.Body));
+        Assert.Equal([.. Enumerable.Range(0, sent).Select(Body)], lrs.Sent.Select(x => x.Body));
 
-        var untouched = (await Stored()).Where(x => x.Status == XApiQueueStatus.Pending).ToList();
-        Assert.Equal(2, untouched.Count);
+        var untouched = (await Stored())
+            .Where(x => x.Status == XApiQueueStatus.Pending)
+            .OrderBy(x => x.QueuedAt)
+            .ToList();
+
+        Assert.Equal([.. Enumerable.Range(sent, left).Select(Body)], untouched.Select(x => x.StatementJson));
         Assert.All(untouched, x => Assert.Equal(0, x.RetryCount));
     }
 
