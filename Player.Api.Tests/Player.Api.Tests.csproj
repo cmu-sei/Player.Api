@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Required by xUnit v3: the test project is a self-executing host. -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Player.Api.Tests</RootNamespace>
+
+    <!--
+      Applies coverlet.runsettings to every run, so a coverage run cannot go without its exclusions:
+      without them the generated migration assembly alone takes the total from 14,368 sequence points
+      to 36,661 and the headline reads 94.6% while the application sits at 86.2%. The collector in that
+      file is disabled by default, so an ordinary `dotnet test` collects nothing; coverage is opt-in
+      through the collect argument.
+    -->
+    <RunSettingsFilePath>$(MSBuildProjectDirectory)/coverlet.runsettings</RunSettingsFilePath>
+  </PropertyGroup>
+
+  <!-- Used by nearly every test file; importing them globally keeps the noise down. -->
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="NSubstitute" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="NSubstitute" />
+    <!-- Hosts Player.Api in-process over TestServer, so the tests drive the real Startup. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- The version comes from Directory.Packages.props, the same entry Player.Api uses: the SQLite
+         fallback approximates production's PostgreSQL, so the two must not run on different EF patches. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Player.Api\Player.Api.csproj" />
+  </ItemGroup>
+
+</Project>

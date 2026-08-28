@@ -1,0 +1,16 @@
+# Analyzer configuration. Code style is deliberately not legislated here: the two projects were
+# written to different conventions (block versus file-scoped namespaces, `this.` prefixes), and
+# encoding one of them would turn every file into a diff without making anything more correct.
+#
+# What this file does is raise the analyzer rules that ship as suggestions and that the test suite's
+# own conventions depend on. Directory.Build.props turns warnings into errors, so anything named here
+# fails the build.
+root = true
+
+[*.cs]
+
+# A skipped test is a test that reports nothing. docs/Testing.md requires the opposite: a bug found
+# while testing is characterized by a test that asserts the current behaviour and turns red when it
+# is fixed. Conditional skips are unaffected — [RequiresPostgres] uses SkipUnless, which this does
+# not match.
+dotnet_diagnostic.xUnit1004.severity = warning

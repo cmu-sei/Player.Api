@@ -75,6 +75,10 @@ configs:
 
 The official microsoft docker image is based on Debian. SSL CA trusts and their entry scripts need to be updated to use `update-ca-certificates` please see [update-trusts.sh](entry.d/update-trusts.sh).
 
+## Testing
+
+`Player.Api.Tests` holds the automated test suite. `dotnet test` runs it, starting its own PostgreSQL container through Testcontainers — see [docs/Testing.md](docs/Testing.md) for what the suite covers, how the harness is put together, and how to run it without Docker.
+
 ## Reporting bugs and requesting features
 
 Think you found a bug? Please report all Crucible bugs - including bugs for the individual Crucible apps - in the [cmu-sei/crucible issue tracker](https://github.com/cmu-sei/crucible/issues).
