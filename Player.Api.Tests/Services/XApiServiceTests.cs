@@ -20,6 +20,7 @@ public class XApiServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
 {
     private const string Issuer = "https://identity.test";
     private const string ApiUrl = "https://player.test/api";
+    private const string UiUrl = "https://player.test";
     private const string TeamExtensionKey = "https://crucible.sei.cmu.edu/xapi/extensions/team";
     private const string ProfileCategory = "https://crucible.sei.cmu.edu/xapi/profile/v1";
 
@@ -507,11 +508,11 @@ public class XApiServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     }
 
     /// <summary>
-    /// Unlike every other emit, this one builds its context without the team, so the team appears only
-    /// as the statement's object and not as the team extension a consumer filters on.
+    /// The attended statement carries both the standard xAPI team group and the compatibility
+    /// extension, so old and new consumers identify the same team.
     /// </summary>
     [Fact]
-    public async Task EmitTeamJoined_omits_the_team_context_extension()
+    public async Task EmitTeamJoined_carries_the_team_context()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
@@ -519,7 +520,13 @@ public class XApiServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
 
         await Service(Caller()).EmitTeamJoinedAsync(team.Id, view.Id, Ct);
 
-        Assert.Null(TeamExtension(Json(await Queued())));
+        var statement = Json(await Queued());
+        Assert.Equal(team.Id.ToString(), TeamExtension(statement));
+
+        var contextTeam = statement["context"]["team"];
+        Assert.Equal(team.Name, contextTeam["name"].GetValue<string>());
+        Assert.Equal(team.Id.ToString(), contextTeam["account"]["name"].GetValue<string>());
+        Assert.Equal($"{UiUrl}/", contextTeam["account"]["homePage"].GetValue<string>());
     }
 
     /// <summary>
@@ -703,6 +710,7 @@ public class XApiServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
             o.XApi.Enabled = true;
             o.XApi.Username = "lrs-user";
             o.XApi.ApiUrl = ApiUrl;
+            o.XApi.UiUrl = UiUrl;
             o.XApi.Platform = "Player";
             configure?.Invoke(o.XApi);
         }).Resolve<IXApiService>();

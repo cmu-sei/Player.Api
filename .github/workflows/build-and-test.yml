@@ -18,14 +18,6 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
 
-    env:
-      # The single most important line in this file. Player.Api.Tests falls back to SQLite when no
-      # Docker daemon is reachable so that a contributor without Docker still gets coverage; in CI
-      # that fallback would report a green run that never touched production's database. With this
-      # set, DatabaseFixture turns an unavailable daemon into a hard failure instead.
-      # See Player.Api.Tests/Support/DatabaseFixture.cs.
-      PLAYER_TESTS_REQUIRE_POSTGRES: "true"
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -68,14 +60,13 @@ jobs:
           dotnet test --no-build --logger "trx;LogFileName=test-results.trx" \
             -- xUnit.DiagnosticMessages=true | tee "$RUNNER_TEMP/test.log"
 
-      # PLAYER_TESTS_REQUIRE_POSTGRES already fails the run if PostgreSQL is unavailable, so this is
-      # a second, independent check on the same guarantee: it reads what the suite reported rather
-      # than trusting that the environment variable was honoured.
+      # This independently checks the provider the suite reported, so a future harness change cannot
+      # silently stop exercising PostgreSQL.
       - name: Confirm the suite ran against PostgreSQL
         # Block scalar, not a plain one: the pattern contains a colon-space, which YAML would
         # otherwise read as the start of a mapping entry.
         run: |
-          grep -F '[Player.Api.Tests] database provider: PostgreSql' "$RUNNER_TEMP/test.log"
+          grep -F '[Player.Api.Tests] database provider: PostgreSQL' "$RUNNER_TEMP/test.log"
 
       # Unconditional, so that a failing run still publishes which tests failed rather than only the
       # summary line in the log. Coverage is deliberately not collected here: nothing gates on the
