@@ -93,7 +93,7 @@ public class XApiService : IXApiService
         return _xApiOptions.Enabled && !string.IsNullOrWhiteSpace(_xApiOptions.Username);
     }
 
-    private Context BuildContext(Guid viewId, Guid? teamId = null)
+    private Context BuildContext(Guid viewId, TeamEntity team = null)
     {
         var context = new Context
         {
@@ -115,13 +115,25 @@ public class XApiService : IXApiService
 
         context.contextActivities = contextActivities;
 
-        // Add team context extension if teamId provided
-        if (teamId.HasValue)
+        if (team != null)
         {
+            var group = new Group
+            {
+                name = team.Name ?? "Unnamed Team",
+                account = new AgentAccount
+                {
+                    homePage = new Uri(_xApiOptions.UiUrl),
+                    name = team.Id.ToString()
+                },
+                member = new List<Agent> { _agent }
+            };
+            context.team = group;
+
+            // Retain the existing extension for consumers that use it.
             context.extensions = new TinCan.Extensions(
                 new Newtonsoft.Json.Linq.JObject
                 {
-                    ["https://crucible.sei.cmu.edu/xapi/extensions/team"] = teamId.Value.ToString()
+                    ["https://crucible.sei.cmu.edu/xapi/extensions/team"] = team.Id.ToString()
                 });
         }
 
@@ -153,8 +165,9 @@ public class XApiService : IXApiService
             var userId = _user.GetId();
             var viewMembership = await _context.ViewMemberships
                 .Include(vm => vm.PrimaryTeamMembership)
+                .ThenInclude(tm => tm.Team)
                 .FirstOrDefaultAsync(vm => vm.ViewId == viewId && vm.UserId == userId, ct);
-            var teamId = viewMembership?.PrimaryTeamMembership?.TeamId;
+            var team = viewMembership?.PrimaryTeamMembership?.Team;
 
             var verb = new Verb { id = new Uri("http://id.tincanapi.com/verb/viewed") };
             verb.display = new LanguageMap();
@@ -175,7 +188,7 @@ public class XApiService : IXApiService
                 actor = _agent,
                 verb = verb,
                 target = activity,
-                context = BuildContext(viewId, teamId)
+                context = BuildContext(viewId, team)
             };
 
             await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
@@ -186,7 +199,7 @@ public class XApiService : IXApiService
                 ViewId = viewId
             }, ct);
 
-            _logger.LogInformation("Queued ViewViewed statement for View {ViewId}, Team {TeamId}", viewId, teamId);
+            _logger.LogInformation("Queued ViewViewed statement for View {ViewId}, Team {TeamId}", viewId, team?.Id);
         }
         catch (Exception ex)
         {
@@ -206,8 +219,9 @@ public class XApiService : IXApiService
             var userId = _user.GetId();
             var viewMembership = await _context.ViewMemberships
                 .Include(vm => vm.PrimaryTeamMembership)
+                .ThenInclude(tm => tm.Team)
                 .FirstOrDefaultAsync(vm => vm.ViewId == viewId && vm.UserId == userId, ct);
-            var teamId = viewMembership?.PrimaryTeamMembership?.TeamId;
+            var team = viewMembership?.PrimaryTeamMembership?.Team;
 
             var appDisplayNames = new Dictionary<string, string>
             {
@@ -237,7 +251,7 @@ public class XApiService : IXApiService
             activity.definition.name = new LanguageMap();
             activity.definition.name.Add("en-US", displayName);
 
-            var contextObj = BuildContext(viewId, teamId);
+            var contextObj = BuildContext(viewId, team);
 
             // Add parent context activity (the View)
             var parentActivity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
@@ -263,7 +277,7 @@ public class XApiService : IXApiService
                 ViewId = viewId
             }, ct);
 
-            _logger.LogInformation("Queued ApplicationSwitched statement for View {ViewId}, App {ApplicationName}, Team {TeamId}", viewId, applicationName, teamId);
+            _logger.LogInformation("Queued ApplicationSwitched statement for View {ViewId}, App {ApplicationName}, Team {TeamId}", viewId, applicationName, team?.Id);
         }
         catch (Exception ex)
         {
@@ -303,7 +317,7 @@ public class XApiService : IXApiService
                 actor = _agent,
                 verb = verb,
                 target = activity,
-                context = BuildContext(viewId)
+                context = BuildContext(viewId, team)
             };
 
             await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
@@ -334,8 +348,9 @@ public class XApiService : IXApiService
             var userId = _user.GetId();
             var viewMembership = await _context.ViewMemberships
                 .Include(vm => vm.PrimaryTeamMembership)
+                .ThenInclude(tm => tm.Team)
                 .FirstOrDefaultAsync(vm => vm.ViewId == viewId && vm.UserId == userId, ct);
-            var teamId = viewMembership?.PrimaryTeamMembership?.TeamId;
+            var team = viewMembership?.PrimaryTeamMembership?.Team;
 
             var verb = new Verb { id = new Uri("http://adlnet.gov/expapi/verbs/terminated") };
             verb.display = new LanguageMap();
@@ -356,7 +371,7 @@ public class XApiService : IXApiService
                 {
                     duration = duration
                 },
-                context = BuildContext(viewId, teamId)
+                context = BuildContext(viewId, team)
             };
 
             await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
@@ -367,7 +382,7 @@ public class XApiService : IXApiService
                 ViewId = viewId
             }, ct);
 
-            _logger.LogInformation("Queued ViewTerminated statement for View {ViewId}, Duration {Duration}, Team {TeamId}", viewId, duration, teamId);
+            _logger.LogInformation("Queued ViewTerminated statement for View {ViewId}, Duration {Duration}, Team {TeamId}", viewId, duration, team?.Id);
         }
         catch (Exception ex)
         {
@@ -402,7 +417,7 @@ public class XApiService : IXApiService
             activity.definition.name = new LanguageMap();
             activity.definition.name.Add("en-US", team.Name ?? "Unnamed Team");
 
-            var contextObj = BuildContext(viewId, teamId);
+            var contextObj = BuildContext(viewId, team);
 
             // Add parent context activity (the View)
             var parentActivity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
