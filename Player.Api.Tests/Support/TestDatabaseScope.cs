@@ -12,10 +12,9 @@ namespace Player.Api.Tests.Support;
 /// <remarks>
 /// <para>
 /// One host serves the whole run, so the application's own <c>PlayerContext</c> registration cannot
-/// be reused: <c>AddEventPublishingDbContextFactory</c> pools its options as a singleton, and the
-/// SQLite fallback has no connection string to configure at all — it binds contexts to an open
-/// <c>SqliteConnection</c> instance. <see cref="PlayerAppFactory"/> replaces the registration with one
-/// that asks this class.
+/// be reused: <c>AddEventPublishingDbContextFactory</c> pools its options as a singleton, while each
+/// test owns an isolated PostgreSQL database. <see cref="PlayerAppFactory"/> replaces the registration
+/// with one that asks this class.
 /// </para>
 /// <para>
 /// Each test registers its session under an id and sends that id as <see cref="HeaderName"/> on every

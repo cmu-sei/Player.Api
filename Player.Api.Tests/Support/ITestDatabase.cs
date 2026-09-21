@@ -7,25 +7,13 @@ using Player.Api.Data.Data;
 namespace Player.Api.Tests.Support;
 
 /// <summary>
-/// Which provider is backing the current test run.
-/// </summary>
-public enum TestDatabaseKind
-{
-    PostgreSql,
-    Sqlite
-}
-
-/// <summary>
-/// A database the test suite can run against. Created once per run and asked for a fresh,
-/// isolated <see cref="ITestDatabaseSession"/> per test.
+/// The database backing the test suite. Created once per run and asked for a fresh, isolated
+/// <see cref="ITestDatabaseSession"/> per test.
 /// </summary>
 public interface ITestDatabase : IAsyncDisposable
 {
-    TestDatabaseKind Kind { get; }
-
     /// <summary>
-    /// Prepares the database so sessions can be handed out: starts the container and migrates
-    /// the template (PostgreSQL), or verifies the provider is usable (SQLite).
+    /// Starts the PostgreSQL container and migrates the template database.
     /// </summary>
     Task InitializeAsync();
 
@@ -43,9 +31,8 @@ public interface ITestDatabase : IAsyncDisposable
 /// Isolation deliberately avoids wrapping the test in a rolled-back transaction. The
 /// <c>EntityEventInterceptor</c> only publishes entity events on <c>TransactionCommitted</c> when a
 /// transaction is in progress, and clears its tracked state on <c>TransactionRolledBack</c> — so
-/// transaction-based isolation would silently stop entity events from firing, and only on
-/// PostgreSQL. Both providers therefore give each test its own database instead, which keeps
-/// SaveChanges behavior identical across providers.
+/// transaction-based isolation would silently stop entity events from firing. Each test therefore
+/// gets its own PostgreSQL database.
 /// </para>
 /// </remarks>
 public interface ITestDatabaseSession : IAsyncDisposable

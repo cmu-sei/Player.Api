@@ -16,9 +16,8 @@ namespace Player.Api.Tests.Support;
 /// <para>
 /// Migrations are applied once, to a template database. Each test then gets its own database
 /// created from that template, which is a file-level copy and so much cheaper than re-running the
-/// 34 migrations. This also gives stronger isolation than a shared database would, and keeps
-/// SaveChanges behavior identical to the SQLite fallback (see <see cref="ITestDatabaseSession"/>
-/// for why transaction-based isolation is not used).
+/// 34 migrations. This also gives stronger isolation than a shared database would; see
+/// <see cref="ITestDatabaseSession"/> for why transaction-based isolation is not used.
 /// </para>
 /// <para>
 /// The migrations emit <c>CREATE EXTENSION "uuid-ossp"</c> (via
@@ -45,8 +44,6 @@ public sealed class PostgresTestDatabase : ITestDatabase
         .Build();
 
     private int _databaseCount;
-
-    public TestDatabaseKind Kind => TestDatabaseKind.PostgreSql;
 
     public async Task InitializeAsync()
     {

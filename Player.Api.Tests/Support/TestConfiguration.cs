@@ -35,17 +35,10 @@ internal static class TestConfiguration
         // PlayerAppFactory. Both services have their own tests, which drive them directly.
         ["open-api-only"] = "true",
 
-        // Must match a case of Startup's provider switch. The second switch, which registers the
-        // health check, has no default either, so an unmatched provider leaves AddHealthChecks
-        // uncalled and MapHealthChecks throws while the host is still building. Sqlite is the
-        // cheapest match: the check opens its connection only when /api/health/* is requested, and
-        // the context registration the first switch makes is replaced per request anyway. Pinned
-        // rather than inherited so the harness does not break if the application's default changes.
-        ["Database:Provider"] = "Sqlite",
-
-        // The shipped value names a file, which the health check would create in the content root —
-        // the Player.Api project directory under test.
-        ["ConnectionStrings:Sqlite"] = "Data Source=:memory:",
+        // Startup must select a provider before the test factory can replace its context registration.
+        // InMemory keeps that otherwise-unused startup registration self-contained. Database-backed
+        // tests receive their PostgreSQL context from TestDatabaseScope instead.
+        ["Database:Provider"] = "InMemory",
 
         // One host serves the whole run, and the claims cache is keyed on user id alone. Cached
         // claims would leak across tests: a user whose permissions one test seeds would keep them in

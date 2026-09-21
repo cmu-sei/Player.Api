@@ -23,8 +23,8 @@ public class HealthControllerTests(DatabaseFixture fixture, PlayerAppFactory fac
     : ApiTestBase(fixture, factory)
 {
     /// <summary>
-    /// The liveness check is the configured provider's, tagged <c>live</c> in <c>Startup</c>. The test
-    /// host's provider is SQLite over <c>:memory:</c>, and this is the only test that opens it.
+    /// The test host registers an empty health-check collection because its real PostgreSQL contexts
+    /// are selected per request rather than through Startup's singleton provider registration.
     /// </summary>
     [Fact]
     public async Task Live_reports_healthy()

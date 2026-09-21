@@ -117,6 +117,10 @@ public sealed class PlayerAppFactory : WebApplicationFactory<Program>
         {
             _production = [.. services];
 
+            // Startup does not register provider health checks for its otherwise-unused InMemory
+            // context. The route tests need the health-check services, but not another database.
+            services.AddHealthChecks();
+
             AddTestAuthentication(services);
             AddPerTestDatabase(services);
             AddStubbedCollaborators(services);

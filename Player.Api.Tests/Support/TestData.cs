@@ -10,20 +10,15 @@ namespace Player.Api.Tests.Support;
 /// Object mothers for the entities permission tests need.
 /// </summary>
 /// <remarks>
-/// Every mother assigns an explicit <see cref="Guid.NewGuid"/> id. This is deliberate: on
-/// PostgreSQL ids are store-generated (<c>uuid_generate_v4()</c>, via
-/// <c>ModelBuilderExtensions.AddPostgresUUIDGeneration</c>) while on the SQLite fallback nothing
-/// generates them, so an unassigned id would come back as <see cref="Guid.Empty"/> there and
-/// collide on the second insert. Assigning up front makes a test's ids identical under both
-/// providers, and lets a test hold an id before saving.
+/// Every mother assigns an explicit <see cref="Guid.NewGuid"/> id so a test can retain and compose
+/// stable references before saving.
 /// </remarks>
 public static class TestData
 {
     /// <summary>
     /// Ids of the <see cref="TeamRoleEntity"/> rows seeded by
     /// <c>PlayerContext.SeedTeamRoles</c>. <see cref="TeamEntity.RoleId"/> is a required foreign
-    /// key, so every team needs one of these — the seed data is present under both providers
-    /// (migrations on PostgreSQL, <c>EnsureCreated</c> on SQLite).
+    /// key, so every team needs one of these. The migration history creates the seed data.
     /// </summary>
     public static class TeamRoles
     {

@@ -390,10 +390,9 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     /// application serves every team in a view.
     /// </summary>
     /// <remarks>
-    /// Compared ignoring case: the substitution is a <c>Guid.ToString()</c> inside a projected
-    /// expression (<c>Applications/MappingProfile.cs:48-51</c>), so the database performs it — and
-    /// SQLite renders a <c>Guid</c> as upper-case text where PostgreSQL renders it lower-case. The
-    /// casing is the provider's, not the application's.
+    /// The substitution is a <c>Guid.ToString()</c> inside a projected expression
+    /// (<c>Applications/MappingProfile.cs:48-51</c>), so this also covers the database-side
+    /// projection.
     /// </remarks>
     [Fact]
     public async Task CreateApplicationInstance_substitutes_the_team_and_view_placeholders()
@@ -414,8 +413,7 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         Assert.Equal("Blue Team console", created.Name);
         Assert.Equal(
             $"https://example.test/{view.Id}/{team.Id}?view=My%20View&team=Blue%20Team",
-            created.Url,
-            ignoreCase: true);
+            created.Url);
     }
 
     /// <summary>

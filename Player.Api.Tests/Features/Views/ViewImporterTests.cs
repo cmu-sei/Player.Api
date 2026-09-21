@@ -398,10 +398,9 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     /// </summary>
     /// <remarks>
     /// Turns red when the importer validates the parent: expect an <c>ImportViewFailure</c> naming it,
-    /// and "Sibling" imported. PostgreSQL-only because it needs the foreign key to be enforced, which
-    /// <c>DatabaseHarnessTests.The_sqlite_fallback_enforces_foreign_keys</c> records for the fallback.
+    /// and "Sibling" imported. The PostgreSQL test database enforces the missing-parent foreign key.
     /// </remarks>
-    [RequiresPostgres]
+    [Fact]
     public async Task A_view_whose_parent_is_missing_fails_the_whole_import()
     {
         var orphan = Export("Orphan");
@@ -425,7 +424,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     /// rather than the named seed failure. Turns red when the importer rejects a team with no role:
     /// expect an <c>ImportViewFailure</c> naming it, and "Sibling" imported.
     /// </remarks>
-    [RequiresPostgres]
+    [Fact]
     public async Task A_team_with_no_role_fails_the_whole_import()
     {
         var roleless = Export("Roleless");

@@ -24,10 +24,8 @@ public class XApiQueueServiceTests(DatabaseFixture fixture) : ServiceTestBase(fi
     /// the one state the sender looks for.
     /// </summary>
     /// <remarks>
-    /// The stamp is asserted as an instant near now rather than by its <see cref="DateTimeKind"/>:
-    /// Npgsql returns <c>Utc</c> for a <c>timestamptz</c> and SQLite returns <c>Unspecified</c>, and
-    /// nothing in the queue re-applies the kind on read, so the kind is the provider's answer rather
-    /// than the application's.
+    /// The stamp is asserted as an instant near now because the queue's contract is when it was
+    /// recorded, not the provider metadata attached to the returned value.
     /// </remarks>
     [Fact]
     public async Task EnqueueAsync_stores_the_statement_pending_and_unattempted()

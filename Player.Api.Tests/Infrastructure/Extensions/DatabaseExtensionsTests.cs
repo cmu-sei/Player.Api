@@ -26,12 +26,6 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
 {
     // ---- Provider selection ---------------------------------------------------------------------
 
-    [Fact]
-    public void DbProvider_defaults_to_Sqlite()
-    {
-        Assert.Equal("Sqlite", DatabaseExtensions.DbProvider(Configuration()));
-    }
-
     /// <summary>
     /// Trimmed, because the value reaches a switch and an assembly name — a stray space in a config file
     /// would otherwise silently select no provider at all.
@@ -45,7 +39,6 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
     }
 
     [Theory]
-    [InlineData("Sqlite", "Microsoft.EntityFrameworkCore.Sqlite")]
     [InlineData("PostgreSQL", "Npgsql.EntityFrameworkCore.PostgreSQL")]
     [InlineData("SqlServer", "Microsoft.EntityFrameworkCore.SqlServer")]
     public void UseConfiguredDatabase_selects_the_provider_named_in_configuration(

@@ -66,10 +66,9 @@ public class DatabaseHarnessTests(DatabaseFixture fixture) : DatabaseTestBase(fi
     }
 
     [Fact]
-    public async Task Explicit_ids_survive_the_round_trip_under_either_provider()
+    public async Task Explicit_ids_survive_the_round_trip()
     {
-        // PostgreSQL generates ids in the store and SQLite does not, so TestData assigns them up
-        // front. If that ever stopped working, ids would silently become Guid.Empty on SQLite.
+        // TestData assigns ids up front so tests can retain stable references before saving.
         var view = TestData.View();
         var assignedId = view.Id;
 
@@ -87,7 +86,7 @@ public class DatabaseHarnessTests(DatabaseFixture fixture) : DatabaseTestBase(fi
     /// Entity events must publish. This is the behavior that ruled out transaction-per-test isolation:
     /// <c>EntityEventInterceptor</c> defers publishing to <c>TransactionCommitted</c> and discards it
     /// on <c>TransactionRolledBack</c>, so rollback-based isolation would have silently disabled
-    /// events under PostgreSQL while leaving them on under SQLite.
+    /// events.
     /// </summary>
     [Fact]
     public async Task Saving_publishes_entity_events()
@@ -104,19 +103,17 @@ public class DatabaseHarnessTests(DatabaseFixture fixture) : DatabaseTestBase(fi
             Arg.Any<CancellationToken>());
     }
 
-    [RequiresPostgres]
+    [Fact]
     public void Uses_the_real_postgres_provider()
     {
-        Assert.True(Fixture.IsPostgres);
         Assert.True(Db.Database.IsNpgsql());
     }
 
     /// <summary>
-    /// The PostgreSQL-only half of <c>PlayerContext.OnModelCreating</c>: snake_case naming and
-    /// store-generated UUIDs. Neither is reachable on the SQLite fallback, which is what
-    /// <see cref="RequiresPostgresAttribute"/> exists for.
+    /// The PostgreSQL-specific half of <c>PlayerContext.OnModelCreating</c>: snake_case naming and
+    /// store-generated UUIDs.
     /// </summary>
-    [RequiresPostgres]
+    [Fact]
     public void Applies_postgres_snake_case_naming()
     {
         var entityType = Db.Model.FindEntityType(typeof(ViewMembershipEntity));
@@ -127,70 +124,13 @@ public class DatabaseHarnessTests(DatabaseFixture fixture) : DatabaseTestBase(fi
             entityType.FindProperty(nameof(ViewMembershipEntity.PrimaryTeamMembershipId)).GetColumnName());
     }
 
-    [RequiresPostgres]
+    [Fact]
     public async Task Applies_the_real_migration_history()
     {
         // EnsureCreated leaves no migration history, so this also proves the template database was
         // built by migrations rather than by the model.
-        var applied = await Db.Database.GetAppliedMigrationsAsync();
+        var applied = await Db.Database.GetAppliedMigrationsAsync(Ct);
 
         Assert.NotEmpty(applied);
-    }
-
-    /// <summary>
-    /// Exercises the SQLite implementation directly rather than through the ambient provider, so the
-    /// fallback stays covered on a machine that always resolves PostgreSQL — including CI.
-    /// </summary>
-    [Fact]
-    public async Task The_sqlite_fallback_works_regardless_of_the_active_provider()
-    {
-        var database = new SqliteTestDatabase();
-        await database.InitializeAsync();
-
-        await using var session = await database.BeginSessionAsync();
-        var view = TestData.View();
-
-        await using (var context = session.CreateContext())
-        {
-            context.Views.Add(view);
-            await context.SaveChangesAsync(Ct);
-            Assert.True(context.Database.IsSqlite());
-        }
-
-        await using var reader = session.CreateContext();
-        Assert.NotNull(await reader.Views.FindAsync([view.Id], Ct));
-    }
-
-    /// <summary>
-    /// Whether the fallback enforces foreign keys, which decides whether a test that pins a constraint
-    /// violation can run on it. It does, without the connection string asking: no
-    /// <c>PRAGMA foreign_keys</c> is sent when the <c>Foreign Keys</c> keyword is absent, and the native
-    /// library behind it — <c>SQLitePCLRaw.bundle_e_sqlite3</c> — is compiled with
-    /// <c>SQLITE_DEFAULT_FOREIGN_KEYS</c>, which enforces them by default.
-    /// </summary>
-    /// <remarks>
-    /// Recorded because it is not obvious and it is not configured anywhere. The two importer tests that
-    /// pin a violation still carry <see cref="RequiresPostgresAttribute"/>, so they do not rest on how
-    /// somebody else's native library was built.
-    /// </remarks>
-    [Fact]
-    public async Task The_sqlite_fallback_enforces_foreign_keys()
-    {
-        var database = new SqliteTestDatabase();
-        await database.InitializeAsync();
-
-        await using var session = await database.BeginSessionAsync();
-        await using var context = session.CreateContext();
-
-        // A team whose role and view both point at rows that do not exist.
-        context.Teams.Add(new TeamEntity
-        {
-            Id = Guid.NewGuid(),
-            Name = "Dangling",
-            RoleId = Guid.NewGuid(),
-            ViewId = Guid.NewGuid()
-        });
-
-        await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync(Ct));
     }
 }
