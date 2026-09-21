@@ -11,6 +11,8 @@ namespace Player.Api.Features.Users
     {
         public MappingProfile()
         {
+            CreateMap<UserIdentityAttributeEntity, UserIdentityAttribute>();
+
             CreateMap<UserEntity, User>()
                 .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.RoleId.HasValue ? src.Role.Name : null));
 

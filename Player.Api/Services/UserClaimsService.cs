@@ -74,7 +74,11 @@ public class UserClaimsService : IUserClaimsService
         if (claimsCacheEntry == null)
         {
             List<Claim> claims = [];
-            var user = await ValidateUser(userId, principal.FindFirst("name")?.Value, update);
+            var user = await ValidateUser(
+                userId,
+                principal.FindFirst("name")?.Value,
+                GetConfiguredUserAttributes(principal),
+                update);
 
             if (user != null)
             {
@@ -132,10 +136,15 @@ public class UserClaimsService : IUserClaimsService
         _currentClaimsPrincipal = principal;
     }
 
-    private async Task<UserEntity> ValidateUser(Guid subClaim, string nameClaim, bool update)
+    private async Task<UserEntity> ValidateUser(
+        Guid subClaim,
+        string nameClaim,
+        IReadOnlyDictionary<string, ConfiguredUserAttribute> configuredAttributes,
+        bool update)
     {
         var anyUsers = await _context.Users.AnyAsync();
         var user = await _context.Users
+            .Include(u => u.IdentityAttributes)
             .Where(u => u.Id == subClaim)
             .SingleOrDefaultAsync();
 
@@ -146,16 +155,28 @@ public class UserClaimsService : IUserClaimsService
                 user = new UserEntity
                 {
                     Id = subClaim,
-                    Name = nameClaim ?? "Anonymous"
+                    Name = nameClaim ?? "Anonymous",
+                    IdentityAttributes = configuredAttributes.Values
+                        .Select(CreateUserIdentityAttribute)
+                        .ToList()
                 };
 
                 _context.Users.Add(user);
             }
             else
             {
+                var changed = false;
+
                 if (nameClaim != null && user.Name != nameClaim)
                 {
                     user.Name = nameClaim;
+                    changed = true;
+                }
+
+                changed |= SyncUserIdentityAttributes(user, configuredAttributes);
+
+                if (changed)
+                {
                     _context.Update(user);
                 }
             }
@@ -170,6 +191,69 @@ public class UserClaimsService : IUserClaimsService
 
         return user;
     }
+
+    private IReadOnlyDictionary<string, ConfiguredUserAttribute> GetConfiguredUserAttributes(ClaimsPrincipal principal)
+    {
+        var attributes = new Dictionary<string, ConfiguredUserAttribute>();
+
+        foreach (var definition in _options.GetUserAttributeDefinitions())
+        {
+            attributes.Add(
+                definition.Name,
+                new ConfiguredUserAttribute(
+                    definition.Name,
+                    GetClaimsFromToken(principal, definition.ClaimPath).FirstOrDefault(),
+                    definition.DisplayOrder));
+        }
+
+        return attributes;
+    }
+
+    private static bool SyncUserIdentityAttributes(
+        UserEntity user,
+        IReadOnlyDictionary<string, ConfiguredUserAttribute> configuredAttributes)
+    {
+        var changed = false;
+
+        foreach (var attribute in user.IdentityAttributes
+            .Where(attribute => !configuredAttributes.ContainsKey(attribute.Name))
+            .ToArray())
+        {
+            user.IdentityAttributes.Remove(attribute);
+            changed = true;
+        }
+
+        foreach (var configuredAttribute in configuredAttributes.Values)
+        {
+            var attribute = user.IdentityAttributes
+                .SingleOrDefault(attribute => attribute.Name == configuredAttribute.Name);
+
+            if (attribute == null)
+            {
+                user.IdentityAttributes.Add(CreateUserIdentityAttribute(configuredAttribute));
+                changed = true;
+            }
+            else if (attribute.Value != configuredAttribute.Value ||
+                attribute.DisplayOrder != configuredAttribute.DisplayOrder)
+            {
+                attribute.Value = configuredAttribute.Value;
+                attribute.DisplayOrder = configuredAttribute.DisplayOrder;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private static UserIdentityAttributeEntity CreateUserIdentityAttribute(ConfiguredUserAttribute attribute) =>
+        new()
+        {
+            Name = attribute.Name,
+            Value = attribute.Value,
+            DisplayOrder = attribute.DisplayOrder
+        };
+
+    private sealed record ConfiguredUserAttribute(string Name, string Value, int DisplayOrder);
 
     private async Task<ClaimsCacheEntry> GetPermissionClaims(Guid userId, ClaimsPrincipal principal)
     {
