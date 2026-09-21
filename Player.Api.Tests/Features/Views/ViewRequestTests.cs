@@ -732,7 +732,7 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     /// <summary>
-    /// The reason issue 42's tgz size bug does not reach view export: this handler serializes with the
+    /// The reason the tgz size bug does not reach view export: this handler serializes with the
     /// default encoder (<c>Export.cs:135</c>), which escapes every non-ASCII character to <c>\uXXXX</c>, so
     /// <c>views.json</c> is always ASCII and its char count always equals its byte count. Template export
     /// opts out of that escaping and does fail. Goes red if an <c>Encoder</c> is ever set here.

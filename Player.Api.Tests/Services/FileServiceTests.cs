@@ -44,7 +44,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         Assert.Equal("notes.txt", model.Name);
         Assert.Equal([team.Id], model.teamIds);
 
-        using var db = NewContext();
+        await using var db = NewContext();
         var stored = db.Files.Include(x => x.View).Single();
         Assert.Equal(view.Id, stored.View.Id);
         Assert.Equal("hello", await File.ReadAllTextAsync(stored.Path, Ct));
@@ -65,7 +65,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         await service.UploadAsync(Form(view.Id, [team.Id], ("notes.txt", "one")), Ct);
         await service.UploadAsync(Form(view.Id, [team.Id], ("notes.txt", "two")), Ct);
 
-        using var db = NewContext();
+        await using var db = NewContext();
         var paths = db.Files.Select(x => x.Path).ToList();
         Assert.Equal(2, paths.Distinct().Count());
         Assert.All(paths, path =>
@@ -90,7 +90,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
 
         await Service().UploadAsync(Form(view.Id, [team.Id], ("notes.txt", "one")), Ct);
 
-        using var db = NewContext();
+        await using var db = NewContext();
         var stored = Path.GetFileName(db.Files.Single().Path);
 
         Assert.EndsWith("..txt", stored);
@@ -167,7 +167,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     }
 
     /// <summary>
-    /// Characterizes issue 61. The allow-list is matched with a case-sensitive
+    /// Characterizes current behavior. The allow-list is matched with a case-sensitive
     /// <see cref="string.EndsWith(string)"/> (<c>FileService.cs:302</c>), so the file refused here uploads
     /// fine once its extension is lower-cased. Cameras, scanners and Windows clients all produce
     /// upper-case extensions, and the caller is told only that the extension is invalid.
@@ -237,7 +237,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     }
 
     /// <summary>
-    /// Characterizes issue 61. <c>ValidateFileExtension</c> compares with
+    /// Characterizes current behavior. <c>ValidateFileExtension</c> compares with
     /// <see cref="string.EndsWith(string)"/>, whose default is culture-sensitive, so characters the
     /// collation gives no weight are not read at all: this name matches <c>.txt</c> without ending in it
     /// under any ordinal reading. A soft hyphen is not an invalid file-name character, so it survives
@@ -563,7 +563,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         Assert.Equal("replacement.txt", updated.Name);
         Assert.False(File.Exists(originalPath));
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Equal("after", await File.ReadAllTextAsync(db.Files.Single().Path, Ct));
     }
 
@@ -749,7 +749,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         var view = TestData.View();
         await Seed(view);
 
-        var entity = new FileEntity { Id = Guid.NewGuid(), Name = "imported.txt", View = view };
+        var entity = TestData.File(view, "imported.txt");
 
         var path = await Service().SaveFile(entity, Encoding.UTF8.GetBytes("imported"), Ct);
 
@@ -763,7 +763,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         var view = TestData.View();
         await Seed(view);
 
-        var entity = new FileEntity { Id = Guid.NewGuid(), Name = "payload.exe", View = view };
+        var entity = TestData.File(view, "payload.exe");
 
         await Assert.ThrowsAsync<ForbiddenException>(() => Service().SaveFile(entity, [1], Ct));
     }
@@ -839,14 +839,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     /// </summary>
     private async Task<FileEntity> SeedFileAt(ViewEntity view, string path, string name, params Guid[] teamIds)
     {
-        var entity = new FileEntity
-        {
-            Id = Guid.NewGuid(),
-            Name = name,
-            Path = path,
-            TeamIds = [.. teamIds],
-            View = view
-        };
+        var entity = TestData.File(view, name, path, teamIds);
 
         await Seed(entity);
         return entity;

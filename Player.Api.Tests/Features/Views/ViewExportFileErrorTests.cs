@@ -144,9 +144,10 @@ public class ViewExportFileErrorTests(DatabaseFixture fixture, PlayerAppFactory 
     // ---- Import ---------------------------------------------------------------------------------
 
     /// <summary>
-    /// Characterizes issue 43: views.json names a file whose bytes were never packed, so the importer
+    /// Characterizes current behavior: views.json names a file whose bytes were never packed, so the importer
     /// rejects the whole view over it — a partial export is a total loss on import.
     /// </summary>
+    /// <remarks>Turns red when export omits the missing file from the manifest or reports the partial archive.</remarks>
     [Fact]
     public async Task An_export_with_a_missing_file_produces_an_archive_that_imports_as_a_failure()
     {
@@ -171,7 +172,7 @@ public class ViewExportFileErrorTests(DatabaseFixture fixture, PlayerAppFactory 
     }
 
     /// <summary>
-    /// Bounds issue 43: the blast radius is the one view that owns the unreadable file. Its neighbour in
+    /// The blast radius is the one view that owns the unreadable file. Its neighbour in
     /// the same archive imports normally, and errors.txt attributes the failure to the right view.
     /// </summary>
     [Fact]
@@ -279,14 +280,7 @@ public class ViewExportFileErrorTests(DatabaseFixture fixture, PlayerAppFactory 
 
     private async Task<FileEntity> SeedFile(ViewEntity view, string name, string path)
     {
-        var file = new FileEntity
-        {
-            Id = Guid.NewGuid(),
-            Name = name,
-            Path = path,
-            TeamIds = [],
-            View = view
-        };
+        var file = TestData.File(view, name, path);
 
         await Seed(file);
         return file;

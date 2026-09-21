@@ -310,7 +310,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     }
 
     /// <summary>
-    /// Characterizes issue 47: each file is written as it is validated, so a later file the archive does not
+    /// Characterizes current behavior: each file is written as it is validated, so a later file the archive does not
     /// contain rejects the view after the earlier bytes are already on disk, leaving them with no row that
     /// owns them and no way to delete them through the API.
     /// </summary>
@@ -338,7 +338,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     }
 
     /// <summary>
-    /// Issue 47: the write happens whatever the view was rejected for. Validation accumulates failures and
+    /// The write happens whatever the view was rejected for. Validation accumulates failures and
     /// only decides at the end, so a manifest condemned by its applications still writes every file it
     /// carries — nothing here is about files at all.
     /// </summary>
@@ -392,7 +392,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     }
 
     /// <summary>
-    /// Characterizes issue 17: <c>ParentViewId</c> is mapped straight through and never validated, so a
+    /// Characterizes current behavior: <c>ParentViewId</c> is mapped straight through and never validated, so a
     /// child view imported without its parent violates a foreign key. Every other view in the archive
     /// goes with it, because the importer saves the whole batch once.
     /// </summary>
@@ -439,7 +439,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     }
 
     /// <summary>
-    /// Characterizes issue 39: application validation walks the array without a null check, so a manifest
+    /// Characterizes current behavior: application validation walks the array without a null check, so a manifest
     /// that omits it fails LINQ's own argument guard rather than being reported.
     /// </summary>
     /// <remarks>
@@ -458,7 +458,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     }
 
     /// <summary>
-    /// The other half of issue 39, from the other validator. A missing <c>Files</c> array is safe by
+    /// The other validator exposes the contrasting behavior. A missing <c>Files</c> array is safe by
     /// contrast, because file validation walks the mapped entity, whose collection is never null.
     /// </summary>
     /// <remarks>

@@ -35,9 +35,10 @@ public class UserHubTests
     }
 
     /// <summary>
-    /// Characterizes issue 33: joining someone else's notifications is refused through <c>WasSuccess</c>, which
+    /// Characterizes current behavior: joining someone else's notifications is refused through <c>WasSuccess</c>, which
     /// the hub does not read, so the connection is added to that user's group regardless.
     /// </summary>
+    /// <remarks>Turns red when the hub checks <c>WasSuccess</c> before joining the group.</remarks>
     [Fact]
     public async Task A_refused_join_still_joins_the_group()
     {

@@ -75,7 +75,7 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
     // ---- Seeding --------------------------------------------------------------------------------
 
     [Fact]
-    public void InitializeDatabase_seeds_permissions_and_roles()
+    public async Task InitializeDatabase_seeds_permissions_and_roles()
     {
         var host = HostWithSeedData(seed =>
         {
@@ -91,7 +91,7 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         var permission = db.Permissions.Single(x => x.Name == "SeededPermission");
         Assert.Equal("From configuration", permission.Description);
 
@@ -104,19 +104,19 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
     /// entry cannot stop the application from booting.
     /// </summary>
     [Fact]
-    public void InitializeDatabase_skips_an_unknown_permission_name_on_a_role()
+    public async Task InitializeDatabase_skips_an_unknown_permission_name_on_a_role()
     {
         var host = HostWithSeedData(seed =>
             seed.Roles = [new() { Name = "Seeded Role", PermissionNames = ["NoSuchPermission"] }]);
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Empty(db.Roles.Include(x => x.Permissions).Single(x => x.Name == "Seeded Role").Permissions);
     }
 
     [Fact]
-    public void InitializeDatabase_seeds_team_permissions_and_team_roles()
+    public async Task InitializeDatabase_seeds_team_permissions_and_team_roles()
     {
         var host = HostWithSeedData(seed =>
         {
@@ -129,7 +129,7 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         var permission = db.TeamPermissions.Single(x => x.Name == "SeededTeamPermission");
         var role = db.TeamRoles.Include(x => x.Permissions).Single(x => x.Name == "Seeded Team Role");
         Assert.Equal(permission.Id, Assert.Single(role.Permissions).PermissionId);
@@ -140,20 +140,20 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
     /// repeating one leaves the stored row alone rather than duplicating it.
     /// </summary>
     [Fact]
-    public void InitializeDatabase_leaves_an_existing_role_alone()
+    public async Task InitializeDatabase_leaves_an_existing_role_alone()
     {
         var host = HostWithSeedData(seed =>
             seed.Roles = [new() { Name = "Administrator", AllPermissions = false }]);
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         var administrator = Assert.Single(db.Roles.Where(x => x.Name == "Administrator"));
         Assert.True(administrator.AllPermissions);
     }
 
     [Fact]
-    public void InitializeDatabase_seeds_users_with_their_role()
+    public async Task InitializeDatabase_seeds_users_with_their_role()
     {
         var id = Guid.NewGuid();
         var host = HostWithSeedData(seed =>
@@ -161,7 +161,7 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         var user = db.Users.Single(x => x.Id == id);
         Assert.Equal("Seeded User", user.Name);
         Assert.Equal(TestData.Roles.Administrator, user.RoleId);
@@ -172,7 +172,7 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
     /// tolerance the role seeding shows.
     /// </summary>
     [Fact]
-    public void InitializeDatabase_seeds_a_user_whose_role_does_not_resolve()
+    public async Task InitializeDatabase_seeds_a_user_whose_role_does_not_resolve()
     {
         var id = Guid.NewGuid();
         var host = HostWithSeedData(seed =>
@@ -180,7 +180,7 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Null(db.Users.Single(x => x.Id == id).RoleId);
     }
 
@@ -198,12 +198,12 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Equal("Original", db.Users.Single(x => x.Id == user.Id).Name);
     }
 
     [Fact]
-    public void InitializeDatabase_seeds_webhook_subscriptions()
+    public async Task InitializeDatabase_seeds_webhook_subscriptions()
     {
         var host = HostWithSeedData(seed =>
             seed.Subscriptions =
@@ -220,12 +220,12 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Equal("https://example.test/hook", db.Webhooks.Single().CallbackUri);
     }
 
     [Fact]
-    public void InitializeDatabase_seeds_application_templates_by_id()
+    public async Task InitializeDatabase_seeds_application_templates_by_id()
     {
         var id = Guid.NewGuid();
         var host = HostWithSeedData(seed =>
@@ -236,7 +236,7 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Equal("Seeded Template", db.ApplicationTemplates.Single(x => x.Id == id).Name);
     }
 
@@ -254,7 +254,7 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Equal("Original", db.ApplicationTemplates.Single(x => x.Id == template.Id).Name);
     }
 
@@ -263,7 +263,7 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
     /// with its teams.
     /// </summary>
     [Fact]
-    public void InitializeDatabase_seeds_views_through_the_importer()
+    public async Task InitializeDatabase_seeds_views_through_the_importer()
     {
         var id = Guid.NewGuid();
         var host = HostWithSeedData(seed =>
@@ -281,7 +281,7 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         var view = db.Views.Include(x => x.Teams).Single(x => x.Id == id);
         Assert.Equal("Seeded View", view.Name);
         Assert.Equal("Blue", Assert.Single(view.Teams).Name);
@@ -305,7 +305,7 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
 
         host.InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Equal("Already Here", db.Views.Single(x => x.Id == view.Id).Name);
     }
 
@@ -336,11 +336,11 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
     /// Nothing configured means nothing written, which is the default for an upgrade of a live instance.
     /// </summary>
     [Fact]
-    public void InitializeDatabase_writes_nothing_without_seed_data()
+    public async Task InitializeDatabase_writes_nothing_without_seed_data()
     {
         HostWithSeedData(_ => { }).InitializeDatabase();
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Empty(db.Views);
         Assert.Empty(db.Users);
         Assert.Empty(db.Webhooks);

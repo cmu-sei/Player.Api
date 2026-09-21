@@ -29,7 +29,7 @@ namespace Player.Api.Tests.Services;
 /// database or the stubbed subscriber until the effect appears.
 /// </para>
 /// <para>
-/// A failed delivery is retried forever, five seconds apart at first (see issue 30). Tests of failure
+/// A failed delivery is retried forever, five seconds apart at first. Tests of failure
 /// therefore assert on the error recorded before the first wait and leave the loop running; the sender is
 /// given its own contexts through <see cref="ScopeFactory"/> so an abandoned loop cannot touch
 /// <see cref="DatabaseTestBase.Db"/> after the test ends.
@@ -175,6 +175,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
     /// The body a subscriber receives is the whole event — type, timestamp and the serialized payload —
     /// which is the public contract of the webhook.
     /// </summary>
+    /// <remarks>Turns red when each event is assigned a non-empty id.</remarks>
     [Fact]
     public async Task The_delivered_body_is_the_serialized_event()
     {
@@ -197,7 +198,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
         var payload = JsonNode.Parse(body["Payload"].GetValue<string>());
         Assert.Equal("Sales", payload["ViewName"].GetValue<string>());
 
-        // Characterizes issue 31: WebhookEvent's id initializer is `new Guid()`, so every event a
+        // Characterizes current behavior: WebhookEvent's id initializer is `new Guid()`, so every event a
         // subscriber sees is identified as all-zeros and cannot be deduplicated. Expect a real id when
         // that is fixed.
         Assert.Equal(Guid.Empty, body["Id"].GetValue<Guid>());
@@ -293,10 +294,11 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
     }
 
     /// <summary>
-    /// Characterizes issue 32: when the identity provider refuses the credentials the event is posted
+    /// Characterizes current behavior: when the identity provider refuses the credentials the event is posted
     /// anyway, with an <c>Authorization</c> header carrying no token, instead of the failure being recorded
-    /// against the subscription. Expect a recorded error and no post when that is fixed.
+    /// against the subscription.
     /// </summary>
+    /// <remarks>Turns red when the refusal is recorded and the callback is not attempted.</remarks>
     [Fact]
     public async Task A_refused_token_request_posts_the_event_with_no_credentials()
     {
@@ -376,7 +378,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
     }
 
     /// <summary>
-    /// Every other code keeps the row, which is safe but — see issue 30 — never gives up, so a subscriber
+    /// Every other code keeps the row, which is safe but never gives up, so a subscriber
     /// answering <c>201</c> or <c>204</c> is retried forever. Those two are the cases worth reading twice:
     /// both are successes to the subscriber that sent them, and neither is treated as one here.
     /// </summary>
@@ -447,7 +449,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
     /// The floor of the first wait is the only part of the schedule a test can observe without spending
     /// it. <c>Wait</c> awaits <c>Task.Delay</c> directly (<c>BackgroundWebhookService.cs:225</c>) with no
     /// clock to substitute, so confirming the documented 5s → 10s → … → 60s would cost three and a half
-    /// minutes of wall clock and confirming the cap alone still costs five — see issue 30.
+    /// minutes of wall clock and confirming the cap alone still costs five.
     /// </para>
     /// <para>
     /// One second against a five-second initial wait: a loop that retried without waiting posts again

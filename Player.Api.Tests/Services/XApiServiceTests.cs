@@ -177,10 +177,10 @@ public class XApiServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     }
 
     /// <summary>
-    /// Characterizes issue 27: the <c>iss</c> claim is read with <c>First</c>, so a token without one
-    /// throws before any statement is built and the failure is swallowed by the catch. Flip these to
-    /// expect a queued statement when the lookup becomes tolerant of a missing claim.
+    /// Characterizes current behavior: the <c>iss</c> claim is read with <c>First</c>, so a token without one
+    /// throws before any statement is built and the failure is swallowed by the catch.
     /// </summary>
+    /// <remarks>Turns red when the lookup tolerates a missing claim and queues the statements.</remarks>
     [Fact]
     public async Task Nothing_is_queued_when_the_token_carries_no_iss_claim()
     {
@@ -440,7 +440,7 @@ public class XApiServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
 
     /// <summary>
     /// Pins that <c>applicationUrl</c> is accepted and ignored — the statement is identical whatever is
-    /// passed. Issue 28: either the URL belongs in the statement or the parameter should go.
+    /// passed. Either the URL belongs in the statement or the parameter should go.
     /// </summary>
     [Fact]
     public async Task EmitApplicationSwitched_ignores_the_application_url()
@@ -717,7 +717,7 @@ public class XApiServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
 
     /// <summary>
     /// A caller carrying the <c>iss</c> claim the actor is built from. A null
-    /// <paramref name="issuer"/> omits it, which is the shape issue 27 is about.
+    /// <paramref name="issuer"/> omits it, which is the missing-claim shape covered above.
     /// </summary>
     private static ClaimsPrincipal Caller(Guid? userId = null, string issuer = Issuer)
     {

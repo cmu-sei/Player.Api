@@ -366,12 +366,11 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         var team = TestData.Team(view.Id);
         var template = TestData.ApplicationTemplate(
             "Template Name", "https://example.test/template", embeddable: true);
-        var application = new ApplicationEntity
-        {
-            Id = Guid.NewGuid(),
-            ViewId = view.Id,
-            ApplicationTemplateId = template.Id
-        };
+        var application = TestData.Application(
+            view.Id,
+            name: null,
+            url: null,
+            templateId: template.Id);
         await Seed(view, team, template, application);
 
         var created = await ReadAsync<ApplicationInstance>(await RootClient.PostAsJsonAsync(

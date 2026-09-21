@@ -183,6 +183,31 @@ public static class TestData
         };
 
     /// <summary>
+    /// A file row in <paramref name="view"/>. The default path is unique and need not exist unless a
+    /// test is specifically about reading the bytes.
+    /// </summary>
+    public static FileEntity File(
+        ViewEntity view,
+        string name = "notes.txt",
+        params Guid[] teamIds) =>
+        File(view, name, $"/tmp/player-tests/{Guid.NewGuid():N}/{name}", teamIds);
+
+    /// <summary>A file row with the exact path supplied, including <see langword="null"/>.</summary>
+    public static FileEntity File(
+        ViewEntity view,
+        string name,
+        string path,
+        params Guid[] teamIds) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Path = path,
+            TeamIds = [.. teamIds],
+            View = view
+        };
+
+    /// <summary>
     /// Scopes <paramref name="teamId"/>'s effective team permissions onto
     /// <paramref name="targetTeamId"/> — the relationship that makes a claim's effective and direct
     /// permissions diverge.

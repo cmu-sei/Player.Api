@@ -18,7 +18,7 @@ namespace Player.Api.Tests.Infrastructure.Endpoints;
 /// A name it does not recognize is refused, and a number it does not recognize is not: <c>System.Text.Json</c>
 /// reads a numeric enum without checking it against the defined values, and neither the commands nor the
 /// entities check afterwards. So the number is stored, returned, and — for webhook event types — used as a
-/// matching key that can never match. Issue 64.
+/// matching key that can never match.
 /// </para>
 /// <para>
 /// Both halves are here on purpose. The refusals are what make the acceptances a bug rather than a

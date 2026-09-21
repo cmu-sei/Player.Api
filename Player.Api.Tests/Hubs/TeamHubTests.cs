@@ -32,10 +32,11 @@ public class TeamHubTests
     }
 
     /// <summary>
-    /// Characterizes issue 33: a refused join is reported by <c>WasSuccess</c>, which the hub never reads, so
+    /// Characterizes current behavior: a refused join is reported by <c>WasSuccess</c>, which the hub never reads, so
     /// the connection joins the group and receives every later broadcast anyway. The hub's own check is on
     /// <c>ToId</c>, which the service sets to the requested id whether or not the caller was authorized.
     /// </summary>
+    /// <remarks>Turns red when the hub checks <c>WasSuccess</c> before joining the group.</remarks>
     [Fact]
     public async Task A_refused_join_still_joins_the_group()
     {

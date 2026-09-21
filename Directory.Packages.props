@@ -1,10 +1,7 @@
 <!--
   Central Package Management. Every PackageReference in the repository takes its version from this
-  file, so a package that two projects share cannot drift between them.
-
-  This exists because Player.Api.Tests approximates production's PostgreSQL with SQLite and so
-  references EF Core directly. Before this file, that reference carried its own version number and a
-  comment asking the next person to keep it in step with Player.Api by hand.
+  file, so a package that two projects share cannot drift between them and project files describe
+  dependencies without repeating version numbers.
 -->
 <Project>
 
@@ -19,8 +16,8 @@
 
   <!-- Application and data access. -->
   <ItemGroup>
-    <PackageVersion Include="AutoMapper" Version="13.0.1" /> <!-- DO NOT UPDATE. Version 15+ requires a license. Plan to migrate to something else. -->
-    <PackageVersion Include="MediatR" Version="12.4.1" /> <!-- DO NOT UPDATE. Version 13+ requires a license. Plan to migrate to something else. -->
+    <PackageVersion Include="AutoMapper" Version="13.0.1" /> <!-- Deferred: see docs/DependencyDeferrals.md. -->
+    <PackageVersion Include="MediatR" Version="12.4.1" /> <!-- Deferred: see docs/DependencyDeferrals.md. -->
     <PackageVersion Include="Crucible.Common.EntityEvents" Version="0.2.0" />
     <PackageVersion Include="Crucible.Common.ServiceDefaults" Version="0.0.2" />
     <PackageVersion Include="IdentityServer4.AccessTokenValidation" Version="3.0.1" />
@@ -28,11 +25,7 @@
     <PackageVersion Include="TinCan" Version="1.3.0" />
   </ItemGroup>
 
-  <!--
-    EF Core and its providers. Player.Api.Tests takes Microsoft.EntityFrameworkCore.Sqlite from the
-    same entries as the application, which is what keeps the SQLite fallback on the same EF patch as
-    production's PostgreSQL.
-  -->
+  <!-- EF Core and the providers used by the application. -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.1" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.1" />
@@ -51,6 +44,7 @@
     <PackageVersion Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.1" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.1" />
+    <!-- Deferred: see docs/DependencyDeferrals.md. -->
     <PackageVersion Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.0-rc.1.25458.5" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.0" />
     <PackageVersion Include="Swashbuckle.AspNetCore.Annotations" Version="10.1.0" />

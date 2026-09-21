@@ -39,8 +39,8 @@ public class MalformedRouteParameterTests(DatabaseFixture fixture, PlayerAppFact
     /// <remarks>
     /// The empty body is the assertion worth reading. It is what minimal-API binding failure produces on
     /// its own, before any of the application's own error handling is reached, so a caller debugging a
-    /// generated id has only the status code to go on. Related to issue 49, which is the same bare 400 for
-    /// a missing query parameter.
+    /// generated id has only the status code to go on. A missing query parameter produces the same bare
+    /// 400 response.
     /// </remarks>
     [Theory]
     [InlineData("GET", "api/views/last-tuesday")]

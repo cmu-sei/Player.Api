@@ -114,7 +114,7 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// team with, provided they hold <c>ViewTeam</c> on it.
     /// </summary>
     /// <remarks>
-    /// Issue 22 is what decides this one in practice — the fallback's empty required-system-permission
+    /// The fallback's empty required-system-permission
     /// array succeeds for every caller, so the <c>ViewTeam</c> grant is not load-bearing. It goes red
     /// when the fallback stops consulting the target user's teams at all.
     /// </remarks>
@@ -598,7 +598,7 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
     /// <summary>
     /// Rejected before anything is persisted, which is right — but <c>ArgumentException</c> is not an
-    /// <c>IApiException</c>, so the caller's own mistake is answered with a 500. Issue 50: wrong.
+    /// <c>IApiException</c>, so the caller's own mistake is answered with a 500.
     /// </summary>
     /// <remarks>Turns red when the handler throws something that maps to a client error.</remarks>
     [Fact]
@@ -623,7 +623,7 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// <summary>
     /// This handler authorizes against <c>UserEntity</c>, which
     /// <c>AuthorizationService.GetResourceResult</c> does not handle, so every caller without
-    /// <c>ManageViews</c> gets a 500 rather than a decision. Issue 19: wrong — the view administrators
+    /// <c>ManageViews</c> gets a 500 rather than a decision. The view administrators
     /// the call's <c>ManageView</c> argument was written for are refused along with everyone else.
     /// </summary>
     /// <remarks>

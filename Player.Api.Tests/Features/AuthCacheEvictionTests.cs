@@ -363,7 +363,7 @@ public class AuthCacheEvictionTests(DatabaseFixture fixture) : ServiceTestBase(f
     private async Task<(RoleEntity Role, UserEntity Holder, UserEntity Other)> SeedRole()
     {
         // Not one of the roles the context seeds — role names are unique.
-        var role = new RoleEntity { Id = Guid.NewGuid(), Name = "Exercise Author" };
+        var role = TestData.Role("Exercise Author");
         var holder = TestData.User(name: "Holder", roleId: role.Id);
         var other = TestData.User(name: "Other");
         await Seed(role, holder, other);
@@ -379,7 +379,7 @@ public class AuthCacheEvictionTests(DatabaseFixture fixture) : ServiceTestBase(f
     private async Task<TeamWorld> SeedTeams()
     {
         var view = TestData.View();
-        var teamRole = new TeamRoleEntity { Id = Guid.NewGuid(), Name = "Team Lead" };
+        var teamRole = TestData.TeamRole("Team Lead");
         var team = TestData.Team(view.Id, "Blue Team", teamRole.Id);
         var otherTeam = TestData.Team(view.Id, "Red Team");
 

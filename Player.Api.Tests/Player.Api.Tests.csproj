@@ -10,10 +10,9 @@
 
     <!--
       Applies coverlet.runsettings to every run, so a coverage run cannot go without its exclusions:
-      without them the generated migration assembly alone takes the total from 14,368 sequence points
-      to 36,661 and the headline reads 94.6% while the application sits at 86.2%. The collector in that
-      file is disabled by default, so an ordinary `dotnet test` collects nothing; coverage is opt-in
-      through the collect argument.
+      without them generated migrations and third-party sources distort the result. The collector in
+      that file is disabled by default, so an ordinary `dotnet test` collects nothing; coverage is
+      opt-in through the collect argument.
     -->
     <RunSettingsFilePath>$(MSBuildProjectDirectory)/coverlet.runsettings</RunSettingsFilePath>
   </PropertyGroup>

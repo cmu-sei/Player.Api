@@ -1,14 +1,12 @@
 name: Build and Test
 
-# Deliberately not scoped to a branch list. The publish workflows here are limited to `main`
-# because releasing is gated; running the test suite is not, and a regression should surface on
-# the feature branch that introduced it rather than waiting for a pull request to be opened.
+# Pull requests validate proposed changes. Pushes to main verify the result after merge.
 on:
-  push:
   pull_request:
+  push:
+    branches: [main]
 
-# A same-repo pull request fires both triggers above, and each new push supersedes the run before
-# it, so cancel anything still in flight for the same ref.
+# A newer run for the same pull request or main ref supersedes one still in flight.
 concurrency:
   group: build-and-test-${{ github.ref }}
   cancel-in-progress: true

@@ -486,7 +486,7 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
     /// Characterizes a live 500: this export serializes with <c>UnsafeRelaxedJsonEscaping</c>
     /// (<c>ExportApplicationTemplates.cs:147</c>) so non-ASCII reaches the archive raw, and
     /// <c>ArchiveService.cs:71</c> declares the tar entry's size as a char count. One accented character
-    /// in a template name is enough to make every tgz export of it fail. See issue 42.
+    /// in a template name is enough to make every tgz export of it fail.
     /// </summary>
     [Fact]
     public async Task ExportApplicationTemplates_as_tgz_fails_when_a_template_name_is_not_ascii()
@@ -632,7 +632,7 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
 
     /// <summary>
     /// The export route, with the three flags binding makes mandatory. A request omitting any of them is
-    /// answered with a bare 400 and an empty body before the handler is reached — see issue 49.
+    /// answered with a bare 400 and an empty body before the handler is reached.
     /// </summary>
     private static string ExportRoute(
         ArchiveType archiveType = ArchiveType.zip,

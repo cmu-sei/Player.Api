@@ -231,7 +231,7 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
 
         await Service().AddUserClaims(principal, true);
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Equal("New User", db.Users.Single(x => x.Id == id).Name);
     }
 
@@ -243,7 +243,7 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
 
         await Service().AddUserClaims(principal, true);
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Equal("Anonymous", db.Users.Single(x => x.Id == id).Name);
     }
 
@@ -259,7 +259,7 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
 
         await Service().AddUserClaims(principal, true);
 
-        using var db = NewContext();
+        await using var db = NewContext();
         Assert.Equal("New Name", db.Users.Single(x => x.Id == user.Id).Name);
     }
 
@@ -642,7 +642,7 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
     /// <summary>A role granting <paramref name="permissions"/>, resolved from the seeded rows.</summary>
     private async Task<RoleEntity> SeedRole(string name, params SystemPermission[] permissions)
     {
-        var role = new RoleEntity { Id = Guid.NewGuid(), Name = name };
+        var role = TestData.Role(name);
         await Seed(role);
 
         foreach (var permission in permissions)

@@ -275,9 +275,10 @@ public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ServiceTestBa
 
     /// <summary>
     /// A row is marked <c>Processing</c> before it is sent, so a process that dies mid-batch leaves it
-    /// there. Characterizes issue 29: the sweep <em>deletes</em> such a row rather than returning it to
-    /// the queue, so the statement is lost. Flip this to expect a pending row when that is fixed.
+    /// there. Characterizes current behavior: the sweep <em>deletes</em> such a row rather than returning it to
+    /// the queue, so the statement is lost.
     /// </summary>
+    /// <remarks>Turns red when cleanup returns the abandoned statement to the pending queue.</remarks>
     [Fact]
     public async Task Cleanup_deletes_a_statement_left_processing_past_the_timeout()
     {

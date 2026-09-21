@@ -592,7 +592,7 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// <c>ExceptionMiddleware</c> has no mapping for it and falls through to 500.
     /// </summary>
     /// <remarks>
-    /// Issue 50. Turns red when the handler throws something that maps to a client error — nothing else
+    /// Turns red when the handler throws something that maps to a client error — nothing else
     /// about the endpoint has to change.
     /// </remarks>
     [Fact]

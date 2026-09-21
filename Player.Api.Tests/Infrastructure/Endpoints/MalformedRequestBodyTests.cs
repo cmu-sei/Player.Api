@@ -19,7 +19,7 @@ namespace Player.Api.Tests.Infrastructure.Endpoints;
 /// The headline is the first theory: a write with no body at all is a 500, on every route that takes one.
 /// Nullable reference types are not enabled in <c>Player.Api</c>, so a reference-typed body parameter is
 /// nullable-oblivious, and minimal-API binding treats that as optional — the absent body becomes
-/// <c>null</c> and the handler is called with it rather than the request being refused. Issue 63.
+/// <c>null</c> and the handler is called with it rather than the request being refused.
 /// </para>
 /// <para>
 /// Everything else here is the framework answering before any application code runs, which is worth
@@ -46,7 +46,7 @@ public class MalformedRequestBodyTests(DatabaseFixture fixture, PlayerAppFactory
     /// </summary>
     /// <remarks>
     /// Turns red when a missing body is a 400 — the answer this ought to be. The ids need not exist,
-    /// because the graft happens in the endpoint, before the handler looks anything up. Issue 63.
+    /// because the graft happens in the endpoint, before the handler looks anything up.
     /// </remarks>
     [Theory]
     [InlineData("POST", "api/views", MediatorRefused)]
@@ -133,7 +133,7 @@ public class MalformedRequestBodyTests(DatabaseFixture fixture, PlayerAppFactory
     /// <remarks>
     /// Turns red when the create command validates its own members. The stored name is asserted rather than
     /// the response's, because a null that only the mapping dropped would read the same on the way out.
-    /// Issue 63 covers this as the other half of an unvalidated body.
+    /// This is the other half of the same unvalidated-body behavior.
     /// </remarks>
     [Fact]
     public async Task An_empty_object_creates_a_view_with_no_name()

@@ -403,7 +403,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         Assert.True(posted.WasSuccess);
         Assert.True(posted.CanPost);
 
-        using var db = NewContext();
+        await using var db = NewContext();
         var stored = db.Notifications.Single();
         Assert.Equal("Hello", stored.Text);
         Assert.Equal(view.Id, stored.ToId);
@@ -422,7 +422,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
 
         await Service().PostToTeam(team.Id, new Notification { Text = "Hello" }, Ct);
 
-        using var db = NewContext();
+        await using var db = NewContext();
         var stored = db.Notifications.Single();
         Assert.Equal(team.Id, stored.ToId);
         Assert.Equal(NotificationType.Team, stored.ToType);
@@ -438,7 +438,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
 
         await Service().PostToUser(view.Id, user.Id, new Notification { Text = "Hello" }, Ct);
 
-        using var db = NewContext();
+        await using var db = NewContext();
         var stored = db.Notifications.Single();
         Assert.Equal(user.Id, stored.ToId);
         Assert.Equal(NotificationType.User, stored.ToType);
@@ -447,10 +447,11 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     }
 
     /// <summary>
-    /// Characterizes issue 34: none of the three post methods authorizes the caller. A principal with no claim
+    /// Characterizes current behavior: none of the three post methods authorizes the caller. A principal with no claim
     /// on the view broadcasts to it and is told it succeeded — <c>CanPost</c>, the flag a join returns to say
     /// whether posting is allowed, is advisory and never consulted here.
     /// </summary>
+    /// <remarks>Turns red when the post methods authorize the caller before broadcasting.</remarks>
     [Fact]
     public async Task PostToView_does_not_check_that_the_caller_may_post()
     {

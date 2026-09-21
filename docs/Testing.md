@@ -2,7 +2,7 @@ Player.Api has an automated test suite in the `Player.Api.Tests` project. This d
 
 # Testing
 
-The suite contains 1,096 tests across 57 test classes. 1,095 of them run today. The remaining one skips itself until the application gives it something to assert on.
+One mapping test conditionally skips until the application declares a source-validated AutoMapper map. It starts running automatically when there is something for it to assert on.
 
 The suite is built on xUnit v3 and NSubstitute, and runs against a real PostgreSQL instance started in a container. These are not isolated unit tests. A typical test sends an HTTP request to the application hosted in process, through the real routes, the real middleware, the real claims transformer, the real handlers, the real AutoMapper profiles and a real database, then asserts on the response and on what changed in the database. Only collaborators that leave the process are substituted.
 
@@ -21,31 +21,6 @@ dotnet test --filter "FullyQualifiedName~ViewRequestTests"
 dotnet test --filter "FullyQualifiedName~ViewRequestTests.Export_round_trips_through_Import"
 ```
 
-## Running without Docker
-
-If no Docker daemon is reachable, the suite falls back to in-memory SQLite, so that a contributor without Docker still gets useful coverage. The fallback is announced at the start of the run:
-
-```
-[Player.Api.Tests] database provider: Sqlite (FALLBACK: migrations, snake_case casing and store-generated UUIDs are NOT covered)
-```
-
-Two things are not covered by the fallback:
-
-- The `if (Database.IsNpgsql())` branch of `PlayerContext.OnModelCreating`, which handles snake_case column naming and store-generated UUIDs.
-- The migration history. The SQLite database is created with `EnsureCreated()`, the same distinction the application makes in `DatabaseExtensions.InitializeDatabase`, since only PostgreSQL migrations exist.
-
-Tests that require PostgreSQL are marked `[RequiresPostgres]` and skip on the fallback, so a green SQLite run does not give the same assurance as a green PostgreSQL run. Setting `PLAYER_TESTS_REQUIRE_POSTGRES=true` turns an unavailable Docker daemon into a hard failure instead of a silent fallback. CI sets it, and it should be set for a local run before opening a pull request:
-
-```bash
-PLAYER_TESTS_REQUIRE_POSTGRES=true dotnet test
-```
-
-`PLAYER_TESTS_FORCE_SQLITE=true` is the other direction: it takes the fallback with Docker running, which is how the fallback is checked without stopping the daemon. A change to the harness should be run both ways, since the two providers disagree on casing, on store-generated ids and on how a delete graph is ordered.
-
-```bash
-PLAYER_TESTS_FORCE_SQLITE=true dotnet test
-```
-
 # Coverage
 
 ```bash
@@ -61,30 +36,9 @@ The runsettings file excludes:
 - Generated code, by attribute: `GeneratedCodeAttribute`, `CompilerGeneratedAttribute` and `ExcludeFromCodeCoverageAttribute`.
 - Auto-implemented property accessors, through `SkipAutoProps`. These are not logic and cannot fail.
 
-The current figures are:
-
-| Assembly | Lines | Line coverage | Branch coverage |
-|---|---|---|---|
-| `Player.Api` | 6,439 / 6,566 | 98.1% | 92.7% |
-| `Player.Api.Data` | 600 / 618 | 97.1% | 88.9% |
-| Total | 7,039 / 7,184 | 98.0% | 92.6% |
-
 coverlet's cobertura output emits every class element twice, so merge the hits per file and line number before summing anything. Adding the class elements up as they come doubles every count, and the ratio survives the mistake, which is what makes it easy to miss. Cross-check a total against `lines-covered` and `lines-valid` on the root element, which are already merged.
 
-The 127 uncovered lines in `Player.Api` are concentrated in six files:
-
-| File | Uncovered | Of |
-|---|---|---|
-| `Startup.cs` | 19 | 291 |
-| `Features/Teams/Requests/GetByUserView.cs` | 18 | 69 |
-| `Services/BackgroundWebhookService.cs` | 16 | 179 |
-| `Services/PresenceService.cs` | 12 | 250 |
-| `Services/XApiBackgroundService.cs` | 12 | 160 |
-| `Controllers/XApiController.cs` | 9 | 29 |
-
-What is left is a long tail rather than a gap. `GetByUserView` is missing the `me/views/{id}/teams` delegate and the branch that answers with only the teams the subject belongs to, which needs a caller who is the subject and holds no view-level permission. The three services are missing exception handlers, retry backoff, shutdown paths and one telemetry loop — the parts a test reaches only by making a background loop fail or by waiting out its delay. `XApiController` is missing everything past its `IsConfigured()` guard, because `XApiOptions:Enabled` is a configuration value and one host serves the whole run, so over HTTP only the disabled branch is reachable; `XApiServiceTests` and `XApiQueueServiceTests` cover the work it delegates. What is left in `Startup` is composition whose other branch a single hosting configuration cannot take.
-
-`BackgroundWebhookService`'s figure moves by a few lines between runs. Its retry loop runs on its own threads and outlives the test that started it, so whether a given delivery attempt is recorded depends on the timing of the run. Treat a small change there as noise rather than as a regression.
+Coverage is a local diagnostic rather than a maintained project statistic. CI does not collect or enforce it, so this document deliberately carries no snapshot that can drift from the suite.
 
 # Build settings
 
@@ -96,14 +50,11 @@ What is left is a long tail rather than a gap. `GetByUserView` is missing the `m
 - xUnit2000 - `Assert.Equal` with the expected value passed second.
 - xUnit2012 - `Assert.True` over a collection lookup, where `Assert.Contains` says what failed.
 
-Restore-time warnings stay warnings, through `WarningsNotAsErrors`. NU1901 to NU1904 are the NuGet audit, and its findings cannot be acted on here: AutoMapper 13 and MediatR 12 are pinned because later versions require a commercial license. NU1701 is TinCan, which ships only .NET Framework assets.
+Restore-time warnings stay warnings, through `WarningsNotAsErrors`. NU1901 to NU1904 are the NuGet audit, and NU1701 reports TinCan's .NET Framework assets. The known dependency deferrals and their review triggers are tracked in [DependencyDeferrals.md](DependencyDeferrals.md).
 
-`.editorconfig` raises xUnit1004, so a test parked with `[Fact(Skip = "...")]` fails the build. Conditional skips are unaffected, because `[RequiresPostgres]` uses `SkipUnless`.
+`.editorconfig` raises xUnit1004, so a test parked with `[Fact(Skip = "...")]` fails the build. Runtime conditional skips through `Assert.SkipWhen` remain available when a test has nothing meaningful to assert.
 
-Package versions live in `Directory.Packages.props`. Two of the test project's references are versioned against the application rather than against the test tools around them, and both for the same reason:
-
-- `Microsoft.EntityFrameworkCore.Sqlite`, the fallback provider, takes the version the application uses, so the fallback cannot run on a different EF patch than production.
-- `Microsoft.AspNetCore.Mvc.Testing`, which hosts the application, tracks the ASP.NET Core version, since it has to build the host the application's own framework reference expects.
+Package versions live in `Directory.Packages.props`. `Microsoft.AspNetCore.Mvc.Testing`, which hosts the application, tracks the ASP.NET Core version because it has to build the host the application's own framework reference expects.
 
 ## Test runner
 
@@ -178,7 +129,7 @@ Both fixtures arrive by constructor injection, which xUnit v3 satisfies from the
 `PlayerAppFactory` boots the real `Startup` with the real middleware chain, the real endpoint delegates, the real authorization stack and the real claims transformer. Three things are not the application's own:
 
 - **Token validation.** `TestAuthHandler` replaces the bearer scheme and mints the identity a validated token would have produced, from an `X-Test-User` header. Everything downstream is real: `AuthorizationClaimsTransformer` runs on that identity and derives every permission claim from the database, so what an actor may do is decided by the rows the test seeded rather than by claims the test wrote. `TestActor` seeds those rows.
-- **The `PlayerContext` registration.** The application builds pooled options once for the process and the SQLite fallback has no reachable connection string, so a request resolves the database of the test that sent it, by an `X-Test-Session` header through `TestDatabaseScope`. The request's own scope is the context's `ServiceProvider`, as in production, which is what makes entity events reach the real handlers.
+- **The `PlayerContext` registration.** The application builds pooled options once for the process, while the suite gives every test an isolated database. A request therefore resolves the database of the test that sent it, by an `X-Test-Session` header through `TestDatabaseScope`. The request's own scope is the context's `ServiceProvider`, as in production, which is what makes entity events reach the real handlers.
 - **The collaborators that leave the process**, each something a test can assert against: the three `IHubContext<T>` over `Factory.Hub<T>()`, `IBackgroundWebhookService` over `Factory.Webhooks`, and `IHttpClientFactory` over `Factory.OutboundHttp`.
 
 All five of those are written out rather than substituted, and the reason is a harness rule worth knowing before adding a sixth: **nothing registered in this host may be a substitute a test asserts on.** Each is one instance for the whole run, NSubstitute keeps its assertion state per thread, and `TestServer` serves requests on the same thread pool the tests run on — so a pending `Received()` in one test can consume a call made for another, and creating substitutes on several threads at once crosses their bookkeeping. Calls then go missing, which reads as a broadcast that never happened: a failure that arrives with load rather than with a change. A recorder that keeps what it was given has no such state, and a test reads it by naming the audience or the url it expects. `HubRecorder` and `WebhookRecorder` are those recorders, and `StubHttpMessageHandler` is the same idea for outbound HTTP.
@@ -253,9 +204,7 @@ The harness itself lives in `Support/`:
 - `StubHttpMessageHandler` - Answers outbound HTTP from a table of urls. `Requests` and `Sent` are snapshots, so a test can read them while a background sender is still recording.
 - `HubRecorder` - Takes the place of an `IHubContext<T>` and keeps what was broadcast, per audience. `ToGroup(id)` is what a test reads, and each message is a `HubBroadcast` naming the client method and its arguments.
 - `WebhookRecorder` - Takes the place of `IBackgroundWebhookService` and keeps the events handed to it. `Recorded(type, payload)` filters by predicate, because every test in the run raises events through the one recorder.
-- `RequiresPostgresAttribute` - Marks a test that only makes sense on PostgreSQL.
-
-`DatabaseHarnessTests`, `HttpHarnessTests`, `TestActorTests` and `ApiTestHostTests` are tests of the harness itself. They pin what the rest of the suite assumes: that two tests inserting the same key do not see each other, that explicit ids survive a round trip under either provider, that saving publishes entity events, that the real migration history and snake_case naming are in force on PostgreSQL, that a request with no identity is a 401 and an actor with no permissions a 403, that a request reaches the database of the test that sent it, that each actor shape produces the claims it promises, and that every handler can be constructed. When the harness breaks, these tests fail instead of a hundred unrelated ones.
+`DatabaseHarnessTests`, `HttpHarnessTests`, `TestActorTests` and `ApiTestHostTests` are tests of the harness itself. They pin what the rest of the suite assumes: that two tests inserting the same key do not see each other, that explicit ids survive a round trip, that saving publishes entity events, that the real migration history and snake_case naming are in force, that a request with no identity is a 401 and an actor with no permissions a 403, that a request reaches the database of the test that sent it, that each actor shape produces the claims it promises, and that every handler can be constructed. When the harness breaks, these tests fail instead of a hundred unrelated ones.
 
 # Conventions
 
@@ -271,29 +220,28 @@ Bugs found while writing a test are characterized, not fixed. The test asserts t
 
 ```csharp
 /// <summary>
-/// Characterizes issue 47: each file is written as it is validated, so a later file the archive does not
+/// Characterizes current behavior: each file is written as it is validated, so a later file the archive does not
 /// contain rejects the view after the earlier bytes are already on disk, leaving them with no row that
 /// owns them and no way to delete them through the API.
 /// </summary>
 /// <remarks>Turns red when the importer defers its writes to the save.</remarks>
 ```
 
-An issue number in a test comment is a cross-reference into the findings list that accompanies this work. The remarks are self-contained, so the number is not required reading.
+Keep the summary and remarks self-contained. Do not add a bare issue number unless it links to a tracker entry that exists and supplies useful context.
 
 # Common mistakes
 
 - On `ServiceTestBase`, `HostFor(user, configure)` honours `configure` only on the call that builds the host. A later call passing `configure` for a principal that already has one throws, rather than returning the cached host and ignoring the options: a test asserting against a configuration it did not set passes or fails for a reason written nowhere in it. Configure the host on first use, or use a distinct principal. `ClaimsPrincipalBuilder` returns a new instance each time and the cache keys on the instance, so a principal per configuration is enough.
 - `Db` is not the context a request used. Each request runs in its own scope with its own `PlayerContext`, so `Db`'s change tracker never saw the write and reading a seeded object back confirms only what the test already set. Re-read through `NewContext()`. On `ServiceTestBase` the hazard is the mirror image: services resolved as the same user share one context, which a sequence of production requests would not.
-- The SQLite fallback does enforce foreign keys. The bundled `e_sqlite3` is compiled with `SQLITE_DEFAULT_FOREIGN_KEYS`, so the assumption that SQLite will not catch a violation is not a reason to skip an assertion. `[RequiresPostgres]` is for casing, store-generated UUIDs, migrations and delete-graph ordering.
 - The file layout does not always match the namespace. `Features/Webhooks/Requests/Edit.cs` declares `namespace Player.Api.Features.Webhooks`, with no `.Requests` segment. Read the `namespace` line rather than inferring it from the path.
 - Minimal-API parameter binding classifies every handler parameter at registration time. Anything it cannot resolve as a service is inferred as a body, which is rejected outright on a GET. This is why `EndpointHarness` registers substitutes for `IMediator` and `IIdentityResolver` before building.
 - A stub in the HTTP host is one instance for the whole run, and tests run in parallel. So arrange and assert on a key no other test uses rather than on the shared surface: a url of your own on `Factory.OutboundHttp`, or the group name a seeded id produces on `Factory.Hub<T>()`. Asking whether a hub broadcast *anything* is asking about the whole run, and passes or fails depending on what else was running. Do not reach for a substitute to answer it either — see the harness rule under "What is real, and what is not". Every flake found while building this suite that involved a shared collaborator came from one of those two mistakes, and each reproduced only under load, which is why the check is a repeated run under coverage collection rather than a single plain one.
 
 # Continuous integration
 
-`.github/workflows/build-and-test.yml` restores, builds and runs the suite on every push and pull request. It is not scoped to a branch list, so a regression surfaces on the branch that introduced it rather than waiting for a pull request. Releasing is gated separately.
+`.github/workflows/build-and-test.yml` restores, builds and runs the suite for pull requests and for pushes to `main`. The pull-request `synchronize` event covers each new commit on a branch with an open pull request, without also running a duplicate feature-branch workflow.
 
-The job sets `PLAYER_TESTS_REQUIRE_POSTGRES=true` and then independently greps the provider banner out of the log, so that a run cannot pass having quietly used the SQLite fallback. There is no `services: postgres:` block, because Testcontainers starts and disposes the container itself.
+The job independently greps the PostgreSQL provider banner out of the log, so a future harness change cannot silently stop exercising the production database provider. There is no `services: postgres:` block, because Testcontainers starts and disposes the container itself.
 
 The run produces one artifact, `test-results`, the TRX of the run. It is uploaded even when the job fails, so that a failure shows which tests failed rather than only a count. The NuGet cache is keyed on `Directory.Packages.props` and the project files, which are what decide what a restore pulls.
 

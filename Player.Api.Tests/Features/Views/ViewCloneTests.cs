@@ -40,7 +40,7 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// This is wrong: a view id naming nothing should be a 404, and is a server error instead.
     /// </summary>
     /// <remarks>
-    /// Issue 38. <c>Clone.cs:75</c> loads the view with <c>SingleOrDefaultAsync</c> and <c>:77</c>
+    /// <c>Clone.cs:75</c> loads the view with <c>SingleOrDefaultAsync</c> and <c>:77</c>
     /// dereferences it unguarded, where every other handler in the feature throws
     /// <c>EntityNotFoundException&lt;View&gt;</c>. Turns red when the null is checked.
     /// </remarks>
@@ -60,7 +60,7 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// the name and description of a view the same caller is forbidden to <c>Get</c>.
     /// </summary>
     /// <remarks>
-    /// Issue 37. <c>Clone.cs:61</c> authorizes on the system permission with empty view and team lists,
+    /// <c>Clone.cs:61</c> authorizes on the system permission with empty view and team lists,
     /// so nothing is scoped to the source view and nothing bounds how many copies one caller makes.
     /// Turns red when a read check is added.
     /// </remarks>
@@ -192,7 +192,7 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// instance is repointed at the first copy while the second is left unused.
     /// </summary>
     /// <remarks>
-    /// Issue 35. <c>Clone.cs:106</c> resolves the original application by id and <c>:107</c> throws that
+    /// <c>Clone.cs:106</c> resolves the original application by id and <c>:107</c> throws that
     /// away to search the copies by <c>GetName()</c>. Turns red — as intended — when Clone keys off the
     /// original application's id, which gives one instance per application.
     /// </remarks>
@@ -315,7 +315,7 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// copy, so the second cloned team loses access to a file it should see.
     /// </summary>
     /// <remarks>
-    /// Issue 35. <c>Clone.cs:154-155</c> remaps through the team's name rather than the
+    /// <c>Clone.cs:154-155</c> remaps through the team's name rather than the
     /// <c>clonedTeams</c> dictionary the handler already built. Turns red — as intended — when the remap
     /// goes through the original team id, which gives one id per team.
     /// </remarks>
@@ -347,7 +347,7 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// dereferences the team it cannot find after the copy has already been committed.
     /// </summary>
     /// <remarks>
-    /// Issue 36. <c>Teams/Requests/Delete.cs</c> never scrubs <c>File.TeamIds</c>, <c>Clone.cs:154</c>
+    /// <c>Teams/Requests/Delete.cs</c> never scrubs <c>File.TeamIds</c>, <c>Clone.cs:154</c>
     /// reads <c>.Name</c> off a <c>FirstOrDefault</c> that found nothing, and the save at <c>:133</c>
     /// shares no transaction with the one at <c>:193</c> — so the 500 leaves a view behind whose file
     /// still names a team in the source view, and the source can never be cloned again. Turns red when
@@ -425,14 +425,7 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// </summary>
     private async Task<FileEntity> SeedFile(ViewEntity view, string name, params Guid[] teamIds)
     {
-        var file = new FileEntity
-        {
-            Id = Guid.NewGuid(),
-            Name = name,
-            Path = $"/tmp/player-tests/{Guid.NewGuid():N}/{name}",
-            TeamIds = [.. teamIds],
-            View = view
-        };
+        var file = TestData.File(view, name, teamIds: teamIds);
 
         await Seed(file);
         return file;

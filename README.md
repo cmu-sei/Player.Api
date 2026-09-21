@@ -77,7 +77,7 @@ The official microsoft docker image is based on Debian. SSL CA trusts and their 
 
 ## Testing
 
-`Player.Api.Tests` holds the automated test suite. `dotnet test` runs it, starting its own PostgreSQL container through Testcontainers — see [docs/Testing.md](docs/Testing.md) for what the suite covers, how the harness is put together, and how to run it without Docker.
+`Player.Api.Tests` holds the automated test suite. `dotnet test` runs it, starting its own PostgreSQL container through Testcontainers — see [docs/Testing.md](docs/Testing.md) for what the suite covers and how the harness is put together.
 
 ## Reporting bugs and requesting features
 
