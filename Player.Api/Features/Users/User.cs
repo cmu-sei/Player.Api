@@ -13,32 +13,13 @@ namespace Player.Api.Features.Users
 
         public Guid? RoleId { get; set; }
         public string RoleName { get; set; }
-    }
-
-    public class AdminUsers
-    {
-        public UserIdentityAttributeDefinition[] AttributeDefinitions { get; set; }
-        public AdminUser[] Users { get; set; }
-    }
-
-    public class AdminUser
-    {
-        public Guid Id { get; set; }
-        public string Name { get; set; }
-        public Guid? RoleId { get; set; }
-        public string RoleName { get; set; }
         public UserIdentityAttribute[] IdentityAttributes { get; set; }
-    }
-
-    public class UserIdentityAttributeDefinition
-    {
-        public string Key { get; set; }
-        public string Name { get; set; }
     }
 
     public class UserIdentityAttribute
     {
         public string Key { get; set; }
+        public string Name { get; set; }
         public string Value { get; set; }
     }
 

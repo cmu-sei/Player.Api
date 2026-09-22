@@ -12,7 +12,8 @@ namespace Player.Api.Features.Users
         public MappingProfile()
         {
             CreateMap<UserEntity, User>()
-                .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.RoleId.HasValue ? src.Role.Name : null));
+                .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.RoleId.HasValue ? src.Role.Name : null))
+                .ForMember(dest => dest.IdentityAttributes, opt => opt.Ignore());
 
             CreateMap<Create.Command, UserEntity>();
             CreateMap<Edit.Command, UserEntity>();
