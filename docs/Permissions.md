@@ -45,12 +45,30 @@ SeedData will only add objects if they do not exist. It will not modify existing
 
 Roles can optionally be integrated with the Identity Provider that is being used to authenticate to Player. There are new settings under `ClaimsTransformation` to configure this integration. See appsettings.json. This integration is compatible with any Identity Provider that is capable of putting Roles into the auth token.
 
-Player can also store configured identity attributes from the authentication token so they can be shown as dynamic columns in the Users administration table. `UserAttributes` is an ordered list of mappings with:
+Player can also store configured identity attributes from the authentication token so they can be shown as dynamic columns in the Users administration table. This is disabled by default. `UserAttributes` is an ordered list of mappings with:
 
+- Key: A unique, stable identifier used to associate stored values with this mapping.
 - Name: The column heading shown in Player.
 - ClaimPath: The path within the User's auth token containing the value.
 
-The shipped configuration maps `Email` to `email` and `Air Force Rank` to `rank`. Add, remove, rename, or reorder mappings to control the columns without changing code. Values are updated when Player refreshes that User's identity claims during authenticated requests.
+For example:
+
+```json
+"UserAttributes": [
+  {
+    "Key": "department",
+    "Name": "Department",
+    "ClaimPath": "department"
+  },
+  {
+    "Key": "organization",
+    "Name": "Organization",
+    "ClaimPath": "organization"
+  }
+]
+```
+
+Add, remove, or reorder mappings to control the columns without changing code. A mapping's `Name` can change while its `Key` remains stable. Values are updated when Player refreshes that User's identity claims during authenticated requests. Player returns these values only from the Users administration endpoint, which requires the `ViewUsers` system permission.
 
 ## Roles
 

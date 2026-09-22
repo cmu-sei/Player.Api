@@ -199,11 +199,10 @@ public class UserClaimsService : IUserClaimsService
         foreach (var definition in _options.GetUserAttributeDefinitions())
         {
             attributes.Add(
-                definition.Name,
+                definition.Key,
                 new ConfiguredUserAttribute(
-                    definition.Name,
-                    GetClaimsFromToken(principal, definition.ClaimPath).FirstOrDefault(),
-                    definition.DisplayOrder));
+                    definition.Key,
+                    GetClaimsFromToken(principal, definition.ClaimPath).FirstOrDefault()));
         }
 
         return attributes;
@@ -216,7 +215,7 @@ public class UserClaimsService : IUserClaimsService
         var changed = false;
 
         foreach (var attribute in user.IdentityAttributes
-            .Where(attribute => !configuredAttributes.ContainsKey(attribute.Name))
+            .Where(attribute => !configuredAttributes.ContainsKey(attribute.Key))
             .ToArray())
         {
             user.IdentityAttributes.Remove(attribute);
@@ -226,18 +225,16 @@ public class UserClaimsService : IUserClaimsService
         foreach (var configuredAttribute in configuredAttributes.Values)
         {
             var attribute = user.IdentityAttributes
-                .SingleOrDefault(attribute => attribute.Name == configuredAttribute.Name);
+                .SingleOrDefault(attribute => attribute.Key == configuredAttribute.Key);
 
             if (attribute == null)
             {
                 user.IdentityAttributes.Add(CreateUserIdentityAttribute(configuredAttribute));
                 changed = true;
             }
-            else if (attribute.Value != configuredAttribute.Value ||
-                attribute.DisplayOrder != configuredAttribute.DisplayOrder)
+            else if (attribute.Value != configuredAttribute.Value)
             {
                 attribute.Value = configuredAttribute.Value;
-                attribute.DisplayOrder = configuredAttribute.DisplayOrder;
                 changed = true;
             }
         }
@@ -248,12 +245,11 @@ public class UserClaimsService : IUserClaimsService
     private static UserIdentityAttributeEntity CreateUserIdentityAttribute(ConfiguredUserAttribute attribute) =>
         new()
         {
-            Name = attribute.Name,
-            Value = attribute.Value,
-            DisplayOrder = attribute.DisplayOrder
+            Key = attribute.Key,
+            Value = attribute.Value
         };
 
-    private sealed record ConfiguredUserAttribute(string Name, string Value, int DisplayOrder);
+    private sealed record ConfiguredUserAttribute(string Key, string Value);
 
     private async Task<ClaimsCacheEntry> GetPermissionClaims(Guid userId, ClaimsPrincipal principal)
     {

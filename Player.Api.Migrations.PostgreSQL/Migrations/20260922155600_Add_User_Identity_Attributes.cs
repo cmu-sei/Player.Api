@@ -1,7 +1,4 @@
-﻿// Copyright 2026 Carnegie Mellon University. All Rights Reserved.
-// Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
-
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -20,9 +17,8 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "uuid_generate_v4()"),
                     user_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    name = table.Column<string>(type: "text", nullable: true),
-                    value = table.Column<string>(type: "text", nullable: true),
-                    display_order = table.Column<int>(type: "integer", nullable: false)
+                    key = table.Column<string>(type: "text", nullable: false),
+                    value = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -36,9 +32,9 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_user_identity_attributes_user_id_name",
+                name: "IX_user_identity_attributes_user_id_key",
                 table: "user_identity_attributes",
-                columns: new[] { "user_id", "name" },
+                columns: new[] { "user_id", "key" },
                 unique: true);
         }
 

@@ -18,27 +18,28 @@ namespace Player.Api.Options
 
         public IReadOnlyList<UserAttributeDefinition> GetUserAttributeDefinitions()
         {
-            var names = new HashSet<string>();
+            var keys = new HashSet<string>();
 
             return (UserAttributes ?? [])
-                .Select((options, displayOrder) => new { options, displayOrder })
-                .Where(item =>
-                    !string.IsNullOrWhiteSpace(item.options.Name) &&
-                    !string.IsNullOrWhiteSpace(item.options.ClaimPath) &&
-                    names.Add(item.options.Name))
-                .Select(item => new UserAttributeDefinition(
-                    item.options.Name,
-                    item.options.ClaimPath,
-                    item.displayOrder))
+                .Where(options =>
+                    !string.IsNullOrWhiteSpace(options.Key) &&
+                    !string.IsNullOrWhiteSpace(options.Name) &&
+                    !string.IsNullOrWhiteSpace(options.ClaimPath) &&
+                    keys.Add(options.Key))
+                .Select(options => new UserAttributeDefinition(
+                    options.Key,
+                    options.Name,
+                    options.ClaimPath))
                 .ToArray();
         }
     }
 
     public class UserAttributeOptions
     {
+        public string Key { get; set; }
         public string Name { get; set; }
         public string ClaimPath { get; set; }
     }
 
-    public record UserAttributeDefinition(string Name, string ClaimPath, int DisplayOrder);
+    public record UserAttributeDefinition(string Key, string Name, string ClaimPath);
 }

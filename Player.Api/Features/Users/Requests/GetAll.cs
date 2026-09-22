@@ -2,7 +2,6 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System.Runtime.Serialization;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -17,7 +16,6 @@ using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
-using Player.Api.Options;
 using TeamPermission = Player.Api.Data.Data.Models.TeamPermission;
 
 namespace Player.Api.Features.Users;
@@ -50,7 +48,6 @@ public class GetAll
 
     public class Handler(
         IPlayerAuthorizationService authorizationService,
-        ClaimsTransformationOptions claimsOptions,
         PlayerContext db,
         IMapper mapper) : BaseHandler<Query, User[]>
     {
@@ -59,35 +56,9 @@ public class GetAll
 
         public override async Task<User[]> HandleRequest(Query request, CancellationToken cancellationToken)
         {
-            var users = await db.Users
+            return await db.Users
                 .ProjectTo<User>(mapper.ConfigurationProvider)
                 .ToArrayAsync(cancellationToken);
-
-            var attributeDefinitions = claimsOptions.GetUserAttributeDefinitions();
-
-            foreach (var user in users)
-            {
-                var attributesByName = (user.IdentityAttributes ?? [])
-                    .Where(attribute => !string.IsNullOrWhiteSpace(attribute.Name))
-                    .GroupBy(attribute => attribute.Name)
-                    .ToDictionary(group => group.Key, group => group.First());
-
-                user.IdentityAttributes = attributeDefinitions
-                    .Select(definition =>
-                    {
-                        attributesByName.TryGetValue(definition.Name, out var storedAttribute);
-
-                        return new UserIdentityAttribute
-                        {
-                            Name = definition.Name,
-                            Value = storedAttribute?.Value,
-                            DisplayOrder = definition.DisplayOrder
-                        };
-                    })
-                    .ToArray();
-            }
-
-            return users;
         }
     }
 }

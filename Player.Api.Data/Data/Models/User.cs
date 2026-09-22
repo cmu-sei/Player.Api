@@ -39,9 +39,8 @@ namespace Player.Api.Data.Data.Models
         public Guid UserId { get; set; }
         public virtual UserEntity User { get; set; }
 
-        public string Name { get; set; }
+        public string Key { get; set; }
         public string Value { get; set; }
-        public int DisplayOrder { get; set; }
     }
 
     public class UserConfiguration : IEntityTypeConfiguration<UserEntity>
@@ -56,7 +55,8 @@ namespace Player.Api.Data.Data.Models
     {
         public void Configure(EntityTypeBuilder<UserIdentityAttributeEntity> builder)
         {
-            builder.HasIndex(e => new { e.UserId, e.Name }).IsUnique();
+            builder.Property(e => e.Key).IsRequired();
+            builder.HasIndex(e => new { e.UserId, e.Key }).IsUnique();
 
             builder
                 .HasOne(e => e.User)
