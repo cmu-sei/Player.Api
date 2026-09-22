@@ -13,6 +13,10 @@ namespace Player.Api.Features.Users
 
         public Guid? RoleId { get; set; }
         public string RoleName { get; set; }
+    }
+
+    public class UserDirectoryEntry : User
+    {
         public UserIdentityAttribute[] IdentityAttributes { get; set; }
     }
 

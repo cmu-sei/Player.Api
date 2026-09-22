@@ -68,7 +68,7 @@ For example:
 ]
 ```
 
-Add, remove, or reorder mappings to control the columns without changing code. A mapping's `Name` can change while its `Key` remains stable. Values are updated when Player refreshes that User's identity claims during authenticated requests. `GET /api/users` includes these values only when the caller has the `ViewUsers` system permission. Callers authorized through `ManageView` or `ManageTeam` continue to receive the existing User fields without identity attributes.
+Add, remove, or reorder mappings to control the columns without changing code. A mapping's `Name` can change while its `Key` remains stable. Values are updated when Player refreshes that User's identity claims during authenticated requests. `GET /api/users` includes these values only when the caller has the `ViewUsers` system permission. Callers authorized through `ManageView` or `ManageTeam` receive the existing User fields with an empty identity attributes collection. Other User endpoints continue to return the shared User response without an identity attributes property.
 
 ## Roles
 

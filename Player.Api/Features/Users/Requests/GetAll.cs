@@ -25,7 +25,7 @@ namespace Player.Api.Features.Users;
 public class GetAll
 {
     [DataContract(Name = "GetUsersQuery")]
-    public record Query : IRequest<User[]>
+    public record Query : IRequest<UserDirectoryEntry[]>
     {
 
     }
@@ -42,7 +42,7 @@ public class GetAll
             ];
         }
 
-        async Task<Ok<User[]>> TypedHandler(IMediator mediator, CancellationToken cancellationToken)
+        async Task<Ok<UserDirectoryEntry[]>> TypedHandler(IMediator mediator, CancellationToken cancellationToken)
         {
             return TypedResults.Ok(await mediator.Send(new Query(), cancellationToken));
         }
@@ -52,16 +52,17 @@ public class GetAll
         IPlayerAuthorizationService authorizationService,
         ClaimsTransformationOptions claimsOptions,
         PlayerContext db,
-        IMapper mapper) : BaseHandler<Query, User[]>
+        IMapper mapper) : BaseHandler<Query, UserDirectoryEntry[]>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ViewUsers], [ViewPermission.ManageView], [TeamPermission.ManageTeam], cancellationToken);
 
-        public override async Task<User[]> HandleRequest(Query request, CancellationToken cancellationToken)
+        public override async Task<UserDirectoryEntry[]> HandleRequest(Query request, CancellationToken cancellationToken)
         {
             var users = await db.Users
                 .ProjectTo<User>(mapper.ConfigurationProvider)
                 .ToArrayAsync(cancellationToken);
+            var directoryEntries = mapper.Map<UserDirectoryEntry[]>(users);
 
             var canViewIdentityAttributes = await authorizationService.Authorize(
                 [SystemPermission.ViewUsers],
@@ -69,7 +70,7 @@ public class GetAll
 
             if (!canViewIdentityAttributes)
             {
-                return users;
+                return directoryEntries;
             }
 
             var definitions = claimsOptions.GetUserAttributeDefinitions();
@@ -84,7 +85,7 @@ public class GetAll
                 attribute => (attribute.UserId, attribute.Key),
                 attribute => attribute.Value);
 
-            foreach (var user in users)
+            foreach (var user in directoryEntries)
             {
                 user.IdentityAttributes = definitions
                     .Select(definition =>
@@ -101,7 +102,7 @@ public class GetAll
                     .ToArray();
             }
 
-            return users;
+            return directoryEntries;
         }
     }
 }
