@@ -7,6 +7,7 @@ ARG VERSION
 WORKDIR /source
 
 # Copy project files and restore as distinct layers
+COPY --link Directory.Build.props Directory.Packages.props global.json ./
 COPY --link Player.Api/*.csproj ./Player.Api/
 COPY --link Player.Api.Data/*.csproj ./Player.Api.Data/
 COPY --link Player.Api.Migrations.PostgreSQL/*.csproj ./Player.Api.Migrations.PostgreSQL/
