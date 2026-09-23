@@ -47,12 +47,12 @@ public class TeamPermissionsClaimTests
             [
                 ViewPermission.ViewView.ToString(),
                 ViewPermission.ManageView.ToString(),
-                TeamPermission.EditTeam.ToString()
+                TeamPermission.ManageTeam.ToString()
             ]
         };
 
         Assert.Equal([ViewPermission.ViewView, ViewPermission.ManageView], claim.ViewPermissions);
-        Assert.Equal([TeamPermission.EditTeam], claim.TeamPermissions);
+        Assert.Equal([TeamPermission.ManageTeam], claim.TeamPermissions);
     }
 
     [Fact]

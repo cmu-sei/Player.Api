@@ -51,10 +51,10 @@ public class TeamPermissionsHandlerTests
     public async Task Succeeds_when_the_named_team_grants_a_required_team_permission()
     {
         var user = new ClaimsPrincipalBuilder()
-            .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.EditTeam])
+            .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.ManageTeam])
             .Build();
         var requirement = new TeamPermissionRequirement(
-            RequiredTeamPermissions: [TeamPermission.EditTeam],
+            RequiredTeamPermissions: [TeamPermission.ManageTeam],
             TeamId: TeamId);
 
         var context = await AuthorizationHarness.HandleAsync(_handler, requirement, user);
@@ -66,10 +66,10 @@ public class TeamPermissionsHandlerTests
     public async Task Does_not_succeed_when_the_permission_is_held_on_a_different_team()
     {
         var user = new ClaimsPrincipalBuilder()
-            .WithTeam(ViewId, OtherTeamId, teamPermissions: [TeamPermission.EditTeam])
+            .WithTeam(ViewId, OtherTeamId, teamPermissions: [TeamPermission.ManageTeam])
             .Build();
         var requirement = new TeamPermissionRequirement(
-            RequiredTeamPermissions: [TeamPermission.EditTeam],
+            RequiredTeamPermissions: [TeamPermission.ManageTeam],
             TeamId: TeamId);
 
         var context = await AuthorizationHarness.HandleAsync(_handler, requirement, user);
@@ -164,10 +164,10 @@ public class TeamPermissionsHandlerTests
     {
         // "Can this user do X anywhere?" — the shape used by list endpoints.
         var user = new ClaimsPrincipalBuilder()
-            .WithTeam(OtherViewId, OtherTeamId, viewPermissions: [ViewPermission.EditView])
+            .WithTeam(OtherViewId, OtherTeamId, viewPermissions: [ViewPermission.ManageView])
             .Build();
         var requirement = new TeamPermissionRequirement(
-            RequiredViewPermissions: [ViewPermission.EditView],
+            RequiredViewPermissions: [ViewPermission.ManageView],
             RequiredTeamPermissions: [TeamPermission.ManageTeam]);
 
         var context = await AuthorizationHarness.HandleAsync(_handler, requirement, user);
@@ -182,7 +182,7 @@ public class TeamPermissionsHandlerTests
             .WithTeam(OtherViewId, OtherTeamId, teamPermissions: [TeamPermission.ManageTeam])
             .Build();
         var requirement = new TeamPermissionRequirement(
-            RequiredViewPermissions: [ViewPermission.EditView],
+            RequiredViewPermissions: [ViewPermission.ManageView],
             RequiredTeamPermissions: [TeamPermission.ManageTeam]);
 
         var context = await AuthorizationHarness.HandleAsync(_handler, requirement, user);

@@ -192,6 +192,34 @@ namespace Player.Api.Data.Data
                     Name = "DeleteIsos",
                     Description = "Allows deleting any ISO across all Views",
                     Immutable = false
+                },
+                new PermissionEntity
+                {
+                    Id = new("71c8e1c1-d1e2-45b6-987f-823467b6fbb8"),
+                    Name = "ViewVms",
+                    Description = "Allows viewing all Vm consoles, but not interacting with them",
+                    Immutable = false
+                },
+                new PermissionEntity
+                {
+                    Id = new("92340801-3fbf-4f53-a075-02f576563b53"),
+                    Name = "ControlVms",
+                    Description = "Allows interacting with and controlling all Vms",
+                    Immutable = false
+                },
+                new PermissionEntity
+                {
+                    Id = new("69556b84-4df2-46b6-9931-39e1e1cb0ccd"),
+                    Name = "ViewMaps",
+                    Description = "Allows viewing all Maps, but not creating, editing, or deleting them",
+                    Immutable = false
+                },
+                new PermissionEntity
+                {
+                    Id = new("f1403fb2-2925-40e4-aa94-5142bdf19ce8"),
+                    Name = "ManageMaps",
+                    Description = "Allows viewing, creating, editing, and deleting all Maps",
+                    Immutable = false
                 }
             );
 
@@ -245,13 +273,6 @@ namespace Player.Api.Data.Data
                 },
                 new TeamPermissionEntity
                 {
-                    Id = new("fbabccc8-48c7-478a-bc30-d4bd8950e3d5"),
-                    Name = TeamPermission.EditTeam.ToString(),
-                    Description = "Allows editing basic Team resources, including making changes within Virtual Machines, if applicable",
-                    Immutable = true
-                },
-                new TeamPermissionEntity
-                {
                     Id = new("83e41563-8b7f-4f43-b9d0-2d8dc12fc0bf"),
                     Name = TeamPermission.ManageTeam.ToString(),
                     Description = "Allows managing all Team resources, including adding and removing Users",
@@ -269,13 +290,6 @@ namespace Player.Api.Data.Data
                     Id = new("7be07cd5-104e-4770-800b-80ac26cda6d5"),
                     Name = ViewPermission.ViewView.ToString(),
                     Description = "Allows viewing all resources in the View",
-                    Immutable = true
-                },
-                new TeamPermissionEntity
-                {
-                    Id = new("5ae96619-b40b-4fdb-bbef-ad476c21553d"),
-                    Name = ViewPermission.EditView.ToString(),
-                    Description = "Allows editing all basic resources in the View, including making changes within Virtual Machines, if applicable",
                     Immutable = true
                 },
 
@@ -342,19 +356,66 @@ namespace Player.Api.Data.Data
                     Name = "ManageNetworks",
                     Description = "Allows creating, updating, and deleting Network access for the View",
                     Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("f75c335b-20f2-4eec-86b5-b21811c7b7db"),
+                    Name = "ViewTeamVms",
+                    Description = "Allows viewing the Vm consoles available to the Team, but not interacting with them",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("dbc9b1c0-4964-439b-b7b4-3d6d0e4b9e91"),
+                    Name = "ControlTeamVms",
+                    Description = "Allows interacting with and controlling the Vms available to the Team",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("2baec4b7-5637-4e6c-8228-73e6fe38bbf5"),
+                    Name = "ViewViewVms",
+                    Description = "Allows viewing all of the Vm consoles in the View, but not interacting with them",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("2a8d8276-c6e5-4f94-8e48-81e753700e89"),
+                    Name = "ControlViewVms",
+                    Description = "Allows interacting with and controlling all of the Vms in the View",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("2a94e61f-5d26-4446-b47b-e4c5aeb854ba"),
+                    Name = "ViewTeamMaps",
+                    Description = "Allows viewing the Maps available to the Team, but not creating, editing, or deleting them",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("40deaedd-11dd-4b05-bcdd-045a249189b8"),
+                    Name = "ManageTeamMaps",
+                    Description = "Allows viewing, creating, editing, and deleting all of the Maps available to the Team",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("2dabbfe3-957b-420e-9aa3-9e227494c836"),
+                    Name = "ViewViewMaps",
+                    Description = "Allows viewing all of the Maps in the View, but not creating, editing, or deleting them",
+                    Immutable = false
+                },
+                new TeamPermissionEntity
+                {
+                    Id = new("45a61f67-8f14-496b-b2cb-136fb7d81093"),
+                    Name = "ManageViewMaps",
+                    Description = "Allows viewing, creating, editing, and deleting all of the Maps in the View",
+                    Immutable = false
                 }
             };
 
             builder.Entity<TeamPermissionEntity>().HasData(teamPermissions);
-
-            var observerPermissions = teamPermissions.Where(x => x.Name.StartsWith("View"));
-            var viewMemberPermissions = teamPermissions.Where(x => new[] {
-                TeamPermission.ViewTeam.ToString(),
-                TeamPermission.EditTeam.ToString(),
-                "UploadTeamIsos",
-                "UploadVmFiles",
-            }
-            .Contains(x.Name));
 
             builder.Entity<TeamRolePermissionEntity>().HasData(
                 // Observer Permissions
@@ -376,6 +437,18 @@ namespace Player.Api.Data.Data
                     RoleId = observerRoleId,
                     PermissionId = teamPermissions.SingleOrDefault(x => x.Name == "ViewNetworks").Id
                 },
+                new TeamRolePermissionEntity
+                {
+                    Id = new("a2e44491-da6a-4042-bf9a-94b1dbf6a252"),
+                    RoleId = observerRoleId,
+                    PermissionId = teamPermissions.SingleOrDefault(x => x.Name == "ViewViewVms").Id
+                },
+                new TeamRolePermissionEntity
+                {
+                    Id = new("177b708b-ff6f-4381-8621-e6a163004ed9"),
+                    RoleId = observerRoleId,
+                    PermissionId = teamPermissions.SingleOrDefault(x => x.Name == "ViewViewMaps").Id
+                },
 
                 // View Member Permissions
                 new TeamRolePermissionEntity
@@ -386,9 +459,15 @@ namespace Player.Api.Data.Data
                 },
                 new TeamRolePermissionEntity
                 {
-                    Id = new("f83d8368-1839-44d4-ad8c-dfa7fae56565"),
+                    Id = new("bb6ea1a2-b275-46cc-9043-34cd60d3daa6"),
                     RoleId = viewMemberRoleId,
-                    PermissionId = teamPermissions.SingleOrDefault(x => x.Name == TeamPermission.EditTeam.ToString()).Id
+                    PermissionId = teamPermissions.SingleOrDefault(x => x.Name == "ControlTeamVms").Id
+                },
+                new TeamRolePermissionEntity
+                {
+                    Id = new("dced97e2-f3da-4d3f-ab1b-0f093ccf8f7f"),
+                    RoleId = viewMemberRoleId,
+                    PermissionId = teamPermissions.SingleOrDefault(x => x.Name == "ViewTeamMaps").Id
                 },
                 new TeamRolePermissionEntity
                 {

@@ -179,8 +179,17 @@ public class PrimaryVisibilityContextTests(DatabaseFixture fixture) : DatabaseTe
     public async Task Sees_only_the_primary_team_without_a_direct_team_or_view_permission()
     {
         var (view, primary, second, _) = await SeedViewAsync();
+        // A Vm.Api permission — not a TeamPermission or ViewPermission member — so nothing here grants
+        // visibility beyond the primary team itself.
         var user = new ClaimsPrincipalBuilder()
-            .WithTeam(view.Id, primary.Id, isPrimary: true, teamPermissions: [TeamPermission.EditTeam])
+            .WithTeamClaim(new TeamPermissionsClaim
+            {
+                ViewId = view.Id,
+                TeamId = primary.Id,
+                IsPrimary = true,
+                PermissionValues = ["ControlTeamVms"],
+                DirectPermissionValues = ["ControlTeamVms"]
+            })
             .WithScopedTeam(view.Id, second.Id, sourceTeamIds: [primary.Id])
             .Build();
 
