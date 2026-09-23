@@ -30,7 +30,7 @@ namespace Player.Api.Hubs
         {
             var id = Guid.Parse(idString);
             var notification = await _notificationService.JoinTeam(id, _ct);
-            if (notification.ToId == id)
+            if (notification.WasSuccess)
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, idString);
             }

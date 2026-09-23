@@ -36,21 +36,41 @@ public class ViewHubTests
     }
 
     /// <summary>
-    /// Characterizes current behavior: a refused join is reported by <c>WasSuccess</c>, which the hub never reads, so
-    /// the connection joins the group and receives every later view broadcast anyway.
+    /// A refused join is reported by <c>WasSuccess</c>, and the hub has to read it: joining the group anyway
+    /// would deliver every later view broadcast to a caller with no claim on the view. The refusal is still
+    /// relayed, because the client distinguishes a refusal from a dropped connection.
     /// </summary>
-    /// <remarks>Turns red when the hub checks <c>WasSuccess</c> before joining the group.</remarks>
     [Fact]
-    public async Task A_refused_join_still_joins_the_group()
+    public async Task A_refused_join_does_not_join_the_group()
     {
-        var refused = Message(_viewId, "Failed to join Exercise One notifications.");
+        var refused = Message(_viewId, "Failed to join View notifications.");
         refused.WasSuccess = false;
         _notifications.JoinView(_viewId, Arg.Any<CancellationToken>()).Returns(refused);
 
         await Hub().Join(_viewId.ToString());
 
-        await _harness.Groups.Received(1).AddToGroupAsync(
-            HubHarness.ConnectionId, _viewId.ToString(), Arg.Any<CancellationToken>());
+        await _harness.Groups.DidNotReceive().AddToGroupAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        Assert.Same(refused, HubHarness.Sent<Notification>(_harness.Caller, "Reply"));
+    }
+
+    /// <summary>
+    /// A refused join is not a visit, so it records no presence and emits no xAPI statement. Registering either
+    /// would show a user online in a view they were just refused, and report them as having viewed it.
+    /// </summary>
+    [Fact]
+    public async Task A_refused_join_records_no_presence_and_emits_no_xapi()
+    {
+        var refused = Message(_viewId, "Failed to join View notifications.");
+        refused.WasSuccess = false;
+        _notifications.JoinView(_viewId, Arg.Any<CancellationToken>()).Returns(refused);
+
+        await Hub().Join(_viewId.ToString());
+
+        await _presence.DidNotReceive().AddConnectionToView(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _xApi.DidNotReceive().EmitViewViewedAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        Assert.False(_harness.Items.ContainsKey("presenceId"));
     }
 
     /// <summary>
