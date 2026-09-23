@@ -118,8 +118,6 @@ namespace Player.Api.Services
         /// <returns></returns>
         public async Task<ViewModels.Notification> JoinView(Guid viewId, CancellationToken cancellationToken)
         {
-            var wasSuccess = true;
-            var canPost = false;
             var messageTime = DateTime.Now.ToUniversalTime();
             var notificationEntity = new NotificationEntity { };
             notificationEntity.Subject = "Join View";
@@ -129,22 +127,27 @@ namespace Player.Api.Services
             notificationEntity.FromId = _user.GetId();
             notificationEntity.FromType = NotificationType.User;
             notificationEntity.FromName = _user.Claims.Single(x => x.Type == "name").Value;
-            notificationEntity.ToName = _context.Views.Find(viewId).Name;
             notificationEntity.Priority = NotificationPriority.System;
-            if (await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken))
+
+            // Posting is a management action, so only a manager may post. Managing implies listening,
+            // so a manager joins even without ViewView, which does not imply ManageView.
+            var canManageView = await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
+            var canViewView = await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken);
+            var isViewMember = _authorizationService.GetAuthorizedViewIds().Contains(viewId);
+            var wasSuccess = canManageView || canViewView || isViewMember;
+            var canPost = canManageView;
+
+            if (wasSuccess)
             {
-                notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
-                canPost = true;
-            }
-            else if (_authorizationService.GetAuthorizedViewIds().Contains(viewId))
-            {
+                // Only name the View once the caller is known to have access to it.
+                notificationEntity.ToName = _context.Views.Find(viewId)?.Name;
                 notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
             }
             else
             {
-                notificationEntity.Text = String.Format("Failed to join {0} notifications.", notificationEntity.ToName);
-                wasSuccess = false;
+                notificationEntity.Text = "Failed to join View notifications.";
             }
+
             var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
@@ -153,7 +156,8 @@ namespace Player.Api.Services
         }
 
         /// <summary>
-        /// Allows a client to broadcast a notification to all members of the view who are currently joined
+        /// Allows a client to broadcast a notification to all members of the view who are currently joined, IF:
+        ///     1. they can manage this view
         /// </summary>
         /// <param name="viewId"></param>
         /// <param name="incomingData"></param>
@@ -161,6 +165,9 @@ namespace Player.Api.Services
         /// <returns></returns>
         public async Task<ViewModels.Notification> PostToView(Guid viewId, ViewModels.Notification incomingData, CancellationToken cancellationToken)
         {
+            if (!await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken))
+                throw new ForbiddenException();
+
             var wasSuccess = true;
             var canPost = true;
             var messageTime = DateTime.Now.ToUniversalTime();
@@ -192,8 +199,6 @@ namespace Player.Api.Services
         /// <returns></returns>
         public async Task<ViewModels.Notification> JoinTeam(Guid teamId, CancellationToken cancellationToken)
         {
-            var wasSuccess = true;
-            var canPost = false;
             var messageTime = DateTime.Now.ToUniversalTime();
             var requestedTeam = _context.Teams.Find(teamId);
             var notificationEntity = new NotificationEntity { };
@@ -204,22 +209,29 @@ namespace Player.Api.Services
             notificationEntity.FromId = _user.GetId();
             notificationEntity.FromType = NotificationType.User;
             notificationEntity.FromName = _user.Claims.Single(x => x.Type == "name").Value;
-            notificationEntity.ToName = requestedTeam.Name;
             notificationEntity.Priority = NotificationPriority.System;
-            if (await _authorizationService.Authorize<ViewEntity>(requestedTeam.ViewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken))
+
+            // Posting is a management action on the team's view, so only a manager of that view may post.
+            var canManageView = requestedTeam != null &&
+                await _authorizationService.Authorize<ViewEntity>(requestedTeam.ViewId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
+            var canViewView = requestedTeam != null &&
+                await _authorizationService.Authorize<ViewEntity>(requestedTeam.ViewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken);
+            var canViewTeam = requestedTeam != null &&
+                await _authorizationService.Authorize<TeamEntity>(teamId, [], [], [TeamPermission.ViewTeam], cancellationToken);
+            var wasSuccess = canManageView || canViewView || canViewTeam;
+            var canPost = canManageView;
+
+            if (wasSuccess)
             {
-                notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
-                canPost = true;
-            }
-            else if (await _authorizationService.Authorize<TeamEntity>(teamId, [], [], [TeamPermission.ViewTeam], cancellationToken))
-            {
+                // Only name the Team once the caller is known to have access to it.
+                notificationEntity.ToName = requestedTeam.Name;
                 notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
             }
             else
             {
-                notificationEntity.Text = String.Format("Failed to join {0} notifications.", notificationEntity.ToName);
-                wasSuccess = false;
+                notificationEntity.Text = "Failed to join Team notifications.";
             }
+
             var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
@@ -228,7 +240,8 @@ namespace Player.Api.Services
         }
 
         /// <summary>
-        /// Allows a client to broadcast a notification to all members of the team who are currently joined
+        /// Allows a client to broadcast a notification to all members of the team who are currently joined, IF:
+        ///     1. they can manage the team's view
         /// </summary>
         /// <param name="teamId"></param>
         /// <param name="incomingData"></param>
@@ -236,6 +249,9 @@ namespace Player.Api.Services
         /// <returns></returns>
         public async Task<ViewModels.Notification> PostToTeam(Guid teamId, ViewModels.Notification incomingData, CancellationToken ct)
         {
+            if (!await _authorizationService.Authorize<TeamEntity>(teamId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], ct))
+                throw new ForbiddenException();
+
             var wasSuccess = true;
             var canPost = true;
             var messageTime = DateTime.Now.ToUniversalTime();
@@ -269,8 +285,6 @@ namespace Player.Api.Services
         /// <returns></returns>
         public async Task<ViewModels.Notification> JoinUser(Guid viewId, Guid userId, CancellationToken ct)
         {
-            var wasSuccess = true;
-            var canPost = false;
             var messageTime = DateTime.Now.ToUniversalTime();
             var notificationEntity = new NotificationEntity { };
             notificationEntity.Subject = "Join Team";
@@ -284,25 +298,24 @@ namespace Player.Api.Services
             notificationEntity.ToName = notificationEntity.FromName;
             notificationEntity.Priority = NotificationPriority.System;
 
-            if (await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], ct))
+            // A member joins only their own conversation within the view; anyone who can observe the whole
+            // view joins any of them, and only a manager of the view may post.
+            var canManageView = await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], ct);
+            var canViewView = await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], ct);
+            var isViewMember = _authorizationService.GetAuthorizedViewIds().Contains(viewId);
+            var isSameUser = _user.GetId() == userId;
+            var wasSuccess = canManageView || canViewView || (isViewMember && isSameUser);
+            var canPost = canManageView;
+
+            if (wasSuccess)
             {
                 notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
-                canPost = true;
             }
             else
             {
-                var isViewMember = _authorizationService.GetAuthorizedViewIds().Contains(viewId);
-                var isSameUser = _user.GetId() == userId;
-                if (isViewMember && isSameUser)
-                {
-                    notificationEntity.Text = String.Format("Successfully joined {0} notifications.", notificationEntity.ToName);
-                }
-                else
-                {
-                    notificationEntity.Text = String.Format("Failed to join {0} notifications.", notificationEntity.ToName);
-                    wasSuccess = false;
-                }
+                notificationEntity.Text = String.Format("Failed to join {0} notifications.", notificationEntity.ToName);
             }
+
             var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
@@ -312,7 +325,7 @@ namespace Player.Api.Services
 
         /// <summary>
         /// Allows a client to broadcast a notification to the joined view user, IF:
-        ///     1. they are an view administrator
+        ///     1. they can manage the view the user is being notified in
         /// </summary>
         /// <param name="viewId"></param>
         /// <param name="userId"></param>
@@ -321,6 +334,11 @@ namespace Player.Api.Services
         /// <returns></returns>
         public async Task<ViewModels.Notification> PostToUser(Guid viewId, Guid userId, ViewModels.Notification incomingData, CancellationToken cancellationToken)
         {
+            // Anchored on the view rather than the user: Authorize<UserEntity> is not
+            // supported by GetResourceResult and throws NotImplementedException.
+            if (!await _authorizationService.Authorize<ViewEntity>(viewId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken))
+                throw new ForbiddenException();
+
             var wasSuccess = true;
             var canPost = true;
             var messageTime = DateTime.Now.ToUniversalTime();
