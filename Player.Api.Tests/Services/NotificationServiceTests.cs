@@ -212,7 +212,29 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     /// may post, and the hub relays it either way.
     /// </summary>
     [Fact]
-    public async Task JoinView_lets_a_caller_with_ViewView_post()
+    public async Task JoinView_lets_a_caller_with_ManageView_post()
+    {
+        var view = TestData.View("My View");
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        var caller = Member(view.Id, team.Id, ViewPermission.ManageView);
+        var notification = await Service(caller).JoinView(view.Id, Ct);
+
+        Assert.True(notification.WasSuccess);
+        Assert.True(notification.CanPost);
+        Assert.Equal("My View", notification.ToName);
+        Assert.Equal("Successfully joined My View notifications.", notification.Text);
+        Assert.Equal(NotificationPriority.System, notification.Priority);
+    }
+
+    /// <summary>
+    /// <c>ViewView</c> is a read permission, so it joins but does not broadcast. Broadcasting to everyone in
+    /// a view is a management action, and <c>ManageView</c> is what <see cref="INotificationService.PostToView"/>
+    /// requires.
+    /// </summary>
+    [Fact]
+    public async Task JoinView_does_not_let_a_caller_with_only_ViewView_post()
     {
         var view = TestData.View("My View");
         var team = TestData.Team(view.Id);
@@ -222,10 +244,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         var notification = await Service(caller).JoinView(view.Id, Ct);
 
         Assert.True(notification.WasSuccess);
-        Assert.True(notification.CanPost);
-        Assert.Equal("My View", notification.ToName);
-        Assert.Equal("Successfully joined My View notifications.", notification.Text);
-        Assert.Equal(NotificationPriority.System, notification.Priority);
+        Assert.False(notification.CanPost);
     }
 
     /// <summary>
@@ -245,8 +264,12 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         Assert.False(notification.CanPost);
     }
 
+    /// <summary>
+    /// The refusal does not name the view. Naming it would tell a caller with no claim on the view that a
+    /// view with that id exists, and what it is called, from the guid alone.
+    /// </summary>
     [Fact]
-    public async Task JoinView_refuses_a_caller_with_no_claim_on_the_view()
+    public async Task JoinView_refuses_a_caller_with_no_claim_on_the_view_without_naming_it()
     {
         var view = TestData.View("My View");
         await Seed(view);
@@ -254,7 +277,9 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         var notification = await Service(ClaimsPrincipalBuilder.Anonymous()).JoinView(view.Id, Ct);
 
         Assert.False(notification.WasSuccess);
-        Assert.Equal("Failed to join My View notifications.", notification.Text);
+        Assert.False(notification.CanPost);
+        Assert.Null(notification.ToName);
+        Assert.Equal("Failed to join View notifications.", notification.Text);
     }
 
     /// <summary>
@@ -274,7 +299,22 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     }
 
     [Fact]
-    public async Task JoinTeam_lets_a_caller_with_ViewView_post()
+    public async Task JoinTeam_lets_a_caller_with_ManageView_post()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Blue Team");
+        await Seed(view, team);
+
+        var caller = Member(view.Id, team.Id, ViewPermission.ManageView);
+        var notification = await Service(caller).JoinTeam(team.Id, Ct);
+
+        Assert.True(notification.WasSuccess);
+        Assert.True(notification.CanPost);
+        Assert.Equal("Successfully joined Blue Team notifications.", notification.Text);
+    }
+
+    [Fact]
+    public async Task JoinTeam_does_not_let_a_caller_with_only_ViewView_post()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id, "Blue Team");
@@ -284,8 +324,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         var notification = await Service(caller).JoinTeam(team.Id, Ct);
 
         Assert.True(notification.WasSuccess);
-        Assert.True(notification.CanPost);
-        Assert.Equal("Successfully joined Blue Team notifications.", notification.Text);
+        Assert.False(notification.CanPost);
     }
 
     [Fact]
@@ -349,7 +388,24 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     /// A user joins their own conversation within a view; an administrator joins anyone's.
     /// </summary>
     [Fact]
-    public async Task JoinUser_lets_a_caller_with_ViewView_post_to_anyone()
+    public async Task JoinUser_lets_a_caller_with_ManageView_post_to_anyone()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        var caller = Member(view.Id, team.Id, ViewPermission.ManageView);
+        var notification = await Service(caller).JoinUser(view.Id, Guid.NewGuid(), Ct);
+
+        Assert.True(notification.WasSuccess);
+        Assert.True(notification.CanPost);
+    }
+
+    /// <summary>
+    /// <c>ViewView</c> observes the whole view, so it reaches another user's conversation, but read-only.
+    /// </summary>
+    [Fact]
+    public async Task JoinUser_lets_a_caller_with_only_ViewView_listen_to_anyone_without_posting()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
@@ -359,7 +415,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         var notification = await Service(caller).JoinUser(view.Id, Guid.NewGuid(), Ct);
 
         Assert.True(notification.WasSuccess);
-        Assert.True(notification.CanPost);
+        Assert.False(notification.CanPost);
     }
 
     [Fact]
@@ -395,9 +451,13 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     public async Task PostToView_stores_the_message_addressed_to_the_view()
     {
         var view = TestData.View("My View");
-        await Seed(view);
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
 
-        var caller = new ClaimsPrincipalBuilder().WithName("Poster").Build();
+        var caller = new ClaimsPrincipalBuilder()
+            .WithName("Poster")
+            .WithTeam(view.Id, team.Id, viewPermissions: [ViewPermission.ManageView])
+            .Build();
         var posted = await Service(caller).PostToView(view.Id, new Notification { Text = "Hello" }, Ct);
 
         Assert.True(posted.WasSuccess);
@@ -447,51 +507,68 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     }
 
     /// <summary>
-    /// Characterizes current behavior: none of the three post methods authorizes the caller. A principal with no claim
-    /// on the view broadcasts to it and is told it succeeded — <c>CanPost</c>, the flag a join returns to say
-    /// whether posting is allowed, is advisory and never consulted here.
+    /// Broadcasting requires <c>ManageView</c>, and the check comes before the write, so a refused post leaves
+    /// no row behind. <c>CanPost</c> on a join reply is advisory — the client uses it to decide whether to offer
+    /// a compose box — so the same rule has to be enforced here, where the message is actually stored.
     /// </summary>
-    /// <remarks>Turns red when the post methods authorize the caller before broadcasting.</remarks>
     [Fact]
-    public async Task PostToView_does_not_check_that_the_caller_may_post()
-    {
-        var view = TestData.View();
-        await Seed(view);
-
-        var posted = await Service(ClaimsPrincipalBuilder.Anonymous())
-            .PostToView(view.Id, new Notification { Text = "Hello" }, Ct);
-
-        Assert.True(posted.WasSuccess);
-        Assert.True(posted.CanPost);
-        Assert.Equal("Hello", Assert.Single(await Stored()).Text);
-    }
-
-    [Fact]
-    public async Task PostToTeam_does_not_check_that_the_caller_may_post()
+    public async Task PostToView_is_forbidden_without_ManageView_and_stores_nothing()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
         await Seed(view, team);
 
-        var posted = await Service(ClaimsPrincipalBuilder.Anonymous())
-            .PostToTeam(team.Id, new Notification { Text = "Hello" }, Ct);
+        // A member who may read the view, which is as far as the client's own gate used to go.
+        var caller = Member(view.Id, team.Id, ViewPermission.ViewView);
 
-        Assert.True(posted.WasSuccess);
-        Assert.Equal("Hello", Assert.Single(await Stored()).Text);
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service(caller).PostToView(view.Id, new Notification { Text = "Hello" }, Ct));
+
+        Assert.Empty(await Stored());
     }
 
     [Fact]
-    public async Task PostToUser_does_not_check_that_the_caller_may_post()
+    public async Task PostToView_is_forbidden_for_a_caller_with_no_claim_on_the_view()
     {
         var view = TestData.View();
+        await Seed(view);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service(ClaimsPrincipalBuilder.Anonymous())
+                .PostToView(view.Id, new Notification { Text = "Hello" }, Ct));
+
+        Assert.Empty(await Stored());
+    }
+
+    [Fact]
+    public async Task PostToTeam_is_forbidden_without_ManageView_and_stores_nothing()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        var caller = Member(view.Id, team.Id, ViewPermission.ViewView);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service(caller).PostToTeam(team.Id, new Notification { Text = "Hello" }, Ct));
+
+        Assert.Empty(await Stored());
+    }
+
+    [Fact]
+    public async Task PostToUser_is_forbidden_without_ManageView_and_stores_nothing()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
         var user = TestData.User();
-        await Seed(view, user);
+        await Seed(view, team, user);
 
-        var posted = await Service(ClaimsPrincipalBuilder.Anonymous())
-            .PostToUser(view.Id, user.Id, new Notification { Text = "Hello" }, Ct);
+        var caller = Member(view.Id, team.Id, ViewPermission.ViewView);
 
-        Assert.True(posted.WasSuccess);
-        Assert.Equal("Hello", Assert.Single(await Stored()).Text);
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service(caller).PostToUser(view.Id, user.Id, new Notification { Text = "Hello" }, Ct));
+
+        Assert.Empty(await Stored());
     }
 
     // ---- Icon url ---------------------------------------------------------------------------------
@@ -507,7 +584,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         var team = TestData.Team(view.Id);
         await Seed(view, team);
 
-        var service = Service(Member(view.Id, team.Id));
+        var service = Service(Member(view.Id, team.Id, ViewPermission.ManageView));
 
         var joined = await service.JoinView(view.Id, Ct);
         var posted = await service.PostToView(view.Id, new Notification { Text = "Hello" }, Ct);

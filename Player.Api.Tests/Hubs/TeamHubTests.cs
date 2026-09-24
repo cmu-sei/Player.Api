@@ -32,39 +32,37 @@ public class TeamHubTests
     }
 
     /// <summary>
-    /// Characterizes current behavior: a refused join is reported by <c>WasSuccess</c>, which the hub never reads, so
-    /// the connection joins the group and receives every later broadcast anyway. The hub's own check is on
-    /// <c>ToId</c>, which the service sets to the requested id whether or not the caller was authorized.
+    /// A refused join is reported by <c>WasSuccess</c>, and the hub has to read it: joining the group anyway
+    /// would deliver every later team broadcast to a caller with no claim on the team.
     /// </summary>
-    /// <remarks>Turns red when the hub checks <c>WasSuccess</c> before joining the group.</remarks>
     [Fact]
-    public async Task A_refused_join_still_joins_the_group()
+    public async Task A_refused_join_does_not_join_the_group()
     {
-        var refused = Message(_teamId, "Failed to join Red Team notifications.");
+        var refused = Message(_teamId, "Failed to join Team notifications.");
         refused.WasSuccess = false;
         _notifications.JoinTeam(_teamId, Arg.Any<CancellationToken>()).Returns(refused);
 
         await Hub().Join(_teamId.ToString());
 
-        await _harness.Groups.Received(1).AddToGroupAsync(
-            HubHarness.ConnectionId, _teamId.ToString(), Arg.Any<CancellationToken>());
+        await _harness.Groups.DidNotReceive().AddToGroupAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        Assert.Same(refused, HubHarness.Sent<Notification>(_harness.Caller, "Reply"));
     }
 
     /// <summary>
-    /// The only case the hub's <c>ToId</c> check rejects. The real service cannot produce it — it always
-    /// answers with the requested id — so this covers the branch rather than a reachable behaviour.
+    /// <c>WasSuccess</c> is the whole gate. The reply's <c>ToId</c> used to be, but the service sets it to the
+    /// requested id whether or not the caller was authorized, so it never rejected anything.
     /// </summary>
     [Fact]
-    public async Task A_join_answered_for_another_team_does_not_join_the_group()
+    public async Task A_granted_join_addressed_to_another_team_still_joins_the_requested_group()
     {
         _notifications.JoinTeam(_teamId, Arg.Any<CancellationToken>())
             .Returns(Message(Guid.NewGuid(), "Wrong team."));
 
         await Hub().Join(_teamId.ToString());
 
-        await _harness.Groups.DidNotReceive().AddToGroupAsync(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-        Assert.NotNull(HubHarness.Sent<Notification>(_harness.Caller, "Reply"));
+        await _harness.Groups.Received(1).AddToGroupAsync(
+            HubHarness.ConnectionId, _teamId.ToString(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>

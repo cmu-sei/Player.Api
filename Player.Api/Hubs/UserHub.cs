@@ -29,7 +29,7 @@ namespace Player.Api.Hubs
             var userId = Guid.Parse(userString);
             var viewId = Guid.Parse(viewString);
             var notification = await _notificationService.JoinUser(viewId, userId, _ct);
-            if (notification.ToId == userId)
+            if (notification.WasSuccess)
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, getGroupString(viewString, userString));
             }

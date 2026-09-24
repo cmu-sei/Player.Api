@@ -35,12 +35,11 @@ public class UserHubTests
     }
 
     /// <summary>
-    /// Characterizes current behavior: joining someone else's notifications is refused through <c>WasSuccess</c>, which
-    /// the hub does not read, so the connection is added to that user's group regardless.
+    /// Joining someone else's notifications is refused through <c>WasSuccess</c>, and the hub has to read it:
+    /// adding the connection to that user's group anyway would deliver another user's private notifications.
     /// </summary>
-    /// <remarks>Turns red when the hub checks <c>WasSuccess</c> before joining the group.</remarks>
     [Fact]
-    public async Task A_refused_join_still_joins_the_group()
+    public async Task A_refused_join_does_not_join_the_group()
     {
         var refused = Message(_userId, "Failed to join Test User notifications.");
         refused.WasSuccess = false;
@@ -48,24 +47,25 @@ public class UserHubTests
 
         await Hub().Join(_viewId.ToString(), _userId.ToString());
 
-        await _harness.Groups.Received(1).AddToGroupAsync(
-            HubHarness.ConnectionId, Group, Arg.Any<CancellationToken>());
+        await _harness.Groups.DidNotReceive().AddToGroupAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        Assert.Same(refused, HubHarness.Sent<Notification>(_harness.Caller, "Reply"));
     }
 
     /// <summary>
-    /// The hub compares against the user id, not the view — the real service always answers with the requested
-    /// user, so this covers the branch rather than a reachable behaviour.
+    /// <c>WasSuccess</c> is the whole gate. The reply's <c>ToId</c> used to be, but the service sets it to the
+    /// requested user whether or not the caller was authorized, so it never rejected anything.
     /// </summary>
     [Fact]
-    public async Task A_join_answered_for_another_user_does_not_join_the_group()
+    public async Task A_granted_join_addressed_to_another_user_still_joins_the_requested_group()
     {
         _notifications.JoinUser(_viewId, _userId, Arg.Any<CancellationToken>())
             .Returns(Message(Guid.NewGuid(), "Wrong user."));
 
         await Hub().Join(_viewId.ToString(), _userId.ToString());
 
-        await _harness.Groups.DidNotReceive().AddToGroupAsync(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _harness.Groups.Received(1).AddToGroupAsync(
+            HubHarness.ConnectionId, Group, Arg.Any<CancellationToken>());
     }
 
     [Fact]
