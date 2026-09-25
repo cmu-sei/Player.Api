@@ -33,14 +33,12 @@ namespace Player.Api.Data.Data.Models
     public enum TeamPermission
     {
         ViewTeam,
-        EditTeam,
         ManageTeam,
     }
 
     public enum ViewPermission
     {
         ViewView,
-        EditView,
         ManageView
     }
 }

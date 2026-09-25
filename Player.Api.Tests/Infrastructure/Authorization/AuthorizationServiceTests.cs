@@ -130,11 +130,22 @@ public class AuthorizationServiceTests(DatabaseFixture fixture) : DatabaseTestBa
         Assert.Contains(manageTeamId, teamIds);
     }
 
+    /// <summary>
+    /// Visibility comes from <c>ViewTeam</c>/<c>ManageTeam</c> alone. Any other permission on the team
+    /// — here one of the Vm.Api permissions, which are not <see cref="TeamPermission"/> members —
+    /// leaves the team invisible.
+    /// </summary>
     [Fact]
-    public void GetVisibleTeamIds_excludes_teams_granting_only_EditTeam()
+    public void GetVisibleTeamIds_excludes_teams_granting_only_a_non_visibility_permission()
     {
         var user = new ClaimsPrincipalBuilder()
-            .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.EditTeam])
+            .WithTeamClaim(new TeamPermissionsClaim
+            {
+                ViewId = ViewId,
+                TeamId = TeamId,
+                PermissionValues = ["ControlTeamVms"],
+                DirectPermissionValues = ["ControlTeamVms"]
+            })
             .Build();
 
         Assert.Empty(ServiceFor(user).GetVisibleTeamIds(ViewId));

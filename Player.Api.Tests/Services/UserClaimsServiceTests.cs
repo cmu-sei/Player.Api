@@ -123,11 +123,11 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
         Assert.Equal(view.Id, claim.ViewId);
         Assert.Equal(team.Id, claim.TeamId);
         Assert.True(claim.IsPrimary);
-        // Observer's three, the team's own UploadViewIsos, and View Member's four.
+        // Observer's five, the team's own UploadViewIsos, and View Member's five.
         Assert.Equal(
             [
-                "EditTeam", "UploadTeamIsos", "UploadViewIsos", "UploadVmFiles",
-                "ViewNetworks", "ViewTeam", "ViewView"
+                "ControlTeamVms", "UploadTeamIsos", "UploadViewIsos", "UploadVmFiles",
+                "ViewNetworks", "ViewTeam", "ViewTeamMaps", "ViewView", "ViewViewMaps", "ViewViewVms"
             ],
             claim.PermissionValues.Order());
     }
@@ -185,7 +185,9 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
         Assert.Equal(view.Id, scoped.ViewId);
         Assert.Equal([team.Id], scoped.SourceTeamIds);
         Assert.Empty(scoped.DirectPermissionValues);
-        Assert.Equal(["ViewNetworks", "ViewTeam", "ViewView"], scoped.PermissionValues.Order());
+        Assert.Equal(
+            ["ViewNetworks", "ViewTeam", "ViewView", "ViewViewMaps", "ViewViewVms"],
+            scoped.PermissionValues.Order());
         Assert.False(scoped.IsPrimary);
     }
 
@@ -208,12 +210,15 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
         var merged = Assert.Single(claims, x => x.TeamId == target.Id);
         Assert.Equal(new[] { granting.Id, target.Id }.Order(), merged.SourceTeamIds.Order());
         Assert.Equal(
-            ["EditTeam", "UploadTeamIsos", "UploadVmFiles", "ViewNetworks", "ViewTeam", "ViewView"],
+            [
+                "ControlTeamVms", "UploadTeamIsos", "UploadVmFiles", "ViewNetworks", "ViewTeam",
+                "ViewTeamMaps", "ViewView", "ViewViewMaps", "ViewViewVms"
+            ],
             merged.PermissionValues.Order());
 
         // Only what the membership itself grants, so a scoped grant cannot widen the direct set.
         Assert.Equal(
-            ["EditTeam", "UploadTeamIsos", "UploadVmFiles", "ViewTeam"],
+            ["ControlTeamVms", "UploadTeamIsos", "UploadVmFiles", "ViewTeam", "ViewTeamMaps"],
             merged.DirectPermissionValues.Order());
     }
 

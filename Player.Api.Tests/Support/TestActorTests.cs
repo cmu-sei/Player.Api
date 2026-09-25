@@ -120,12 +120,12 @@ public class TestActorTests(DatabaseFixture fixture) : DatabaseTestBase(fixture)
         var team = await SeedPermissionFreeTeam(view);
 
         var actor = await Actor()
-            .OnTeam(team, viewPermissions: [ViewPermission.EditView], teamPermissions: [TeamPermission.ViewTeam])
+            .OnTeam(team, viewPermissions: [ViewPermission.ManageView], teamPermissions: [TeamPermission.ViewTeam])
             .SeedAsync();
 
         var claim = TeamClaim(await ClaimsOf(actor), team.Id);
-        Assert.Equal(["EditView", "ViewTeam"], claim.PermissionValues.Order());
-        Assert.Equal([ViewPermission.EditView], claim.ViewPermissions);
+        Assert.Equal(["ManageView", "ViewTeam"], claim.PermissionValues.Order());
+        Assert.Equal([ViewPermission.ManageView], claim.ViewPermissions);
         Assert.Equal([TeamPermission.ViewTeam], claim.TeamPermissions);
     }
 
