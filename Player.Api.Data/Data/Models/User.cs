@@ -25,8 +25,22 @@ namespace Player.Api.Data.Data.Models
         public Guid? RoleId { get; set; }
         public virtual RoleEntity Role { get; set; }
 
+        public ICollection<UserIdentityAttributeEntity> IdentityAttributes { get; set; } = new List<UserIdentityAttributeEntity>();
         public ICollection<ViewMembershipEntity> ViewMemberships { get; set; } = new List<ViewMembershipEntity>();
         public ICollection<TeamMembershipEntity> TeamMemberships { get; set; } = new List<TeamMembershipEntity>();
+    }
+
+    public class UserIdentityAttributeEntity : IEntity
+    {
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public Guid Id { get; set; }
+
+        public Guid UserId { get; set; }
+        public virtual UserEntity User { get; set; }
+
+        public string Key { get; set; }
+        public string Value { get; set; }
     }
 
     public class UserConfiguration : IEntityTypeConfiguration<UserEntity>
@@ -34,6 +48,21 @@ namespace Player.Api.Data.Data.Models
         public void Configure(EntityTypeBuilder<UserEntity> builder)
         {
             builder.HasIndex(e => e.Id).IsUnique();
+        }
+    }
+
+    public class UserIdentityAttributeConfiguration : IEntityTypeConfiguration<UserIdentityAttributeEntity>
+    {
+        public void Configure(EntityTypeBuilder<UserIdentityAttributeEntity> builder)
+        {
+            builder.Property(e => e.Key).IsRequired();
+            builder.HasIndex(e => new { e.UserId, e.Key }).IsUnique();
+
+            builder
+                .HasOne(e => e.User)
+                .WithMany(e => e.IdentityAttributes)
+                .HasForeignKey(e => e.UserId)
+                .HasPrincipalKey(e => e.Id);
         }
     }
 }

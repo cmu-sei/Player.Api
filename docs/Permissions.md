@@ -45,6 +45,31 @@ SeedData will only add objects if they do not exist. It will not modify existing
 
 Roles can optionally be integrated with the Identity Provider that is being used to authenticate to Player. There are new settings under `ClaimsTransformation` to configure this integration. See appsettings.json. This integration is compatible with any Identity Provider that is capable of putting Roles into the auth token.
 
+Player can also store configured identity attributes from the authentication token so they can be shown as dynamic columns in the Users administration table. This is disabled by default. `UserAttributes` is an ordered list of mappings with:
+
+- Key: A unique, stable identifier used to associate stored values with this mapping.
+- Name: The column heading shown in Player.
+- ClaimPath: The path within the User's auth token containing the value.
+
+For example:
+
+```json
+"UserAttributes": [
+  {
+    "Key": "department",
+    "Name": "Department",
+    "ClaimPath": "department"
+  },
+  {
+    "Key": "organization",
+    "Name": "Organization",
+    "ClaimPath": "organization"
+  }
+]
+```
+
+Add, remove, or reorder mappings to control the columns without changing code. A mapping's `Name` can change while its `Key` remains stable. Values are updated when Player refreshes that User's identity claims during authenticated requests. `GET /api/users` includes these values only when the caller has the `ViewUsers` system permission. Callers authorized through `ManageView` or `ManageTeam` receive the existing User fields with an empty identity attributes collection. Other User endpoints continue to return the shared User response without an identity attributes property.
+
 ## Roles
 
 If enabled, Roles from the User's auth token will be applied as if the Role was set on the User directly in Player. The Role must exist in Player and the name of the Role in the token must match exactly with the name of the Role in the token.
@@ -67,6 +92,8 @@ If multiple Roles are present in the token, or if one Role is in the token and o
 ## Keycloak
 
 If you are using Keycloak as your Identity Provider, Roles should work by default if you have not changed the default `RolesClaimPath`. You may need to adjust this value if your Keycloak is configured to put Roles in a different location within the token.
+
+The Keycloak client must include every configured value in its access token. For custom User attributes, add protocol mappers that emit them at their configured `ClaimPath`.
 
 # Migration
 
