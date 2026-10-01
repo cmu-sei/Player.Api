@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Player.Api.Data.Data;
@@ -15,9 +16,11 @@ using Player.Api.Data.Data;
 namespace Player.Api.Migrations.PostgreSQL.Migrations
 {
     [DbContext(typeof(PlayerContext))]
-    partial class PlayerContextModelSnapshot : ModelSnapshot
+    [Migration("20260922155600_Add_User_Identity_Attributes")]
+    partial class Add_User_Identity_Attributes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -359,34 +362,6 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                             Description = "Allows deleting any ISO across all Views",
                             Immutable = false,
                             Name = "DeleteIsos"
-                        },
-                        new
-                        {
-                            Id = new Guid("71c8e1c1-d1e2-45b6-987f-823467b6fbb8"),
-                            Description = "Allows viewing all Vm consoles, but not interacting with them",
-                            Immutable = false,
-                            Name = "ViewVms"
-                        },
-                        new
-                        {
-                            Id = new Guid("92340801-3fbf-4f53-a075-02f576563b53"),
-                            Description = "Allows interacting with and controlling all Vms",
-                            Immutable = false,
-                            Name = "ControlVms"
-                        },
-                        new
-                        {
-                            Id = new Guid("69556b84-4df2-46b6-9931-39e1e1cb0ccd"),
-                            Description = "Allows viewing all Maps, but not creating, editing, or deleting them",
-                            Immutable = false,
-                            Name = "ViewMaps"
-                        },
-                        new
-                        {
-                            Id = new Guid("f1403fb2-2925-40e4-aa94-5142bdf19ce8"),
-                            Description = "Allows viewing, creating, editing, and deleting all Maps",
-                            Immutable = false,
-                            Name = "ManageMaps"
                         });
                 });
 
@@ -598,6 +573,13 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         },
                         new
                         {
+                            Id = new Guid("fbabccc8-48c7-478a-bc30-d4bd8950e3d5"),
+                            Description = "Allows editing basic Team resources, including making changes within Virtual Machines, if applicable",
+                            Immutable = true,
+                            Name = "EditTeam"
+                        },
+                        new
+                        {
                             Id = new Guid("83e41563-8b7f-4f43-b9d0-2d8dc12fc0bf"),
                             Description = "Allows managing all Team resources, including adding and removing Users",
                             Immutable = true,
@@ -616,6 +598,13 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                             Description = "Allows viewing all resources in the View",
                             Immutable = true,
                             Name = "ViewView"
+                        },
+                        new
+                        {
+                            Id = new Guid("5ae96619-b40b-4fdb-bbef-ad476c21553d"),
+                            Description = "Allows editing all basic resources in the View, including making changes within Virtual Machines, if applicable",
+                            Immutable = true,
+                            Name = "EditView"
                         },
                         new
                         {
@@ -679,62 +668,6 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                             Description = "Allows creating, updating, and deleting Network access for the View",
                             Immutable = false,
                             Name = "ManageNetworks"
-                        },
-                        new
-                        {
-                            Id = new Guid("f75c335b-20f2-4eec-86b5-b21811c7b7db"),
-                            Description = "Allows viewing the Vm consoles available to the Team, but not interacting with them",
-                            Immutable = false,
-                            Name = "ViewTeamVms"
-                        },
-                        new
-                        {
-                            Id = new Guid("dbc9b1c0-4964-439b-b7b4-3d6d0e4b9e91"),
-                            Description = "Allows interacting with and controlling the Vms available to the Team",
-                            Immutable = false,
-                            Name = "ControlTeamVms"
-                        },
-                        new
-                        {
-                            Id = new Guid("2baec4b7-5637-4e6c-8228-73e6fe38bbf5"),
-                            Description = "Allows viewing all of the Vm consoles in the View, but not interacting with them",
-                            Immutable = false,
-                            Name = "ViewViewVms"
-                        },
-                        new
-                        {
-                            Id = new Guid("2a8d8276-c6e5-4f94-8e48-81e753700e89"),
-                            Description = "Allows interacting with and controlling all of the Vms in the View",
-                            Immutable = false,
-                            Name = "ControlViewVms"
-                        },
-                        new
-                        {
-                            Id = new Guid("2a94e61f-5d26-4446-b47b-e4c5aeb854ba"),
-                            Description = "Allows viewing the Maps available to the Team, but not creating, editing, or deleting them",
-                            Immutable = false,
-                            Name = "ViewTeamMaps"
-                        },
-                        new
-                        {
-                            Id = new Guid("40deaedd-11dd-4b05-bcdd-045a249189b8"),
-                            Description = "Allows viewing, creating, editing, and deleting all of the Maps available to the Team",
-                            Immutable = false,
-                            Name = "ManageTeamMaps"
-                        },
-                        new
-                        {
-                            Id = new Guid("2dabbfe3-957b-420e-9aa3-9e227494c836"),
-                            Description = "Allows viewing all of the Maps in the View, but not creating, editing, or deleting them",
-                            Immutable = false,
-                            Name = "ViewViewMaps"
-                        },
-                        new
-                        {
-                            Id = new Guid("45a61f67-8f14-496b-b2cb-136fb7d81093"),
-                            Description = "Allows viewing, creating, editing, and deleting all of the Maps in the View",
-                            Immutable = false,
-                            Name = "ManageViewMaps"
                         });
                 });
 
@@ -861,32 +794,14 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         },
                         new
                         {
-                            Id = new Guid("a2e44491-da6a-4042-bf9a-94b1dbf6a252"),
-                            PermissionId = new Guid("2baec4b7-5637-4e6c-8228-73e6fe38bbf5"),
-                            RoleId = new Guid("c875dcce-2488-4e73-8585-8375b4730151")
-                        },
-                        new
-                        {
-                            Id = new Guid("177b708b-ff6f-4381-8621-e6a163004ed9"),
-                            PermissionId = new Guid("2dabbfe3-957b-420e-9aa3-9e227494c836"),
-                            RoleId = new Guid("c875dcce-2488-4e73-8585-8375b4730151")
-                        },
-                        new
-                        {
                             Id = new Guid("d1252d24-c25d-4a80-a91c-4ad23efa9f89"),
                             PermissionId = new Guid("f3ef9465-7f7c-43ef-9855-83798ce5bcd5"),
                             RoleId = new Guid("a721a3bf-0ae1-4cd3-9d6f-e56d07260f22")
                         },
                         new
                         {
-                            Id = new Guid("bb6ea1a2-b275-46cc-9043-34cd60d3daa6"),
-                            PermissionId = new Guid("dbc9b1c0-4964-439b-b7b4-3d6d0e4b9e91"),
-                            RoleId = new Guid("a721a3bf-0ae1-4cd3-9d6f-e56d07260f22")
-                        },
-                        new
-                        {
-                            Id = new Guid("dced97e2-f3da-4d3f-ab1b-0f093ccf8f7f"),
-                            PermissionId = new Guid("2a94e61f-5d26-4446-b47b-e4c5aeb854ba"),
+                            Id = new Guid("f83d8368-1839-44d4-ad8c-dfa7fae56565"),
+                            PermissionId = new Guid("fbabccc8-48c7-478a-bc30-d4bd8950e3d5"),
                             RoleId = new Guid("a721a3bf-0ae1-4cd3-9d6f-e56d07260f22")
                         },
                         new

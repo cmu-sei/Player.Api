@@ -15,6 +15,18 @@ namespace Player.Api.Features.Users
         public string RoleName { get; set; }
     }
 
+    public class UserDirectoryEntry : User
+    {
+        public UserIdentityAttribute[] IdentityAttributes { get; set; }
+    }
+
+    public class UserIdentityAttribute
+    {
+        public string Key { get; set; }
+        public string Name { get; set; }
+        public string Value { get; set; }
+    }
+
     public class SeedUser
     {
         public Guid Id { get; set; }

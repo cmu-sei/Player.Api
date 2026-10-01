@@ -24,6 +24,7 @@ namespace Player.Api.Data.Data
         public PlayerContext(DbContextOptions<PlayerContext> options) : base(options) { }
 
         public DbSet<UserEntity> Users { get; set; }
+        public DbSet<UserIdentityAttributeEntity> UserIdentityAttributes { get; set; }
         public DbSet<ViewEntity> Views { get; set; }
         public DbSet<TeamEntity> Teams { get; set; }
         public DbSet<ApplicationTemplateEntity> ApplicationTemplates { get; set; }

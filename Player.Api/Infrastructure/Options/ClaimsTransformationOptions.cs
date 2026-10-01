@@ -14,5 +14,32 @@ namespace Player.Api.Options
         public double CacheExpirationSeconds { get; set; }
         public bool UseRolesFromIdP { get; set; }
         public string RolesClaimPath { get; set; }
+        public List<UserAttributeOptions> UserAttributes { get; set; } = [];
+
+        public IReadOnlyList<UserAttributeDefinition> GetUserAttributeDefinitions()
+        {
+            var keys = new HashSet<string>();
+
+            return (UserAttributes ?? [])
+                .Where(options =>
+                    !string.IsNullOrWhiteSpace(options.Key) &&
+                    !string.IsNullOrWhiteSpace(options.Name) &&
+                    !string.IsNullOrWhiteSpace(options.ClaimPath) &&
+                    keys.Add(options.Key))
+                .Select(options => new UserAttributeDefinition(
+                    options.Key,
+                    options.Name,
+                    options.ClaimPath))
+                .ToArray();
+        }
     }
+
+    public class UserAttributeOptions
+    {
+        public string Key { get; set; }
+        public string Name { get; set; }
+        public string ClaimPath { get; set; }
+    }
+
+    public record UserAttributeDefinition(string Key, string Name, string ClaimPath);
 }
