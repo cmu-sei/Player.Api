@@ -160,7 +160,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     }
 
     [Fact]
-    public async Task GetByUserAsync_returns_the_users_notifications()
+    public async Task GetByUserAsync_returns_the_users_notifications_to_an_observer_of_the_view()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
@@ -170,11 +170,67 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
             team,
             user,
             TestData.Notification(user.Id, NotificationType.User, viewId: view.Id, text: "For the user"),
-            TestData.Notification(user.Id, NotificationType.User, priority: NotificationPriority.System));
+            TestData.Notification(user.Id, NotificationType.User, viewId: view.Id, priority: NotificationPriority.System));
 
-        var notifications = await Service(Member(view.Id, team.Id)).GetByUserAsync(view.Id, user.Id, Ct);
+        var notifications = await Service(Member(view.Id, team.Id, ViewPermission.ViewView)).GetByUserAsync(view.Id, user.Id, Ct);
 
         Assert.Equal("For the user", Assert.Single(notifications).Text);
+    }
+
+    [Fact]
+    public async Task GetByUserAsync_returns_the_users_notifications_to_a_manager_of_the_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var user = TestData.User();
+        await Seed(
+            view,
+            team,
+            user,
+            TestData.Notification(user.Id, NotificationType.User, viewId: view.Id, text: "For the user"));
+
+        var notifications = await Service(Member(view.Id, team.Id, ViewPermission.ManageView)).GetByUserAsync(view.Id, user.Id, Ct);
+
+        Assert.Equal("For the user", Assert.Single(notifications).Text);
+    }
+
+    /// <summary>
+    /// Membership of the view lets a caller read their own conversation, not anyone else's.
+    /// </summary>
+    [Fact]
+    public async Task GetByUserAsync_is_forbidden_for_another_users_notifications_to_a_plain_member()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var user = TestData.User();
+        await Seed(
+            view,
+            team,
+            user,
+            TestData.Notification(user.Id, NotificationType.User, viewId: view.Id, text: "Not yours"));
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service(Member(view.Id, team.Id)).GetByUserAsync(view.Id, user.Id, Ct));
+    }
+
+    /// <summary>
+    /// The history is the conversation within one view, so another view's messages to the same user stay out.
+    /// </summary>
+    [Fact]
+    public async Task GetByUserAsync_returns_only_the_notifications_of_the_requested_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View();
+        var caller = new ClaimsPrincipalBuilder().Build();
+        await Seed(
+            view,
+            otherView,
+            TestData.Notification(caller.GetId(), NotificationType.User, viewId: view.Id, text: "This view"),
+            TestData.Notification(caller.GetId(), NotificationType.User, viewId: otherView.Id, text: "Other view"));
+
+        var notifications = await Service(caller).GetByUserAsync(view.Id, caller.GetId(), Ct);
+
+        Assert.Equal("This view", Assert.Single(notifications).Text);
     }
 
     /// <summary>
@@ -345,13 +401,11 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     }
 
     /// <summary>
-    /// Characterizes current behaviour. The fallback check passes an empty required-system-permission
-    /// array, which the system handler reads as "nothing required" and succeeds — so the
-    /// <c>ViewTeam</c> check never runs and no caller is refused. Flip to <c>False</c> once the handler
-    /// stops treating empty as allow.
+    /// The fallback names only <c>ViewTeam</c>, and a claim on another team in the same view does not
+    /// carry it to this one.
     /// </summary>
     [Fact]
-    public async Task JoinTeam_succeeds_for_a_caller_with_no_claim_on_the_team()
+    public async Task JoinTeam_fails_for_a_caller_with_no_claim_on_the_team()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id, "Blue Team");
@@ -364,16 +418,35 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
 
         var notification = await Service(caller).JoinTeam(team.Id, Ct);
 
-        Assert.True(notification.WasSuccess);
+        Assert.False(notification.WasSuccess);
         Assert.False(notification.CanPost);
+        Assert.Null(notification.ToName);
     }
 
     /// <summary>
-    /// Characterizes current behaviour. Same cause as above, at its widest: a caller in no view at all
-    /// still joins any team's group. Flip to <c>False</c> alongside the test above.
+    /// A member of one view cannot listen in on a team of another.
     /// </summary>
     [Fact]
-    public async Task JoinTeam_succeeds_for_a_caller_who_is_in_no_view()
+    public async Task JoinTeam_fails_for_a_member_of_another_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var team = TestData.Team(view.Id, "Blue Team");
+        var mine = TestData.Team(otherView.Id, "Red Team");
+        await Seed(view, otherView, team, mine);
+
+        var caller = new ClaimsPrincipalBuilder()
+            .WithTeam(otherView.Id, mine.Id, teamPermissions: [TeamPermission.ViewTeam])
+            .Build();
+
+        var notification = await Service(caller).JoinTeam(team.Id, Ct);
+
+        Assert.False(notification.WasSuccess);
+        Assert.Null(notification.ToName);
+    }
+
+    [Fact]
+    public async Task JoinTeam_fails_for_a_caller_who_is_in_no_view()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id, "Blue Team");
@@ -381,7 +454,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
 
         var notification = await Service(ClaimsPrincipalBuilder.Anonymous()).JoinTeam(team.Id, Ct);
 
-        Assert.True(notification.WasSuccess);
+        Assert.False(notification.WasSuccess);
     }
 
     /// <summary>
@@ -623,15 +696,67 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         var notification = TestData.Notification(view.Id);
         await Seed(view, notification);
 
-        Assert.True(await Service().DeleteAsync(notification.Key, Ct));
+        Assert.True(await Service().DeleteAsync(view.Id, notification.Key, Ct));
+        Assert.Empty(await Stored());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_removes_a_user_notification_sent_within_the_view()
+    {
+        var view = TestData.View();
+        var notification = TestData.Notification(Guid.NewGuid(), NotificationType.User, viewId: view.Id);
+        await Seed(view, notification);
+
+        Assert.True(await Service().DeleteAsync(view.Id, notification.Key, Ct));
+        Assert.Empty(await Stored());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_removes_a_team_notification_of_a_team_in_the_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var notification = TestData.Notification(team.Id, NotificationType.Team);
+        await Seed(view, team, notification);
+
+        Assert.True(await Service().DeleteAsync(view.Id, notification.Key, Ct));
         Assert.Empty(await Stored());
     }
 
     [Fact]
     public async Task DeleteAsync_throws_for_an_unknown_key()
     {
+        var view = TestData.View();
+        await Seed(view);
+
         await Assert.ThrowsAsync<EntityNotFoundException<Notification>>(
-            () => Service().DeleteAsync(-1, Ct));
+            () => Service().DeleteAsync(view.Id, -1, Ct));
+    }
+
+    /// <summary>
+    /// Keys are sequential, so a key alone names any view's notification. Outside the view the caller
+    /// named, the key does not exist.
+    /// </summary>
+    [Theory]
+    [InlineData(NotificationType.View)]
+    [InlineData(NotificationType.Team)]
+    [InlineData(NotificationType.User)]
+    public async Task DeleteAsync_does_not_find_a_notification_of_another_view(NotificationType toType)
+    {
+        var view = TestData.View();
+        var otherView = TestData.View();
+        var otherTeam = TestData.Team(otherView.Id);
+        var notification = toType switch
+        {
+            NotificationType.View => TestData.Notification(otherView.Id, NotificationType.View),
+            NotificationType.Team => TestData.Notification(otherTeam.Id, NotificationType.Team),
+            _ => TestData.Notification(Guid.NewGuid(), NotificationType.User, viewId: otherView.Id),
+        };
+        await Seed(view, otherView, otherTeam, notification);
+
+        await Assert.ThrowsAsync<EntityNotFoundException<Notification>>(
+            () => Service().DeleteAsync(view.Id, notification.Key, Ct));
+        Assert.Single(await Stored());
     }
 
     [Fact]

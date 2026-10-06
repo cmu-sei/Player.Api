@@ -27,15 +27,10 @@ namespace Player.Api.Features.Applications;
 public class CreateApplicationInstance
 {
     [DataContract(Name = "CreateApplicationInstanceCommand")]
-    public class Command : IRequest<ApplicationInstance>
+    public class Command : ApplicationInstanceFields
     {
         [Required]
         public Guid TeamId { get; set; }
-
-        [Required]
-        public Guid ApplicationId { get; set; }
-
-        public float DisplayOrder { get; set; }
     }
 
     public class Endpoint : IEndpoint

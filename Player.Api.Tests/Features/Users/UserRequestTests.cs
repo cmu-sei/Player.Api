@@ -113,11 +113,6 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// The fallback branch: a caller with no user-level permission may still read a user they share a
     /// team with, provided they hold <c>ViewTeam</c> on it.
     /// </summary>
-    /// <remarks>
-    /// The fallback's empty required-system-permission
-    /// array succeeds for every caller, so the <c>ViewTeam</c> grant is not load-bearing. It goes red
-    /// when the fallback stops consulting the target user's teams at all.
-    /// </remarks>
     [Fact]
     public async Task Get_is_allowed_for_a_caller_holding_ViewTeam_on_a_team_the_user_belongs_to()
     {
@@ -135,6 +130,30 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         var got = await ReadAsync<User>(await Client(actor).GetAsync($"api/users/{subject.Id}", Ct));
 
         Assert.Equal("Teammate", got.Name);
+    }
+
+    /// <summary>
+    /// <c>ViewTeam</c> on a team of one view does not reach a user who is only on a team of another.
+    /// </summary>
+    [Fact]
+    public async Task Get_is_forbidden_for_a_caller_holding_ViewTeam_only_in_another_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var role = TestData.TeamRole();
+        var mine = TestData.Team(view.Id, "Mine", role.Id);
+        var theirs = TestData.Team(otherView.Id, "Theirs", role.Id);
+        var subject = TestData.User(name: "Stranger");
+        var viewMembership = TestData.ViewMembership(otherView.Id, subject.Id);
+        await Seed(
+            view, otherView, role, mine, theirs, subject, viewMembership,
+            TestData.TeamMembership(theirs.Id, subject.Id, viewMembership.Id));
+
+        var actor = await Actor().OnTeam(mine, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/users/{subject.Id}", Ct));
     }
 
     [Fact]
@@ -621,18 +640,10 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     /// <summary>
-    /// This handler authorizes against <c>UserEntity</c>, which
-    /// <c>AuthorizationService.GetResourceResult</c> does not handle, so every caller without
-    /// <c>ManageViews</c> gets a 500 rather than a decision. The view administrators
-    /// the call's <c>ManageView</c> argument was written for are refused along with everyone else.
+    /// Authorized against the route's view, so a view administrator who is not a system admin can send.
     /// </summary>
-    /// <remarks>
-    /// Turns red when <c>GetResourceResult</c> learns <c>UserEntity</c>, or the call passes a type it
-    /// already knows. The <c>detail</c> is asserted because it is what proves the 500 came from the
-    /// unhandled type and not from somewhere else in the request.
-    /// </remarks>
     [Fact]
-    public async Task SendNotification_is_a_server_error_for_a_caller_without_ManageViews()
+    public async Task SendNotification_is_allowed_for_a_view_member_holding_ManageView()
     {
         var view = TestData.View();
         var role = TestData.TeamRole();
@@ -642,13 +653,28 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
         var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
 
-        var problem = await AssertProblem(
-            HttpStatusCode.InternalServerError,
+        await ReadAsync<string>(await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Allowed" }, Ct));
+
+        await using var db = NewContext();
+        Assert.Equal("Allowed", (await db.Notifications.SingleAsync(x => x.ToId == user.Id, Ct)).Text);
+    }
+
+    [Fact]
+    public async Task SendNotification_is_forbidden_for_a_view_member_without_ManageView()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var user = TestData.User();
+        await Seed(view, role, team, user, TestData.ViewMembership(view.Id, user.Id));
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
             await Client(actor).PostAsJsonAsync(
                 $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Nope" }, Ct));
-
-        Assert.Equal("A server error occurred.", problem.Title);
-        Assert.Equal("Handler for type UserEntity is not implemented.", problem.Detail);
     }
 
     // ---- Helpers --------------------------------------------------------------------------------

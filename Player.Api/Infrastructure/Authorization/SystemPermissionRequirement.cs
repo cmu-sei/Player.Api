@@ -22,15 +22,13 @@ namespace Player.Api.Infrastructure.Authorization
     {
         protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, SystemPermissionRequirement requirement)
         {
+            // An empty list grants nothing. AuthorizationService treats a passing system requirement as an
+            // administrative bypass of the view and team checks, so succeeding here would let every caller through.
             if (context.User == null)
             {
                 context.Fail();
             }
-            else if (requirement.RequiredPermissions == null || requirement.RequiredPermissions.Length == 0)
-            {
-                context.Succeed(requirement);
-            }
-            else if (requirement.RequiredPermissions.Any(p => context.User.HasClaim(AuthorizationConstants.PermissionsClaimType, p.ToString())))
+            else if (requirement.RequiredPermissions != null && requirement.RequiredPermissions.Any(p => context.User.HasClaim(AuthorizationConstants.PermissionsClaimType, p.ToString())))
             {
                 context.Succeed(requirement);
             }

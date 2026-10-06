@@ -109,10 +109,6 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
             $"api/views/{view.Id}/applications", new { name = "Nope" }, Ct));
     }
 
-    /// <summary>
-    /// The route carries only the id, so the body has to name the <c>viewId</c> as well: an edit replaces
-    /// the whole resource, including which view it belongs to.
-    /// </summary>
     [Fact]
     public async Task Edit_updates_the_application()
     {
@@ -122,7 +118,7 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
 
         var edited = await ReadAsync<Application>(await RootClient.PutAsJsonAsync(
             $"api/applications/{application.Id}",
-            new { viewId = view.Id, name = "After", url = "https://example.test/after" },
+            new { name = "After", url = "https://example.test/after" },
             Ct));
 
         Assert.Equal("After", edited.Name);
@@ -139,13 +135,9 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         await Seed(view);
 
         await AssertProblem(HttpStatusCode.NotFound, await RootClient.PutAsJsonAsync(
-            $"api/applications/{Guid.NewGuid()}", new { viewId = view.Id, name = "Ghost" }, Ct));
+            $"api/applications/{Guid.NewGuid()}", new { name = "Ghost" }, Ct));
     }
 
-    /// <summary>
-    /// Authorized against the view named in the body, not the one the application is in — the route
-    /// carries only the id.
-    /// </summary>
     [Fact]
     public async Task Edit_is_forbidden_for_a_caller_with_no_permissions()
     {
@@ -156,7 +148,54 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         var actor = await Actor().SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
-            $"api/applications/{application.Id}", new { viewId = view.Id, name = "Nope" }, Ct));
+            $"api/applications/{application.Id}", new { name = "Nope" }, Ct));
+    }
+
+    /// <summary>
+    /// Authorized against the view the application is in, not a <c>viewId</c> the body names: managing
+    /// one view does not reach into another.
+    /// </summary>
+    [Fact]
+    public async Task Edit_is_forbidden_for_an_application_in_another_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var application = TestData.Application(otherView.Id, "Theirs");
+        await Seed(view, otherView, role, team, application);
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/applications/{application.Id}", new { viewId = view.Id, name = "Mine" }, Ct));
+
+        await using var db = NewContext();
+        var stored = await db.Applications.SingleAsync(x => x.Id == application.Id, Ct);
+        Assert.Equal((otherView.Id, "Theirs"), (stored.ViewId, stored.Name));
+    }
+
+    /// <summary>
+    /// An edit cannot move an application: a <c>viewId</c> in the body is not part of the command.
+    /// </summary>
+    [Fact]
+    public async Task Edit_keeps_the_application_in_its_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var application = TestData.Application(view.Id, "Before");
+        await Seed(view, otherView, role, team, application);
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/applications/{application.Id}", new { viewId = otherView.Id, name = "After" }, Ct));
+
+        await using var db = NewContext();
+        var stored = await db.Applications.SingleAsync(x => x.Id == application.Id, Ct);
+        Assert.Equal((view.Id, "After"), (stored.ViewId, stored.Name));
     }
 
     [Fact]
@@ -479,8 +518,7 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     }
 
     /// <summary>
-    /// The route names only the instance, so the body carries <c>teamId</c> alongside the new
-    /// <c>applicationId</c>; the instance keeps its id and takes the new application's display properties.
+    /// The instance keeps its id and team, and takes the new application's display properties.
     /// </summary>
     [Fact]
     public async Task EditApplicationInstance_moves_it_to_another_application()
@@ -494,7 +532,7 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
 
         var edited = await ReadAsync<ApplicationInstance>(await RootClient.PutAsJsonAsync(
             $"api/application-instances/{instance.Id}",
-            new { teamId = team.Id, applicationId = second.Id, displayOrder = 7 },
+            new { applicationId = second.Id, displayOrder = 7 },
             Ct));
 
         Assert.Equal(second.Id, edited.ApplicationId);
@@ -512,12 +550,13 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
 
         await AssertProblem(HttpStatusCode.NotFound, await RootClient.PutAsJsonAsync(
             $"api/application-instances/{Guid.NewGuid()}",
-            new { teamId = team.Id, applicationId = application.Id },
+            new { applicationId = application.Id },
             Ct));
     }
 
     /// <summary>
-    /// The same one-view rule as create: an edit cannot walk an instance across views.
+    /// The same one-view rule as create, checked against the team the instance is on: an edit cannot walk
+    /// an instance across views.
     /// </summary>
     [Fact]
     public async Task EditApplicationInstance_refuses_a_team_and_application_in_different_views()
@@ -532,10 +571,59 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
 
         var problem = await AssertProblem(HttpStatusCode.Conflict, await RootClient.PutAsJsonAsync(
             $"api/application-instances/{instance.Id}",
-            new { teamId = team.Id, applicationId = elsewhere.Id },
+            new { applicationId = elsewhere.Id },
             Ct));
 
         Assert.Equal("The Team and Application must belong to the same View.", problem.Title);
+    }
+
+    /// <summary>
+    /// Authorized against the team the instance is on, not a <c>teamId</c> the body names.
+    /// </summary>
+    [Fact]
+    public async Task EditApplicationInstance_is_forbidden_for_an_instance_in_another_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var otherTeam = TestData.Team(otherView.Id, "Theirs");
+        var application = TestData.Application(otherView.Id);
+        var instance = TestData.ApplicationInstance(otherTeam.Id, application.Id);
+        await Seed(view, otherView, role, team, otherTeam, application, instance);
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/application-instances/{instance.Id}",
+            new { teamId = team.Id, applicationId = application.Id },
+            Ct));
+
+        await using var db = NewContext();
+        Assert.Equal(otherTeam.Id, (await db.ApplicationInstances.SingleAsync(x => x.Id == instance.Id, Ct)).TeamId);
+    }
+
+    /// <summary>
+    /// An edit cannot move an instance: a <c>teamId</c> in the body is not part of the command.
+    /// </summary>
+    [Fact]
+    public async Task EditApplicationInstance_keeps_the_instance_on_its_team()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var team = TestData.Team(view.Id);
+        var otherTeam = TestData.Team(otherView.Id, "Theirs");
+        var application = TestData.Application(view.Id);
+        var instance = TestData.ApplicationInstance(team.Id, application.Id);
+        await Seed(view, otherView, team, otherTeam, application, instance);
+
+        await AssertStatus(HttpStatusCode.OK, await RootClient.PutAsJsonAsync(
+            $"api/application-instances/{instance.Id}",
+            new { teamId = otherTeam.Id, applicationId = application.Id },
+            Ct));
+
+        await using var db = NewContext();
+        Assert.Equal(team.Id, (await db.ApplicationInstances.SingleAsync(x => x.Id == instance.Id, Ct)).TeamId);
     }
 
     [Fact]
