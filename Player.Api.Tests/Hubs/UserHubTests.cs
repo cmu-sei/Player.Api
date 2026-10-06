@@ -1,10 +1,13 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
+using NSubstitute.ExceptionExtensions;
 using Player.Api.Hubs;
+using Player.Api.Infrastructure.Exceptions;
 using Player.Api.Services;
 using Player.Api.Tests.Support;
 using Player.Api.ViewModels;
+using User = Player.Api.Features.Users.User;
 
 namespace Player.Api.Tests.Hubs;
 
@@ -94,6 +97,22 @@ public class UserHubTests
         await Hub().Post(_viewId.ToString(), _userId.ToString(), "Your VM is ready.");
 
         Assert.Equal("Message was not sent", HubHarness.Sent<Notification>(_harness.Caller, "Reply").Text);
+        HubHarness.NothingSent(_harness.Group(Group), "Reply");
+    }
+
+    /// <summary>
+    /// A recipient outside the view is refused by the service, and the hub lets that propagate rather than
+    /// broadcasting anything to the group.
+    /// </summary>
+    [Fact]
+    public async Task A_rejected_post_broadcasts_nothing()
+    {
+        _notifications.PostToUser(_viewId, _userId, Arg.Any<Notification>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new EntityNotFoundException<User>());
+
+        await Assert.ThrowsAsync<EntityNotFoundException<User>>(
+            () => Hub().Post(_viewId.ToString(), _userId.ToString(), "Your VM is ready."));
+
         HubHarness.NothingSent(_harness.Group(Group), "Reply");
     }
 
