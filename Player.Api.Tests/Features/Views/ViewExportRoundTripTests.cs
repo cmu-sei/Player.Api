@@ -25,16 +25,7 @@ namespace Player.Api.Tests.Features.Views;
 /// </remarks>
 public class ViewExportRoundTripTests
 {
-    /// <summary>
-    /// Exports a view whose teams carry direct permission assignments and maps it back, pinning what the
-    /// return trip does.
-    /// </summary>
-    /// <remarks>
-    /// <c>TeamEntity.Permissions</c> holds <c>TeamPermissionAssignmentEntity</c> rows, and the outbound
-    /// map flattens them to the <c>TeamPermissionModel</c> definitions behind them — so the two
-    /// <c>Permissions</c> members share a name but not an element type. Inbound, AutoMapper matches them
-    /// on that name and finds no <c>TeamPermissionModel</c> to <c>TeamPermissionAssignmentEntity</c> map.
-    /// </remarks>
+    /// <summary>Mapping an export whose teams carry permission assignments back to a view throws.</summary>
     [Fact]
     public void A_view_whose_teams_have_permission_assignments_fails_to_import()
     {

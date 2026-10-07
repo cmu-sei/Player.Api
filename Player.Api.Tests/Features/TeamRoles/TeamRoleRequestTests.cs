@@ -129,10 +129,14 @@ public class TeamRoleRequestTests(DatabaseFixture fixture, PlayerAppFactory fact
             await Client(actor).GetAsync("api/team-roles", Ct)));
     }
 
+    /// <summary>The near miss is ViewTeam where the route admits ManageTeam on any team.</summary>
     [Fact]
-    public async Task GetAll_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ViewTeam()
     {
-        var actor = await Actor().SeedAsync();
+        var view = TestData.View();
+        await Seed(view);
+
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -203,15 +207,7 @@ public class TeamRoleRequestTests(DatabaseFixture fixture, PlayerAppFactory fact
             $"api/team-roles/{Guid.NewGuid()}", new { name = "Ghost" }, Ct));
     }
 
-    /// <summary>
-    /// The same duplicate name <c>Create</c> answers with a 409 is a 500 here, because <c>Edit</c> has no
-    /// duplicate check and the unique index refuses the save. Wrong: the caller's mistake is reported as
-    /// a server fault.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when <c>Edit</c> gains <c>Create</c>'s check, or catches the update failure — either
-    /// makes this a 409.
-    /// </remarks>
+    /// <summary>A rename onto another team role's name is answered with a 500 and the stored name is kept.</summary>
     [Fact]
     public async Task Edit_answers_a_name_that_is_already_taken_with_a_server_error()
     {
@@ -229,16 +225,7 @@ public class TeamRoleRequestTests(DatabaseFixture fixture, PlayerAppFactory fact
             (await db.TeamRoles.SingleAsync(x => x.Id == TestData.TeamRoles.Observer, Ct)).Name);
     }
 
-    /// <summary>
-    /// <c>Immutable</c> is on the DTO and seeded true for <c>View Admin</c>, but <c>Edit</c> never reads
-    /// it, so a role marked as shipped with the system can be renamed. Wrong: the sibling
-    /// <c>TeamPermissions</c> handler refuses the same request with a 403.
-    /// </summary>
-    /// <remarks>
-    /// The row is seeded rather than taken from the seed data, because the only immutable seeded role is
-    /// <c>View Admin</c> and the options check refuses that one by name first. Turns red when <c>Edit</c>
-    /// checks <c>Immutable</c> as <c>TeamPermissions/Requests/Edit.cs:65</c> does.
-    /// </remarks>
+    /// <summary>An immutable team role is renamed like any other and keeps its Immutable flag.</summary>
     [Fact]
     public async Task Edit_renames_an_immutable_role()
     {
@@ -301,12 +288,7 @@ public class TeamRoleRequestTests(DatabaseFixture fixture, PlayerAppFactory fact
             await Client(actor).DeleteAsync($"api/team-roles/{TestData.TeamRoles.Observer}", Ct));
     }
 
-    /// <summary>
-    /// <c>Delete</c> does not read <c>Immutable</c> either, so a role marked as shipped with the system
-    /// is removed like any other. Wrong: <c>TeamPermissions/Requests/Delete.cs:61</c> refuses the same
-    /// request with a 403.
-    /// </summary>
-    /// <remarks>Turns red when <c>Delete</c> checks <c>Immutable</c>.</remarks>
+    /// <summary>An immutable team role is deleted like any other.</summary>
     [Fact]
     public async Task Delete_removes_an_immutable_role()
     {
@@ -321,16 +303,7 @@ public class TeamRoleRequestTests(DatabaseFixture fixture, PlayerAppFactory fact
         Assert.False(await db.TeamRoles.AnyAsync(x => x.Id == role.Id, Ct));
     }
 
-    /// <summary>
-    /// A team's role is a required foreign key declared <c>ON DELETE CASCADE</c>, and the handler checks
-    /// nothing before removing the row — so deleting a role in use silently deletes every team that used
-    /// it, and the memberships, applications and permissions hanging off those teams. Wrong: the caller
-    /// asked to remove a role and lost part of a view.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when <c>Delete</c> refuses a role a team still references, or the foreign key stops
-    /// cascading (<c>20250217165644_Granular_Permissions.cs:441</c>).
-    /// </remarks>
+    /// <summary>Deleting a team role a team uses deletes that team as well; the view is kept.</summary>
     [Fact]
     public async Task Delete_of_a_role_a_team_uses_deletes_the_team()
     {
@@ -345,21 +318,11 @@ public class TeamRoleRequestTests(DatabaseFixture fixture, PlayerAppFactory fact
         await using var db = NewContext();
         Assert.False(await db.Teams.AnyAsync(x => x.Id == team.Id, Ct));
 
-        // The view survives, which is what makes this data loss rather than a visible failure: the view
-        // is still there to open, with a team missing from it.
+        // The view itself is kept; only the team that used the role is gone.
         Assert.True(await db.Views.AnyAsync(x => x.Id == view.Id, Ct));
     }
 
-    /// <summary>
-    /// The membership's role is the optional half of the same relationship, so it does not cascade — the
-    /// foreign key refuses the delete and the caller's request comes back as a server fault instead of a
-    /// 409 naming what still uses the role.
-    /// </summary>
-    /// <remarks>
-    /// The team is given a role of its own, so the membership is the only thing referencing
-    /// <c>Observer</c> and the cascade above cannot be what answers. Turns red when <c>Delete</c> reports
-    /// a role that is still in use as a conflict.
-    /// </remarks>
+    /// <summary>Deleting a team role a membership uses is answered with a 500 and the role is kept.</summary>
     [Fact]
     public async Task Delete_of_a_role_a_membership_uses_is_a_server_error()
     {

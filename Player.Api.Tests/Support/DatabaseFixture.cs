@@ -1,50 +1,39 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
+using Microsoft.EntityFrameworkCore;
+using Player.Api.Data.Data;
+
 namespace Player.Api.Tests.Support;
 
 /// <summary>
-/// Owns the PostgreSQL database for the whole test run: starts it once and hands out an isolated
+/// Owns the PostgreSQL database for the whole test run: starts it on first use and hands out an isolated
 /// session per test.
 /// </summary>
 /// <remarks>
 /// PostgreSQL exercises production's actual database, including the
 /// <c>if (Database.IsNpgsql())</c> branch of <c>PlayerContext.OnModelCreating</c> and the real
-/// migration history. A usable Docker daemon is therefore required to run the suite.
+/// migration history. A usable Docker daemon is therefore required by every test that takes a database.
+/// The mechanics are the shared <see cref="PostgresTestDatabase{TContext}"/>.
 /// </remarks>
-public sealed class DatabaseFixture : IAsyncLifetime
+public sealed class DatabaseFixture : IAsyncLifetime, ITestDatabaseSessionSource<PlayerContext>
 {
-    private readonly ITestDatabase _database = new PostgresTestDatabase();
-
-    public async ValueTask InitializeAsync()
+    private readonly PostgresTestDatabase<PlayerContext> _database = new(new()
     {
-        await _database.InitializeAsync();
-        AnnounceProvider();
-    }
+        Name = "player",
+        TestAssembly = "Player.Api.Tests",
+        // Production computes this as {AssemblyName}.Migrations.{provider} in
+        // DatabaseExtensions.UseConfiguredDatabase. Without it EF looks for migrations in PlayerContext's
+        // own assembly and finds none.
+        MigrationsAssembly = "Player.Api.Migrations.PostgreSQL",
+        CreateContext = PlayerContextFactory.CreateContext,
+        CreateServices = PlayerContextFactory.CreateServices
+    });
 
-    public async Task<ITestDatabaseSession> BeginSessionAsync() => await _database.BeginSessionAsync();
+    /// <summary>Nothing to do here: the container starts on the first request for a session.</summary>
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
-    public async ValueTask DisposeAsync() => await _database.DisposeAsync();
+    public Task<ITestDatabaseSession<PlayerContext>> BeginSessionAsync() => _database.BeginSessionAsync();
 
-    /// <summary>
-    /// Records the provider in the test log so a run shows that it exercised production's database.
-    /// </summary>
-    /// <remarks>
-    /// Sent as an xUnit diagnostic message, not just written to the console. An assembly fixture
-    /// initializes before any test exists to attach output to, and the VSTest bridge that
-    /// <c>dotnet test</c> uses discards the test host's plain stdout at every verbosity, so a
-    /// <see cref="Console.WriteLine"/> alone reaches a direct <c>dotnet run</c> of the suite but never
-    /// a <c>dotnet test</c> log. The diagnostic sink does get surfaced, with
-    /// <c>-- xUnit.DiagnosticMessages=true</c>. Both channels are used so the banner shows up either
-    /// way round.
-    /// </remarks>
-    private static void AnnounceProvider()
-    {
-        const string banner =
-            "[Player.Api.Tests] database provider: PostgreSQL " +
-            "(real migrations, snake_case casing and store-generated UUIDs are covered)";
-
-        Console.WriteLine(banner);
-        TestContext.Current.SendDiagnosticMessage(banner);
-    }
+    public ValueTask DisposeAsync() => _database.DisposeAsync();
 }

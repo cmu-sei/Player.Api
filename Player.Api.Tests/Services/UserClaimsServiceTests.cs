@@ -268,11 +268,7 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
         Assert.Equal("New Name", db.Users.Single(x => x.Id == user.Id).Name);
     }
 
-    /// <summary>
-    /// Characterizes current behaviour. Without <c>update</c> an unknown user leaves the claims entry
-    /// null and it is dereferenced immediately, so refreshing a deleted user's claims throws. Flip to an
-    /// empty principal once the null is handled.
-    /// </summary>
+    /// <summary>Building the principal of a user who does not exist throws a NullReferenceException.</summary>
     [Fact]
     public async Task GetClaimsPrincipal_throws_for_a_user_who_does_not_exist()
     {
@@ -530,11 +526,7 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
 
     // ---- Adding to an identity --------------------------------------------------------------------
 
-    /// <summary>
-    /// Characterizes current behaviour. Claims are skipped by type rather than by type and value, so an
-    /// identity that already carries one permission claim receives none of the computed ones. A token
-    /// issued with its own <c>Permission</c> claim therefore loses every permission the database grants.
-    /// </summary>
+    /// <summary>An identity that already carries a Permission claim receives none of the computed ones.</summary>
     [Fact]
     public async Task AddUserClaims_skips_every_claim_of_a_type_the_identity_already_has()
     {

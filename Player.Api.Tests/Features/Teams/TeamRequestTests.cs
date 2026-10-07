@@ -50,7 +50,7 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// </summary>
     /// <remarks>
     /// One host serves the whole run, so that option is <c>appsettings.json</c>'s <c>View Member</c> and
-    /// no test can vary it. Goes red if the shipped default changes.
+    /// no test can vary it; the assertion names that shipped value, so a change to the default changes it.
     /// </remarks>
     [Fact]
     public async Task Create_falls_back_to_the_configured_default_role()
@@ -120,11 +120,9 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     public async Task Create_is_forbidden_for_a_view_member_without_ManageView()
     {
         var view = TestData.View();
-        var role = TestData.TeamRole();
-        var team = TestData.Team(view.Id, "Team", role.Id);
-        await Seed(view, role, team);
+        await Seed(view);
 
-        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsJsonAsync(
             $"api/views/{view.Id}/teams", new { name = "Nope" }, Ct));
@@ -157,14 +155,15 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             await RootClient.GetAsync($"api/teams/{Guid.NewGuid()}", Ct));
     }
 
+    /// <summary>The near miss is ViewTeam on a sibling team of the same view.</summary>
     [Fact]
-    public async Task Get_is_forbidden_for_a_caller_with_no_permission_on_the_team()
+    public async Task Get_is_forbidden_for_a_caller_holding_ViewTeam_only_on_another_team()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
         await Seed(view, team);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -321,14 +320,15 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             await RootClient.GetAsync($"api/users/{Guid.NewGuid()}/views/{view.Id}/teams", Ct));
     }
 
+    /// <summary>The near miss is ViewTeam on a team of the view where another user's teams take ViewView.</summary>
     [Fact]
-    public async Task GetByUserView_is_forbidden_for_another_user_without_view_access()
+    public async Task GetByUserView_is_forbidden_for_a_caller_holding_only_ViewTeam_in_the_view()
     {
         var view = TestData.View();
         var user = TestData.User();
         await Seed(view, user);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -485,18 +485,7 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             $"api/users/{actor.Id}/teams/{stranger.Id}/primary", null, Ct));
     }
 
-    /// <summary>
-    /// This is wrong: the 409 above is narrower than it looks. It is reached only because that stranger
-    /// team sits in the caller's own view; a team in a view the caller has no membership in is a server
-    /// error instead.
-    /// </summary>
-    /// <remarks>
-    /// <c>SetPrimary.cs:75-79</c> looks the view membership up with <c>SingleOrDefaultAsync</c> and
-    /// <c>:81</c> dereferences it unguarded, so the miss is a <c>NullReferenceException</c> rather than
-    /// the <c>ConflictException</c> two lines further on. Turns red when line 81 is guarded. The route
-    /// names the caller's own id here and in the test below because <c>Authorize</c>
-    /// (<c>SetPrimary.cs:61-67</c>) admits no other subject.
-    /// </remarks>
+    /// <summary>A primary team in a view the caller has no membership in is answered with a 500.</summary>
     [Fact]
     public async Task SetPrimary_fails_when_the_team_is_in_a_view_the_caller_is_not_in()
     {
@@ -516,16 +505,7 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal("Object reference not set to an instance of an object.", problem.Detail);
     }
 
-    /// <summary>
-    /// This is wrong: a team id naming nothing should be a 404, and is a server error instead.
-    /// </summary>
-    /// <remarks>
-    /// <c>SetPrimary.cs:73</c> looks the team up with <c>SingleOrDefaultAsync</c> and never checks the
-    /// result; <c>:78</c> then reads <c>teamEntity.ViewId</c> inside the next query's predicate, so EF
-    /// reports the dereference as a parameter-evaluation failure. The detail is matched on the fragment
-    /// naming that failure rather than in full, because the rest of the sentence is EF's own advice and
-    /// changes with the provider. Turns red when the null is checked.
-    /// </remarks>
+    /// <summary>Setting a primary team that does not exist is answered with a 500.</summary>
     [Fact]
     public async Task SetPrimary_fails_when_the_team_does_not_exist()
     {
@@ -586,15 +566,7 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal(team.Id, Assert.IsType<Notification>(broadcast.Argument).ToId);
     }
 
-    /// <summary>
-    /// This is wrong: a caller who sends no text is making a client's mistake and is answered with a
-    /// server error. <c>ArgumentException</c> is not an <c>IApiException</c>, so
-    /// <c>ExceptionMiddleware</c> has no mapping for it and falls through to 500.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the handler throws something that maps to a client error — nothing else
-    /// about the endpoint has to change.
-    /// </remarks>
+    /// <summary>A team notification with no text is answered with a 500 and nothing is stored.</summary>
     [Fact]
     public async Task SendNotification_rejects_a_notification_with_no_text()
     {

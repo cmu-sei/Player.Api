@@ -111,15 +111,17 @@ public class TeamMembershipRequestTests(DatabaseFixture fixture, PlayerAppFactor
         Assert.Equal(member.Membership.TeamMembershipId, got.Id);
     }
 
+    /// <summary>The near miss is ViewTeam on the membership's own team where reading it takes ManageTeam.</summary>
     [Fact]
-    public async Task Get_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ViewTeam_on_the_membership_team()
     {
         var view = TestData.View();
-        var team = TestData.Team(view.Id);
-        await Seed(view, team);
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        await Seed(view, role, team);
 
         var member = await Actor().WithName("Member").OnTeam(team).SeedAsync();
-        var caller = await Actor().SeedAsync();
+        var caller = await Actor().OnTeam(team, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -178,13 +180,15 @@ public class TeamMembershipRequestTests(DatabaseFixture fixture, PlayerAppFactor
     }
 
     [Fact]
-    public async Task GetByUserView_is_forbidden_for_a_caller_asking_about_someone_else()
+    public async Task GetByUserView_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
     {
         var view = TestData.View();
         var user = TestData.User();
         await Seed(view, user, TestData.ViewMembership(view.Id, user.Id));
 
-        var caller = await Actor().SeedAsync();
+        var other = TestData.View("Other View");
+        await Seed(other);
+        var caller = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -251,11 +255,7 @@ public class TeamMembershipRequestTests(DatabaseFixture fixture, PlayerAppFactor
             $"api/team-memberships/{Guid.NewGuid()}", new { }, Ct));
     }
 
-    /// <summary>
-    /// A role id naming no team role is the caller's mistake, but nothing checks it before the save, so
-    /// the foreign key fails and the answer is a server error rather than a 400. This is wrong.
-    /// </summary>
-    /// <remarks>Turns red when the handler validates the role, or maps the failure to a client error.</remarks>
+    /// <summary>A membership edit onto a role that does not exist is a 500, and the old role is kept.</summary>
     [Fact]
     public async Task Edit_answers_a_role_that_does_not_exist_with_a_server_error()
     {

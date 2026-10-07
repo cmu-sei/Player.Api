@@ -75,12 +75,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         });
     }
 
-    /// <summary>
-    /// The generated name carries two dots before its extension: <c>GetNameToStore</c>
-    /// (<c>FileService.cs:352-358</c>) appends a separator to <c>Path.GetExtension</c>, which already
-    /// returns one. Harmless on disk, and pinned because the name is what an operator sees there.
-    /// </summary>
-    /// <remarks>Turns red when the extension is appended without the extra separator.</remarks>
+    /// <summary>An uploaded file is stored under a name with two dots before its extension.</summary>
     [Fact]
     public async Task UploadAsync_stores_the_file_with_two_dots_before_its_extension()
     {
@@ -143,15 +138,20 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
             () => Service().UploadAsync(Form(view.Id, [otherTeam.Id], ("notes.txt", "hello")), Ct));
     }
 
+    /// <summary>The near miss is ViewView in the view where uploading takes ManageView.</summary>
     [Fact]
-    public async Task UploadAsync_is_forbidden_for_a_caller_without_ManageView()
+    public async Task UploadAsync_is_forbidden_for_a_caller_holding_only_ViewView()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
         await Seed(view, team);
 
+        var caller = new ClaimsPrincipalBuilder()
+            .WithTeam(view.Id, team.Id, viewPermissions: [ViewPermission.ViewView])
+            .Build();
+
         await Assert.ThrowsAsync<ForbiddenException>(
-            () => Service(ClaimsPrincipalBuilder.Anonymous())
+            () => Service(caller)
                 .UploadAsync(Form(view.Id, [team.Id], ("notes.txt", "hello")), Ct));
     }
 
@@ -166,13 +166,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
             () => Service().UploadAsync(Form(view.Id, [team.Id], ("payload.exe", "hello")), Ct));
     }
 
-    /// <summary>
-    /// Characterizes current behavior. The allow-list is matched with a case-sensitive
-    /// <see cref="string.EndsWith(string)"/> (<c>FileService.cs:302</c>), so the file refused here uploads
-    /// fine once its extension is lower-cased. Cameras, scanners and Windows clients all produce
-    /// upper-case extensions, and the caller is told only that the extension is invalid.
-    /// </summary>
-    /// <remarks>Turns red when the comparison becomes case-insensitive.</remarks>
+    /// <summary>An allowed extension in upper or mixed case is refused on upload.</summary>
     [Theory]
     [InlineData("NOTES.TXT")]
     [InlineData("notes.Txt")]
@@ -236,17 +230,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
             () => Service().UploadAsync(Form(view.Id, [team.Id], ("readme", "hello")), Ct));
     }
 
-    /// <summary>
-    /// Characterizes current behavior. <c>ValidateFileExtension</c> compares with
-    /// <see cref="string.EndsWith(string)"/>, whose default is culture-sensitive, so characters the
-    /// collation gives no weight are not read at all: this name matches <c>.txt</c> without ending in it
-    /// under any ordinal reading. A soft hyphen is not an invalid file-name character, so it survives
-    /// <c>SanitizeFileName</c> and the file lands on disk under an extension the allow-list does not
-    /// contain. Nothing dangerous gets through this way — the tail still has to spell an allowed
-    /// extension — but the check does not mean what it reads as, and the guidance for a non-linguistic
-    /// comparison like this one is <see cref="StringComparison.Ordinal"/>.
-    /// </summary>
-    /// <remarks>Turns red when the comparison becomes ordinal.</remarks>
+    /// <summary>A name ending in an allowed extension only under culture-sensitive comparison is accepted.</summary>
     [Fact]
     public async Task UploadAsync_accepts_an_extension_that_matches_only_under_the_current_culture()
     {
@@ -322,11 +306,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         Assert.False(Directory.Exists(Path.Combine(_basePath, view.Id.ToString())));
     }
 
-    /// <summary>
-    /// Characterizes current behaviour. An unknown view is read as null and then dereferenced, so the
-    /// caller gets a 500 rather than a 404. Flip to
-    /// <see cref="EntityNotFoundException{ViewEntity}"/> once the null is handled.
-    /// </summary>
+    /// <summary>An upload to a view that does not exist throws a NullReferenceException.</summary>
     [Fact]
     public async Task UploadAsync_throws_for_an_unknown_view()
     {
@@ -350,18 +330,16 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         Assert.Equal(["one.txt", "two.txt"], files.Select(x => x.Name).Order());
     }
 
+    /// <summary>The near miss is ManageViews: listing every file takes ViewViews.</summary>
     [Fact]
-    public async Task GetAsync_is_forbidden_without_ViewViews()
+    public async Task GetAsync_is_forbidden_for_a_caller_holding_only_ManageViews()
     {
-        await Assert.ThrowsAsync<ForbiddenException>(
-            () => Service(ClaimsPrincipalBuilder.Anonymous()).GetAsync(Ct));
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ManageViews).Build();
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).GetAsync(Ct));
     }
 
-    /// <summary>
-    /// Characterizes current behaviour. The system-permission-only overload leaves both team permission
-    /// arrays null, and the requirement handler enumerates them for any caller who holds a team claim —
-    /// so a view member without <c>ViewViews</c> gets a 500 instead of a 403.
-    /// </summary>
+    /// <summary>A view member without ViewViews gets an ArgumentNullException when listing every file.</summary>
     [Fact]
     public async Task GetAsync_throws_for_a_view_member_without_ViewViews()
     {
@@ -399,13 +377,19 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     }
 
     [Fact]
-    public async Task GetByViewAsync_is_forbidden_without_access_to_the_view()
+    public async Task GetByViewAsync_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
     {
         var view = TestData.View();
-        await Seed(view);
+        var other = TestData.View("Other View");
+        var otherTeam = TestData.Team(other.Id);
+        await Seed(view, other, otherTeam);
+
+        var caller = new ClaimsPrincipalBuilder()
+            .WithTeam(other.Id, otherTeam.Id, viewPermissions: [ViewPermission.ViewView])
+            .Build();
 
         await Assert.ThrowsAsync<ForbiddenException>(
-            () => Service(ClaimsPrincipalBuilder.Anonymous())
+            () => Service(caller)
                 .GetByViewAsync(view.Id, includeAllViewFiles: true, Ct));
     }
 
@@ -449,14 +433,19 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     }
 
     [Fact]
-    public async Task GetByTeamAsync_is_forbidden_without_access_to_the_team()
+    public async Task GetByTeamAsync_is_forbidden_for_a_caller_holding_ViewTeam_only_on_another_team()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
-        await Seed(view, team);
+        var other = TestData.Team(view.Id, "Other Team");
+        await Seed(view, team, other);
+
+        var caller = new ClaimsPrincipalBuilder()
+            .WithTeam(view.Id, other.Id, teamPermissions: [TeamPermission.ViewTeam])
+            .Build();
 
         await Assert.ThrowsAsync<ForbiddenException>(
-            () => Service(ClaimsPrincipalBuilder.Anonymous()).GetByTeamAsync(team.Id, Ct));
+            () => Service(caller).GetByTeamAsync(team.Id, Ct));
     }
 
     [Fact]
@@ -592,10 +581,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         Assert.True(File.Exists(file.Path));
     }
 
-    /// <summary>
-    /// Characterizes current behaviour. The rename branch does not check the extension the upload branch
-    /// enforces, so a stored file can be given any name — and that name is what a download reports.
-    /// </summary>
+    /// <summary>A rename with no replacement file stores a name whose extension the upload options do not allow.</summary>
     [Fact]
     public async Task UpdateAsync_accepts_a_disallowed_extension_when_only_renaming()
     {

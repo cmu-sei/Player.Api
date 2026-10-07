@@ -43,17 +43,7 @@ public class ViewMembershipRequestTests(DatabaseFixture fixture, PlayerAppFactor
             await RootClient.GetAsync($"api/view-memberships/{Guid.NewGuid()}", Ct));
     }
 
-    /// <summary>
-    /// Characterizes current behaviour, which is wrong: a membership whose primary team is null cannot be
-    /// read at all, and the caller is told a server error rather than anything about the row.
-    /// </summary>
-    /// <remarks>
-    /// <c>PrimaryTeamId</c> is a non-nullable <see cref="Guid"/> projected from the primary team
-    /// membership (<c>MappingProfile.cs:15</c>), so a null primary materializes as a failed cast.
-    /// <c>Users/RemoveFromTeam.cs:95</c> clears the primary and deletes the row in two saves, so a
-    /// request failing between them leaves a row no later read can return. Turns red when the projection
-    /// tolerates a null primary.
-    /// </remarks>
+    /// <summary>Reading a view membership with no primary team is answered with a 500.</summary>
     [Fact]
     public async Task Get_fails_for_a_membership_with_no_primary_team()
     {
@@ -91,14 +81,16 @@ public class ViewMembershipRequestTests(DatabaseFixture fixture, PlayerAppFactor
     }
 
     [Fact]
-    public async Task Get_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task Get_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
     {
         var view = TestData.View();
         var user = TestData.User();
         var viewMembership = TestData.ViewMembership(view.Id, user.Id);
         await Seed(view, user, viewMembership);
 
-        var actor = await Actor().SeedAsync();
+        var other = TestData.View("Other View");
+        await Seed(other);
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -152,24 +144,21 @@ public class ViewMembershipRequestTests(DatabaseFixture fixture, PlayerAppFactor
             await RootClient.GetAsync($"api/users/{Guid.NewGuid()}/view-memberships", Ct));
     }
 
+    /// <summary>The near miss is ViewViews where another user's memberships take ViewUsers.</summary>
     [Fact]
-    public async Task GetByUser_is_forbidden_for_a_caller_asking_about_someone_else()
+    public async Task GetByUser_is_forbidden_for_a_caller_holding_only_ViewViews()
     {
         var user = TestData.User();
         await Seed(user);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
             await Client(actor).GetAsync($"api/users/{user.Id}/view-memberships", Ct));
     }
 
-    /// <summary>
-    /// The same defect as <c>Get_fails_for_a_membership_with_no_primary_team</c>, and the worse half of
-    /// it: one such row fails the whole list, so the caller can read none of their memberships.
-    /// </summary>
-    /// <remarks>Turns red when the projection tolerates a null primary.</remarks>
+    /// <summary>Listing a user's view memberships is a 500 when one of them has no primary team.</summary>
     [Fact]
     public async Task GetByUser_fails_when_one_of_the_memberships_has_no_primary_team()
     {

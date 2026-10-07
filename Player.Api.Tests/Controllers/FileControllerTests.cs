@@ -123,12 +123,12 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Contains("at least one team", await response.Content.ReadAsStringAsync(Ct));
     }
 
-    /// <summary>Uploading needs <c>ManageViews</c> or <c>ManageView</c> on the view.</summary>
+    /// <summary>The near miss is ViewView in the view where uploading takes ManageViews or ManageView.</summary>
     [Fact]
-    public async Task Upload_is_forbidden_for_a_caller_who_cannot_manage_the_view()
+    public async Task Upload_is_forbidden_for_a_caller_holding_only_ViewView()
     {
         var (view, team) = await ViewWithTeam();
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         using var form = Upload(view.Id, team.Id, "denied.txt");
 
@@ -156,10 +156,11 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Contains(files, x => x.viewId == second.Id);
     }
 
+    /// <summary>The near miss is ManageViews where the collection route takes ViewViews.</summary>
     [Fact]
-    public async Task GetAll_is_forbidden_without_view_views()
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ManageViews()
     {
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
 
         await AssertStatus(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/files", Ct));
     }
@@ -307,12 +308,10 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
     [Fact]
     public async Task A_handled_exception_is_answered_as_json_rather_than_problem_json()
     {
-        var response = await RootClient.GetAsync($"api/files/{Guid.NewGuid()}", Ct);
-
-        await AssertStatus(HttpStatusCode.NotFound, response);
-        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        await AssertJsonError(HttpStatusCode.NotFound, await RootClient.GetAsync($"api/files/{Guid.NewGuid()}", Ct));
     }
 
+    /// <summary>A request with no identity is answered with a 401; the anonymous client is the case under test.</summary>
     [Fact]
     public async Task An_unauthenticated_request_is_unauthorized()
     {
@@ -384,13 +383,13 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
             await RootClient.GetAsync($"api/files/download/{Guid.NewGuid()}", Ct));
     }
 
-    /// <summary>A caller with no access to any of the file's teams cannot download it.</summary>
+    /// <summary>The near miss is ViewTeam on a sibling team where the file belongs to one team only.</summary>
     [Fact]
-    public async Task Download_is_forbidden_for_a_caller_with_no_access_to_the_file()
+    public async Task Download_is_forbidden_for_a_caller_holding_ViewTeam_only_on_another_team()
     {
-        var (view, team) = await ViewWithTeam();
+        var (view, team, other) = await ViewWithTwoTeams();
         var uploaded = await Uploaded(RootClient, view.Id, team.Id, "private.txt");
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnTeam(other, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
         await AssertStatus(
             HttpStatusCode.Forbidden,
@@ -448,13 +447,7 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Equal("new bytes", await download.Content.ReadAsStringAsync(Ct));
     }
 
-    /// <summary>
-    /// A form with no <c>TeamIds</c> part is a 500: the upload path guards a null list and refuses, while
-    /// <c>UpdateAsync</c> hands it straight to <c>TeamsInSameView</c>, whose <c>foreach</c> dereferences it
-    /// (<c>FileService.cs:214,382</c>). So a rename cannot be sent on its own, though its 404 sibling
-    /// above can, because the entity lookup comes first.
-    /// </summary>
-    /// <remarks>Turns red when the update path guards the list as the upload path does.</remarks>
+    /// <summary>A file update form with no TeamIds part is answered with a 500.</summary>
     [Fact]
     public async Task Update_without_teams_is_a_server_error()
     {
@@ -466,9 +459,11 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
             { new StringContent("renamed.txt"), "Name" }
         };
 
-        await AssertStatus(
+        var problem = await AssertJsonError(
             HttpStatusCode.InternalServerError,
             await RootClient.PutAsync($"api/files/{uploaded.id}", form, Ct));
+
+        Assert.Equal("Object reference not set to an instance of an object.", problem.Detail);
     }
 
     [Fact]
@@ -523,21 +518,31 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
 
     // ---- Helpers --------------------------------------------------------------------------------
 
+    /// <summary>
+    /// A view with one team whose own role grants nothing, so an actor on it holds only what its
+    /// membership names.
+    /// </summary>
     private async Task<(ViewEntity View, TeamEntity Team)> ViewWithTeam()
     {
         var view = TestData.View();
-        var team = TestData.Team(view.Id);
-        await Seed(view, team);
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, roleId: role.Id);
+        await Seed(view, role, team);
 
         return (view, team);
     }
 
+    /// <summary>
+    /// A view with two teams whose own role grants nothing, so an actor on either holds only what its
+    /// membership names.
+    /// </summary>
     private async Task<(ViewEntity View, TeamEntity First, TeamEntity Second)> ViewWithTwoTeams()
     {
         var view = TestData.View();
-        var first = TestData.Team(view.Id, "First");
-        var second = TestData.Team(view.Id, "Second");
-        await Seed(view, first, second);
+        var role = TestData.TeamRole();
+        var first = TestData.Team(view.Id, "First", role.Id);
+        var second = TestData.Team(view.Id, "Second", role.Id);
+        await Seed(view, role, first, second);
 
         return (view, first, second);
     }

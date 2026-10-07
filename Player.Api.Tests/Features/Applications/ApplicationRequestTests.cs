@@ -97,13 +97,14 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         Assert.Equal("Theirs", created.Name);
     }
 
+    /// <summary>The near miss is ViewView where creating takes ManageView.</summary>
     [Fact]
-    public async Task Create_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task Create_is_forbidden_for_a_caller_holding_only_ViewView()
     {
         var view = TestData.View();
         await Seed(view);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsJsonAsync(
             $"api/views/{view.Id}/applications", new { name = "Nope" }, Ct));
@@ -147,16 +148,35 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     /// carries only the id.
     /// </summary>
     [Fact]
-    public async Task Edit_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task Edit_is_forbidden_for_a_caller_holding_only_ViewView()
     {
         var view = TestData.View();
         var application = TestData.Application(view.Id);
         await Seed(view, application);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
             $"api/applications/{application.Id}", new { viewId = view.Id, name = "Nope" }, Ct));
+    }
+
+    /// <summary>A caller holding ManageView on one view moves another view's application into it.</summary>
+    [Fact]
+    public async Task Edit_moves_an_application_out_of_a_view_the_caller_does_not_manage_into_one_it_does()
+    {
+        var elsewhere = TestData.View("Elsewhere");
+        var managed = TestData.View("Managed");
+        var application = TestData.Application(elsewhere.Id, "Theirs");
+        await Seed(elsewhere, managed, application);
+
+        var actor = await Actor().OnNewTeam(managed.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/applications/{application.Id}", new { viewId = managed.Id, name = "Mine now" }, Ct));
+
+        var stored = await ReadBack(db => db.Applications.SingleAsync(x => x.Id == application.Id, Ct));
+        Assert.Equal(managed.Id, stored.ViewId);
+        Assert.Equal("Mine now", stored.Name);
     }
 
     [Fact]
@@ -202,13 +222,13 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     }
 
     [Fact]
-    public async Task Delete_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task Delete_is_forbidden_for_a_caller_holding_only_ViewView()
     {
         var view = TestData.View();
         var application = TestData.Application(view.Id);
         await Seed(view, application);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -230,12 +250,7 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         Assert.Equal("Findable", got.Name);
     }
 
-    /// <summary>
-    /// Characterizes a defect: an id that does not exist is answered 200 with an empty body and no
-    /// <c>Content-Type</c>, because the handler returns null and <c>TypedResults.Ok</c> writes nothing
-    /// for a null value. It should be a 404 — a client cannot tell success from absence.
-    /// </summary>
-    /// <remarks>Turns red as soon as the handler reports a missing application as anything else.</remarks>
+    /// <summary>A missing application is answered with a 200 that has no body and no content type.</summary>
     [Fact]
     public async Task Get_returns_nothing_for_a_missing_application()
     {
@@ -268,13 +283,15 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     }
 
     [Fact]
-    public async Task Get_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task Get_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
     {
         var view = TestData.View();
         var application = TestData.Application(view.Id);
         await Seed(view, application);
 
-        var actor = await Actor().SeedAsync();
+        var other = TestData.View("Other View");
+        await Seed(other);
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -306,12 +323,14 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     }
 
     [Fact]
-    public async Task GetByView_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task GetByView_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
     {
         var view = TestData.View();
         await Seed(view);
 
-        var actor = await Actor().SeedAsync();
+        var other = TestData.View("Other View");
+        await Seed(other);
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -463,14 +482,14 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     }
 
     [Fact]
-    public async Task CreateApplicationInstance_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task CreateApplicationInstance_is_forbidden_for_a_caller_holding_only_ViewView()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
         var application = TestData.Application(view.Id);
         await Seed(view, team, application);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsJsonAsync(
             $"api/teams/{team.Id}/application-instances",
@@ -538,6 +557,30 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         Assert.Equal("The Team and Application must belong to the same View.", problem.Title);
     }
 
+    /// <summary>A caller holding ManageView on one view moves another view's application instance onto its own team.</summary>
+    [Fact]
+    public async Task EditApplicationInstance_moves_an_instance_off_a_team_the_caller_does_not_manage_onto_one_it_does()
+    {
+        var elsewhere = TestData.View("Elsewhere");
+        var managed = TestData.View("Managed");
+        var theirTeam = TestData.Team(elsewhere.Id);
+        var theirApplication = TestData.Application(elsewhere.Id, "Theirs");
+        var managedApplication = TestData.Application(managed.Id, "Managed");
+        var instance = TestData.ApplicationInstance(theirTeam.Id, theirApplication.Id);
+        await Seed(elsewhere, managed, theirTeam, theirApplication, managedApplication, instance);
+
+        var actor = await Actor().OnNewTeam(managed.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/application-instances/{instance.Id}",
+            new { teamId = actor.Membership.TeamId, applicationId = managedApplication.Id },
+            Ct));
+
+        var stored = await ReadBack(db => db.ApplicationInstances.SingleAsync(x => x.Id == instance.Id, Ct));
+        Assert.Equal(actor.Membership.TeamId, stored.TeamId);
+        Assert.Equal(managedApplication.Id, stored.ApplicationId);
+    }
+
     [Fact]
     public async Task DeleteApplicationInstance_removes_the_instance_and_leaves_the_application()
     {
@@ -565,7 +608,7 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     }
 
     [Fact]
-    public async Task DeleteApplicationInstance_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task DeleteApplicationInstance_is_forbidden_for_a_caller_holding_only_ViewView()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
@@ -573,7 +616,7 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         var instance = TestData.ApplicationInstance(team.Id, application.Id);
         await Seed(view, team, application, instance);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -598,11 +641,7 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         Assert.Equal(view.Id, result.ViewId);
     }
 
-    /// <summary>
-    /// Characterizes the same defect as <see cref="Get_returns_nothing_for_a_missing_application"/>: a
-    /// missing instance is a 200 with an empty body instead of a 404.
-    /// </summary>
-    /// <remarks>Turns red as soon as the handler reports a missing instance as anything else.</remarks>
+    /// <summary>A missing application instance is answered with a 200 that has no body and no content type.</summary>
     [Fact]
     public async Task GetApplicationInstance_returns_nothing_for_a_missing_instance()
     {
@@ -645,13 +684,12 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         var view = TestData.View();
         var role = TestData.TeamRole();
         var team = TestData.Team(view.Id, "Team", role.Id);
-        var otherTeam = TestData.Team(view.Id, "Other", role.Id);
         var application = TestData.Application(view.Id);
         var instance = TestData.ApplicationInstance(team.Id, application.Id);
-        await Seed(view, role, team, otherTeam, application, instance);
+        await Seed(view, role, team, application, instance);
 
         var actor = await Actor()
-            .OnTeam(otherTeam, teamPermissions: [TeamPermission.ViewTeam])
+            .OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam])
             .SeedAsync();
 
         await AssertProblem(
@@ -688,13 +726,13 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     }
 
     [Fact]
-    public async Task GetApplicationInstancesByTeam_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task GetApplicationInstancesByTeam_is_forbidden_for_a_caller_holding_ViewTeam_only_on_another_team()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
         await Seed(view, team);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,

@@ -80,7 +80,7 @@ public class ExceptionMiddlewareTests
     }
 
     /// <summary>
-    /// An unmapped exception is a bug, and in development the full <c>ToString()</c> — stack trace included —
+    /// An unmapped exception is unexpected, and in development the full <c>ToString()</c> — stack trace included —
     /// is returned so it can be read without going to the logs.
     /// </summary>
     [Fact]

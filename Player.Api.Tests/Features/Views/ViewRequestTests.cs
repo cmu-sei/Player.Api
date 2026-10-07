@@ -116,9 +116,8 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     /// <summary>
-    /// <c>Roles:DefaultViewCreatorRole</c> (<c>appsettings.json</c>, <c>View Admin</c>) is resolved with
-    /// <c>SingleAsync</c>, so a value matching no team role fails the request with a bare
-    /// <c>InvalidOperationException</c> — a 500, not a 400 naming the misconfiguration.
+    /// A <c>Roles:DefaultViewCreatorRole</c> (<c>appsettings.json</c>, <c>View Admin</c>) that names no
+    /// team role fails view creation with a 500.
     /// </summary>
     [Fact]
     public async Task Create_fails_when_the_configured_view_creator_role_does_not_exist()
@@ -189,11 +188,9 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     {
         var view = TestData.View();
         var elsewhere = TestData.View("Elsewhere");
-        var role = TestData.TeamRole();
-        var team = TestData.Team(elsewhere.Id, "Team", role.Id);
-        await Seed(view, elsewhere, role, team);
+        await Seed(view, elsewhere);
 
-        var actor = await Actor().OnTeam(team).SeedAsync();
+        var actor = await Actor().OnNewTeam(elsewhere.Id).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -216,10 +213,13 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal(["One", "Two"], views.Select(x => x.Name).Order());
     }
 
+    /// <summary>The near miss is ViewView in one view where listing every view takes ViewViews.</summary>
     [Fact]
-    public async Task GetAll_is_forbidden_without_ViewViews()
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ViewView()
     {
-        var actor = await Actor().SeedAsync();
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/views", Ct));
     }
@@ -260,10 +260,11 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             await Client(actor).GetAsync($"api/users/{actor.Id}/views", Ct)));
     }
 
+    /// <summary>The near miss is ViewViews where another user's views take ViewUsers.</summary>
     [Fact]
-    public async Task GetByUser_is_forbidden_for_another_user_without_ViewUsers()
+    public async Task GetByUser_is_forbidden_for_a_caller_holding_only_ViewViews()
     {
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -327,11 +328,9 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     public async Task Edit_is_forbidden_for_a_view_member_without_ManageView()
     {
         var view = TestData.View();
-        var role = TestData.TeamRole();
-        var team = TestData.Team(view.Id, "Team", role.Id);
-        await Seed(view, role, team);
+        await Seed(view);
 
-        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
             $"api/views/{view.Id}", new { name = "Nope" }, Ct));
@@ -401,12 +400,12 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     [Fact]
-    public async Task Delete_is_forbidden_without_ManageViews()
+    public async Task Delete_is_forbidden_for_a_caller_holding_only_ViewView()
     {
         var view = TestData.View();
         await Seed(view);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -562,12 +561,7 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal("Something happened", Assert.IsType<Notification>(broadcast.Argument).Text);
     }
 
-    /// <summary>
-    /// Rejected before anything is persisted, since broadcasting it would push a blank row to every
-    /// connected client — but <c>ArgumentException</c> is not an <c>IApiException</c>, so the caller's
-    /// own mistake comes back as a 500 rather than a 400.
-    /// </summary>
-    /// <remarks>Turns red when the handler throws something that maps to a client error.</remarks>
+    /// <summary>A view notification with no text is answered with a 500 and nothing is stored.</summary>
     [Fact]
     public async Task SendNotification_rejects_a_notification_with_no_text()
     {
@@ -665,12 +659,14 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     [Fact]
-    public async Task GetNotifications_is_forbidden_for_a_non_member_without_ViewViews()
+    public async Task GetNotifications_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
     {
         var view = TestData.View();
         await Seed(view);
 
-        var actor = await Actor().SeedAsync();
+        var other = TestData.View("Other View");
+        await Seed(other);
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -732,10 +728,9 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     /// <summary>
-    /// The reason the tgz size bug does not reach view export: this handler serializes with the
-    /// default encoder (<c>Export.cs:135</c>), which escapes every non-ASCII character to <c>\uXXXX</c>, so
-    /// <c>views.json</c> is always ASCII and its char count always equals its byte count. Template export
-    /// opts out of that escaping and does fail. Goes red if an <c>Encoder</c> is ever set here.
+    /// View export serializes with the default encoder (<c>Export.cs:135</c>), which escapes every
+    /// non-ASCII character to <c>\uXXXX</c>, so <c>views.json</c> is ASCII and its char count equals its
+    /// byte count. The outcome here depends on that encoder.
     /// </summary>
     [Fact]
     public async Task Export_as_tgz_survives_a_view_name_that_is_not_ascii()
@@ -852,15 +847,16 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal(ViewConstants.ExportFileName, failure.Name);
     }
 
+    /// <summary>The near miss is CreateViews where importing takes ManageViews.</summary>
     [Fact]
-    public async Task Import_is_forbidden_without_ManageViews()
+    public async Task Import_is_forbidden_for_a_caller_holding_only_CreateViews()
     {
         var archive = await new ArchiveService().ArchiveData(
             "empty",
             ArchiveType.zip,
             new Dictionary<string, object> { ["a.txt"] = "b" });
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.CreateViews).SeedAsync();
 
         using var upload = ArchiveHelper.AsUpload(Bytes(archive), archive.Name);
 
@@ -869,11 +865,7 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             await Client(actor).PostAsync(ImportRoute, upload, Ct));
     }
 
-    /// <summary>
-    /// Both match-by-name flags are required, so omitting one is refused by parameter binding — ahead of
-    /// authorization, with none of the problem body every other refusal carries.
-    /// </summary>
-    /// <remarks>Turns red when either flag becomes optional, or the app configures a binding response.</remarks>
+    /// <summary>An import missing either match flag is a 400 with no body, ahead of authorization.</summary>
     [Theory]
     [InlineData("api/views/actions/import?matchRolesByName=true")]
     [InlineData("api/views/actions/import?matchApplicationTemplatesByName=true")]

@@ -4,7 +4,7 @@ Player.Api has an automated test suite in the `Player.Api.Tests` project. This d
 
 One mapping test conditionally skips until the application declares a source-validated AutoMapper map. It starts running automatically when there is something for it to assert on.
 
-The suite is built on xUnit v3 and NSubstitute, and runs against a real PostgreSQL instance started in a container. These are not isolated unit tests. A typical test sends an HTTP request to the application hosted in process, through the real routes, the real middleware, the real claims transformer, the real handlers, the real AutoMapper profiles and a real database, then asserts on the response and on what changed in the database. Only collaborators that leave the process are substituted.
+The suite is built on xUnit v3 and NSubstitute, and runs against a real PostgreSQL instance started in a container. It is on the Crucible API test standard in `agent-docs/api-testing/` of the workspace (shared by every Crucible API): the harness files under `Player.Api.Tests/Support/Shared/` are copied from there and are not edited here. These are not isolated unit tests. A typical test sends an HTTP request to the application hosted in process, through the real routes, the real middleware, the real claims transformer, the real handlers, the real AutoMapper profiles and a real database, then asserts on the response and on what changed in the database. Only collaborators that leave the process are substituted.
 
 # Running the tests
 
@@ -12,7 +12,7 @@ The suite is built on xUnit v3 and NSubstitute, and runs against a real PostgreS
 dotnet test
 ```
 
-Docker must be running. The suite starts and disposes its own PostgreSQL container through [Testcontainers](https://testcontainers.com/), so there is nothing to install and no local database to keep in sync.
+Docker must be running. The suite starts and disposes its own PostgreSQL container through [Testcontainers](https://testcontainers.com/), so there is nothing to install and no local database to keep in sync. The container starts when the first test asks for a database, so the tests that take none still run without Docker.
 
 A single class or a single test can be run with a filter:
 
@@ -42,7 +42,7 @@ Coverage is a local diagnostic rather than a maintained project statistic. CI do
 
 # Build settings
 
-`Directory.Build.props` sets `TreatWarningsAsErrors`, which is what enforces the xUnit analyzers that ship with `xunit.v3`. These fail the build:
+`Directory.Build.props` sets `TreatWarningsAsErrors`, which is what enforces the xUnit analyzers that ship with `xunit.v3`. `Player.Api.Tests/Directory.Build.props` (shared by the standard) imports the root one and sets the same for the test project, so the test project keeps it whatever the root file says. These fail the build:
 
 - xUnit1013 - A public method on a test class with no `[Fact]`.
 - xUnit1026 - A `[Theory]` parameter the test does not use.
@@ -50,11 +50,11 @@ Coverage is a local diagnostic rather than a maintained project statistic. CI do
 - xUnit2000 - `Assert.Equal` with the expected value passed second.
 - xUnit2012 - `Assert.True` over a collection lookup, where `Assert.Contains` says what failed.
 
-Restore-time warnings stay warnings, through `WarningsNotAsErrors`. NU1901 to NU1904 are the NuGet audit, and NU1701 reports TinCan's .NET Framework assets. The known dependency deferrals and their review triggers are tracked in [DependencyDeferrals.md](DependencyDeferrals.md).
+Restore-time warnings stay warnings, through `WarningsNotAsErrors`. NU1901 to NU1904 are the NuGet audit, NU1701 reports TinCan's .NET Framework assets, and the test project's file adds NU1510. The known dependency deferrals and their review triggers are tracked in [DependencyDeferrals.md](DependencyDeferrals.md).
 
 `.editorconfig` raises xUnit1004, so a test parked with `[Fact(Skip = "...")]` fails the build. Runtime conditional skips through `Assert.SkipWhen` remain available when a test has nothing meaningful to assert.
 
-Package versions live in `Directory.Packages.props`. `Microsoft.AspNetCore.Mvc.Testing`, which hosts the application, tracks the ASP.NET Core version because it has to build the host the application's own framework reference expects.
+Package versions live in `Directory.Packages.props`; the test packages are pinned by the standard (`agent-docs/api-testing/test-packages.props`) and `sync.sh` checks them. `Microsoft.AspNetCore.Mvc.Testing`, which hosts the application, tracks the ASP.NET Core version because it has to build the host the application's own framework reference expects.
 
 ## Test runner
 
@@ -78,11 +78,14 @@ For tests that need a database but not the application:
 
 - `Db` - A `PlayerContext` over a database that no other test can see.
 - `NewContext()` - Another context over the same database, for re-reading through a cold change tracker after a save. The caller owns it.
+- `ReadBack(db => ...)` - The same cold read in one expression, on a fresh context it disposes: `var stored = await ReadBack(db => db.Views.SingleAsync(x => x.Id == id, Ct));`.
 - `Session` - The database of the running test. `ApiTestBase` registers it so that the requests a test sends reach it.
 - `Mediator` - The substituted mediator that `PublishEventsAsync` resolves on a context the test made. Assert on it to verify published entity events. A context made for a request resolves the request's own mediator instead, so entity events reach the real handlers there.
 - `Ct` - The cancellation token of the running test. Pass it to awaited calls, so that the runner can cancel a hung test. A query blocked on a PostgreSQL lock would otherwise hold the whole run open.
 - `WaitUntil(condition, what)` - Polls for an effect that arrives on a thread the test does not own, on a ten second budget.
-- `Fixture` - The run-wide `DatabaseFixture`, which reports the active provider.
+- `Fixture` - The run-wide `DatabaseFixture`.
+
+These come from the shared `DatabaseTestBase<PlayerContext>`; Player's `DatabaseTestBase` adds only `Fixture`.
 
 ## ApiTestBase
 
@@ -90,14 +93,17 @@ Extends `DatabaseTestBase` for tests that drive the application over HTTP:
 
 - `Root` - An actor holding every system permission, seeded before every test, for tests concerned with what an endpoint does rather than who may call it.
 - `RootClient` - An `HttpClient` acting as `Root`.
-- `Actor()` - Starts describing another actor to seed: `await Actor().WithSystemPermissions(...).OnTeam(team).SeedAsync()`.
+- `Actor()` - Starts describing another actor to seed: `await Actor().WithSystemPermissions(...).OnTeam(team).SeedAsync()`. For a denied test's near miss use `OnNewTeam(view.Id, viewPermissions: ..., teamPermissions: ...)`, which mints a team whose own role grants nothing, so the actor holds exactly what the call names. `TestData.Team` defaults to the seeded `View Member` role, which grants five team permissions to every member; pass an existing team to `OnTeam` only when the test is about what that team grants.
 - `Client(actor)` - A client acting as a seeded actor, cached so that repeated calls share one client.
 - `Client()` - A client carrying no identity, whose requests to an `/api/` route are answered with 401.
 - `ReadAsync<T>(response)` - Asserts the response succeeded and deserializes the body with the options the endpoints serialize with, enums as names included.
 - `AssertStatus(expected, response)` - Asserts the status, naming the body when it is not the expected one.
 - `AssertProblem(expected, response)` - The same, plus the `application/problem+json` shape `ExceptionMiddleware` answers a handled exception with, and returns the `ProblemDetails`. A 500's `Detail` is the exception message, which is what says which failure was reached.
+- `AssertJsonError(expected, response)` - The same for the three MVC controllers (`FileController`, `XApiController`, `HealthCheckController`), whose exceptions `JsonExceptionFilter` answers with a `ProblemDetails` sent as `application/json` rather than `application/problem+json`. It also asserts the body's `Status`, and returns the body for its `Detail`.
 - `Factory` - The run-wide host. `Hub<T>()`, `Webhooks` and `OutboundHttp` are what the application broadcast, queued and requested; `FileUploadBasePath` is where its uploads landed.
 - `Seed(params object[])` - Inherited. Adds entities and saves.
+
+The HTTP helpers come from the shared `ApiTestBase<PlayerContext>`; Player's `ApiTestBase` adds `Root`, `RootClient`, `Actor()`, `Client(actor)` and `Factory`.
 
 A typical test looks like this:
 
@@ -136,7 +142,9 @@ All five of those are written out rather than substituted, and the reason is a h
 
 Everything else the application ships is in force. The content root resolves to the `Player.Api` project directory, so its `appsettings.json` is loaded, and `TestConfiguration` layers over it only the keys whose shipped value breaks or weakens a test run. Each entry there says which, and groups are overridden whole: setting `CorsPolicy:AllowAnyOrigin` on its own left the file's `SupportsCredentials` in place, a combination `CorsPolicyBuilder.Build()` rejects, and the host failed to start.
 
-Hosting needs no production change. `Program.CreateWebHostBuilder` matches neither convention `HostFactoryResolver` looks for, so `WebApplicationFactory` invokes `Program.Main` on a background thread instead, and `Main` runs to completion with `InitializeDatabase` in it. That is why the factory passes `open-api-only` as a host setting as well as configuration: host settings reach the entry point as `--key=value`, which satisfies `Main`'s own gate on that switch. It is a production switch, and both hosted services it also disables have tests that drive them directly.
+Hosting needs no production change. `Program.CreateWebHostBuilder` matches neither convention `HostFactoryResolver` looks for, so `WebApplicationFactory` invokes `Program.Main` on a background thread instead, and `Main` runs to completion with `InitializeDatabase` in it. That is why the factory passes `open-api-only` as a host setting as well as configuration: host settings reach the entry point as `--key=value`, which satisfies `Main`'s own gate on that switch. It is a production switch, and both hosted services it also disables have tests that drive them directly. In the standard's terms this is the run-wide factory with the step 1A database gate (`agent-docs/api-testing/templates/AppFactory.template.cs`): the host gets no database of its own, and the context registration is the one-argument `TestDatabaseScope.ReplaceRegistration`, which throws for a resolution outside a request.
+
+`PlayerAppFactory` also overrides `CreateHost` to build the one host under a lock and hand it to every caller. `WebApplicationFactory.StartServer` takes no lock, and every way into the host (`CreateClient` in either overload, `Services`, `Server`) goes through it to `CreateHost`, so without the lock two tests asking for their first client at once would each run `Program.Main` and build a host.
 
 ## ServiceTestBase
 
@@ -154,7 +162,7 @@ The cost is that `ApiTestHost` re-declares registrations `Startup` already makes
 
 The database is per test and the host is per run, and the difference matters.
 
-Migrations are applied once, to a template database. Each test gets its own database created from that template, which is a file-level copy and much cheaper than re-running the 34 migrations for every test. It is real isolation rather than a shared database with a rollback, so `SaveChanges` behaves as it does in production.
+Migrations are applied once, to a template database, by the shared `PostgresTestDatabase<PlayerContext>` that `DatabaseFixture` wraps. Each test gets its own database created from that template, which is a file-level copy and much cheaper than re-running the 34 migrations for every test. It is real isolation rather than a shared database with a rollback, so `SaveChanges` behaves as it does in production.
 
 The host is the opposite, because starting one costs about a second. Everything the application registers as a singleton is therefore shared by every test in the run, and the tests run in parallel. That is what `TestConfiguration`'s claims-caching entry, `TestDatabaseScope` and the shape of the collaborators standing in for the ones that leave the process exist to deal with, and it is the one place where a test can interfere with another. See the last of the common mistakes below.
 
@@ -166,7 +174,8 @@ The migrations emit `CREATE EXTENSION "uuid-ossp"`, which requires superuser. Th
 2. Derive from `ApiTestBase` if the test sends a request, `ServiceTestBase` if it constructs a service with options of its own, or `DatabaseTestBase` if it only needs a database. Some tests need none of them. `ArchiveServiceTests` and the authorization handler tests take no fixture at all.
 3. Seed with the `TestData` object mothers rather than building entities inline, and add a new mother there if one is missing. Seed a caller with `Actor()`, which is what decides what the request is allowed to do.
 4. Name the method as a sentence, and pass `Ct` to anything awaited.
-5. Assert on the database through `NewContext()`, not on the seeded objects that are still held. The change tracker will only confirm what was already set.
+5. Assert on the response (`ReadAsync`, `AssertStatus`, `AssertProblem` for a minimal-API route, `AssertJsonError` for an MVC controller) and on the database through `NewContext()` or `ReadBack`, not on the seeded objects that are still held. The change tracker will only confirm what was already set.
+6. Allowed and denied cases follow section 4 of `agent-docs/api-testing/CONVENTIONS.md`: the allowed caller holds exactly the required permission (never `Root`), and each denied caller is a near miss seeded with `OnNewTeam`.
 
 # Layout
 
@@ -180,31 +189,40 @@ Player.Api.Tests/
   Infrastructure/    authorization, endpoints, exceptions, filters, extensions, JSON converters, mapping
   Hubs/              the three SignalR hubs
   Events/            entity event handlers
-  Support/           the harness, described below
+  Support/           the harness, described below: Player's own files, the self-tests and the extras
+    Shared/          the standard's shared files, copied by sync.sh and never edited here
 ```
 
-The harness itself lives in `Support/`:
+The harness itself lives in `Support/`. The shared files of the standard are in `Support/Shared/` (namespace `Crucible.Api.Testing`, imported by the project file), byte-identical in every Crucible API and never edited here:
 
-- `DatabaseFixture` - Resolves the provider, starts it once for the run, and hands out an isolated session per test.
+- `PostgresTestDatabase` - Starts PostgreSQL on first use, migrates the template database once and clones a database per test from it. Prints the provider banner.
+- `ITestDatabase` - `ITestDatabaseSession<TContext>`, one test's database, and `ITestDatabaseSessionSource<TContext>`, what hands them out.
+- `DatabaseTestBase<TContext>` and `ApiTestBase<TContext>` - The app-neutral halves of the base classes.
+- `TestDatabaseScope` - Routes a request to the database of the test that sent it, by the `X-Test-Session` header, and replaces the `PlayerContext` registration (`ReplaceRegistration`).
+- `TestAuthHandler` - Mints the identity a validated token would have produced, from `X-Test-User` and `X-Test-Name`. Its opt-ins (`X-Test-Email`, `X-Test-Scope`, `TestAuthentication:Issuer`, `TestAuthentication:UserFromBearer`) are not used here.
+- `HubRecorder` - Takes the place of an `IHubContext<T>` and keeps what was broadcast, per audience. `ToGroup(id)` is what a test reads (a `Clients.Groups(list)` send is recorded for each group in it, and `ToGroups(a, b)` reads the call itself), and each message is a `HubBroadcast` naming the client method and its arguments. `ToUser`, `ToAll`, `Recipients(method)` and `FailsFor(group, exception)` are there for a recorder a test owns.
+- `HubHarness` - The connection-scoped state that SignalR sets on a hub before invoking a method, with the groups a connection joined and left (`JoinedGroups`, `LeftGroups`).
+- `StubHttpMessageHandler` - Answers outbound HTTP from a table of absolute urls (`Respond`, `RespondJson`). `Requests` and `Sent` are snapshots, so a test can read them while a background sender is still recording. Ordered route rules (`Answers`, `AnswersOnce`, `Throws`) and `RefusesUnmatched()` are for a handler one test owns, never the run-wide `Factory.OutboundHttp`. `StubHttpClientFactory` hands out clients over it, with named clients' base addresses where production configures them (Player's need none).
+- `RecordingLogger` and `Waits` - A logger that keeps what it was told, and the polling behind `WaitUntil`.
+
+Player's own files, built from the standard's templates or added for Player:
+
+- `DatabaseFixture` - Wraps `PostgresTestDatabase` with Player's database name, test assembly and migrations assembly.
 - `DatabaseTestBase`, `ApiTestBase` and `ServiceTestBase` - The three base classes described above.
 - `PlayerAppFactory` - Hosts the application over `TestServer`, once for the run. `OutboundHttp` is the stub its outbound HTTP is answered from, `Hub<T>()` and `Webhooks` are the recorders its broadcasts and queued events reach, and `FileUploadBasePath` is where its uploads land.
 - `TestConfiguration` - The configuration keys layered over the application's own `appsettings.json`.
-- `TestAuthHandler` - Mints the identity a validated token would have produced, from `X-Test-User` and `X-Test-Name`.
-- `TestDatabaseScope` - Routes a request to the database of the test that sent it, by the `X-Test-Session` header.
 - `TestActor` and `TestActorBuilder` - Seed a user, the role granting their system permissions, and their view and team memberships, so that the real claims transformer produces the permissions a test needs.
 - `ApiTestHost` and `ApiTestHostOptions` - The application's services without the web host, for `ServiceTestBase`.
 - `TestData` - Object mothers for the entities that most tests need, such as `TestData.View()`, `TestData.Team()` and `TestData.ApplicationTemplate()`, plus the ids of the seeded roles.
-- `ClaimsPrincipalBuilder` - Builds a principal directly, for the tests of the authorization stack itself. It is not how an HTTP test gets its caller: it can produce shapes the transformer cannot, such as an unparseable permission value, which is exactly why those tests keep it.
+- `ClaimsPrincipalBuilder` - Builds a principal directly. It is not how an HTTP test gets its caller (that is `Root`, an `Actor()` or `Client()`), and it has two uses. The tests of the authorization stack itself, where it produces shapes the transformer cannot, such as an unparseable permission value (`WithRaw*`, a permission written with `WithClaim`). And service tests on `ServiceTestBase` (`FileService`, `NotificationService`, the xAPI services, `PresenceService`, `UserClaimsService`): the `ApiTestHost` has no authentication handler and no claims transformer, so the principal stands for the transformer's output while the authorization service and handlers stay real. There permission claims come only from the typed steps (`WithSystemPermissions`, `WithTeam`), `WithClaim` only for identity-provider claims such as `iss`, and denied cases are near misses. Because such a test cannot see a transformer that derives the wrong claims, a route that reaches the service still has its gate tested over HTTP with `Actor()`, and `TestActorTests` and `UserClaimsServiceTests` pin the claim shapes the builder mirrors (the standard's CONVENTIONS.md section 1).
 - `AuthorizationHarness` - Wires the authorization stack the way `Startup.ApplyPolicies` does, for testing a handler directly.
 - `TestMapper` - The real AutoMapper configuration, without starting the application.
 - `PlayerContextFactory` - Builds a `PlayerContext` wired the way production wires it.
-- `HubHarness` - The connection-scoped state that SignalR sets on a hub before invoking a method.
 - `EndpointHarness` - Runs the `RegisterEndpoints` method of an `IEndpoint` against a real route group and hands back the routes.
 - `ArchiveHelper` - Reads an exported archive out of a response body, and presents one back as the multipart upload import takes.
-- `StubHttpMessageHandler` - Answers outbound HTTP from a table of urls. `Requests` and `Sent` are snapshots, so a test can read them while a background sender is still recording.
-- `HubRecorder` - Takes the place of an `IHubContext<T>` and keeps what was broadcast, per audience. `ToGroup(id)` is what a test reads, and each message is a `HubBroadcast` naming the client method and its arguments.
 - `WebhookRecorder` - Takes the place of `IBackgroundWebhookService` and keeps the events handed to it. `Recorded(type, payload)` filters by predicate, because every test in the run raises events through the one recorder.
-`DatabaseHarnessTests`, `HttpHarnessTests`, `TestActorTests` and `ApiTestHostTests` are tests of the harness itself. They pin what the rest of the suite assumes: that two tests inserting the same key do not see each other, that explicit ids survive a round trip, that saving publishes entity events, that the real migration history and snake_case naming are in force, that a request with no identity is a 401 and an actor with no permissions a 403, that a request reaches the database of the test that sent it, that each actor shape produces the claims it promises, and that every handler can be constructed. When the harness breaks, these tests fail instead of a hundred unrelated ones.
+
+`DatabaseHarnessTests`, `HttpHarnessTests`, `TestActorTests` and `ApiTestHostTests` are tests of the harness itself. They pin what the rest of the suite assumes: that two tests inserting the same key into a uniquely indexed column (`roles.name`) do not see each other (and that a second insert of that key within one test is refused), that explicit ids survive a round trip, that saving publishes entity events, that the real migration history and snake_case naming are in force, that a request with no identity is a 401 and an actor with no permissions a 403, that a request reaches the database of the test that sent it, that each actor shape produces the claims it promises, and that every handler can be constructed. When the harness breaks, these tests fail instead of a hundred unrelated ones.
 
 # Conventions
 
@@ -216,18 +234,7 @@ The harness itself lives in `Support/`:
 - `WaitUntil` is a last resort, for the two background services, whose work starts in their constructor and completes nowhere a test can await. Prefer a signal to await, or an effect that queues behind a later, observable one. `BackgroundWebhookServiceTests.AddEvent_with_no_matching_subscription_queues_nothing` sends a second, subscribed event as a barrier, because the sender's block has a degree of parallelism of one.
 - A `[Theory]` is for cases that differ only in data. The route contract in `EndpointRegistrationTests` and the status codes in `BackgroundWebhookServiceTests.Any_other_response_keeps_the_event_queued` are that shape. The `_is_forbidden_` and `_not_found` tests are not, however alike they look: each names the permission the caller is missing or the entity the id does not resolve to, and most seed a different graph to reach it. Rolling a feature's up would move the distinguishing part into a lambda in a `TheoryData`, which xUnit cannot serialize, so a failure would report a case index where a sentence belongs. Leave them as facts. That a new endpoint exists at all is already forced by the contract in `EndpointRegistrationTests`, which fails until the route is listed there.
 
-Bugs found while writing a test are characterized, not fixed. The test asserts the current, incorrect behaviour and turns red when that behaviour is corrected. Its remarks state what turns it red, so that whoever makes the fix knows the failure is expected:
-
-```csharp
-/// <summary>
-/// Characterizes current behavior: each file is written as it is validated, so a later file the archive does not
-/// contain rejects the view after the earlier bytes are already on disk, leaving them with no row that
-/// owns them and no way to delete them through the API.
-/// </summary>
-/// <remarks>Turns red when the importer defers its writes to the save.</remarks>
-```
-
-Keep the summary and remarks self-contained. Do not add a bare issue number unless it links to a tracker entry that exists and supplies useful context.
+Defects found while writing a test are characterized, not fixed. The test asserts the current behaviour and passes; it fails once the behaviour is corrected. The defect itself is not described in the code: the test carries at most a one-line `/// <summary>` stating the current behaviour neutrally, and the description, the production `file:line`, the expected behaviour, the proposed fix and the test to flip are an entry in `agent-docs/api-test-bugs/player.api.md` of the workspace, outside this repository. The rule and the document's format are section 3 of `agent-docs/api-testing/CONVENTIONS.md`. `verify.sh` enforces both halves: `check-repo.js tests` joins each run of consecutive comment lines into one text and fails the defect phrases that section lists, whether a phrase sits on one line or wraps across two, and `check-repo.js defects` checks the document against the tests it names (each entry resolves to its test and assertion line, the counts match, and those tests carry no more than the one-line summary).
 
 # Common mistakes
 
@@ -241,7 +248,7 @@ Keep the summary and remarks self-contained. Do not add a bare issue number unle
 
 `.github/workflows/build-and-test.yml` restores, builds and runs the suite for pull requests and for pushes to `main`. The pull-request `synchronize` event covers each new commit on a branch with an open pull request, without also running a duplicate feature-branch workflow.
 
-The job independently greps the PostgreSQL provider banner out of the log, so a future harness change cannot silently stop exercising the production database provider. There is no `services: postgres:` block, because Testcontainers starts and disposes the container itself.
+The workflow is the standard's `build-and-test.yml` with this repository's test project filled in; `sync.sh` keeps it identical. The job independently greps the PostgreSQL provider banner (`[Player.Api.Tests] database provider: PostgreSQL`) out of the log, so a future harness change cannot silently stop exercising the production database provider. There is no `services: postgres:` block, because Testcontainers starts and disposes the container itself.
 
 The run produces one artifact, `test-results`, the TRX of the run. It is uploaded even when the job fails, so that a failure shows which tests failed rather than only a count. The NuGet cache is keyed on `Directory.Packages.props` and the project files, which are what decide what a restore pulls.
 

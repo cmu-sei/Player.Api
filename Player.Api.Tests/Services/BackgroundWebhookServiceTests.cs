@@ -171,11 +171,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
         await WaitUntil(async () => await PendingCount() == 0, "the delivered event's row to be removed");
     }
 
-    /// <summary>
-    /// The body a subscriber receives is the whole event — type, timestamp and the serialized payload —
-    /// which is the public contract of the webhook.
-    /// </summary>
-    /// <remarks>Turns red when each event is assigned a non-empty id.</remarks>
+    /// <summary>A delivered body carries the event's type, timestamp and payload, and an all-zeros id.</summary>
     [Fact]
     public async Task The_delivered_body_is_the_serialized_event()
     {
@@ -193,14 +189,11 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
 
         // Bounded by the run rather than only non-default, since a subscriber orders and expires events by
         // this field: WebhookEvent's constructor stamps DateTime.UtcNow, so a stamp outside the window
-        // between constructing the event and observing its delivery is the wrong clock or the wrong event.
+        // between constructing the event and observing its delivery comes from another clock or event.
         Assert.InRange(body["Timestamp"].GetValue<DateTime>(), before, DateTime.UtcNow);
         var payload = JsonNode.Parse(body["Payload"].GetValue<string>());
         Assert.Equal("Sales", payload["ViewName"].GetValue<string>());
 
-        // Characterizes current behavior: WebhookEvent's id initializer is `new Guid()`, so every event a
-        // subscriber sees is identified as all-zeros and cannot be deduplicated. Expect a real id when
-        // that is fixed.
         Assert.Equal(Guid.Empty, body["Id"].GetValue<Guid>());
     }
 
@@ -293,12 +286,7 @@ public class BackgroundWebhookServiceTests(DatabaseFixture fixture) : ServiceTes
         Assert.Equal(2, _http.Requests.Count(x => x == TokenUri));
     }
 
-    /// <summary>
-    /// Characterizes current behavior: when the identity provider refuses the credentials the event is posted
-    /// anyway, with an <c>Authorization</c> header carrying no token, instead of the failure being recorded
-    /// against the subscription.
-    /// </summary>
-    /// <remarks>Turns red when the refusal is recorded and the callback is not attempted.</remarks>
+    /// <summary>When the token request is refused, the event is posted with a bare Bearer header.</summary>
     [Fact]
     public async Task A_refused_token_request_posts_the_event_with_no_credentials()
     {

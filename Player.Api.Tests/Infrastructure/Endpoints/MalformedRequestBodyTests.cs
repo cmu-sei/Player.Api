@@ -15,17 +15,9 @@ namespace Player.Api.Tests.Infrastructure.Endpoints;
 /// <see cref="MalformedRouteParameterTests"/> covers for route segments.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The headline is the first theory: a write with no body at all is a 500, on every route that takes one.
-/// Nullable reference types are not enabled in <c>Player.Api</c>, so a reference-typed body parameter is
-/// nullable-oblivious, and minimal-API binding treats that as optional — the absent body becomes
-/// <c>null</c> and the handler is called with it rather than the request being refused.
-/// </para>
-/// <para>
-/// Everything else here is the framework answering before any application code runs, which is worth
-/// pinning precisely because it is not the application's own error shape: no problem document, no field
-/// name, and a 415 rather than a 400 for a content type the route cannot read.
-/// </para>
+/// Apart from the missing and null bodies, the answers here come from the framework before any
+/// application code runs, which is why they are not the application's own error shape: no problem
+/// document, no field name, and a 415 for a content type the route cannot read.
 /// </remarks>
 public class MalformedRequestBodyTests(DatabaseFixture fixture, PlayerAppFactory factory)
     : ApiTestBase(fixture, factory)
@@ -39,15 +31,7 @@ public class MalformedRequestBodyTests(DatabaseFixture fixture, PlayerAppFactory
     /// <summary>What the endpoint says when it grafts the route id onto the command it was handed.</summary>
     private const string HandlerDereferenced = "Object reference not set to an instance of an object.";
 
-    /// <summary>
-    /// A write with no body is a server error, and which of the two details it carries says how the route is
-    /// written: an endpoint that does <c>command.Id = id</c> before sending dereferences the null itself,
-    /// and one that sends the command as it came gets MediatR's <c>ArgumentNullException</c>.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when a missing body is a 400 — the answer this ought to be. The ids need not exist,
-    /// because the graft happens in the endpoint, before the handler looks anything up.
-    /// </remarks>
+    /// <summary>A write with no body is a 500 whose detail depends on how the endpoint is written.</summary>
     [Theory]
     [InlineData("POST", "api/views", MediatorRefused)]
     [InlineData("POST", "api/permissions", MediatorRefused)]
@@ -126,15 +110,7 @@ public class MalformedRequestBodyTests(DatabaseFixture fixture, PlayerAppFactory
         Assert.Empty(await response.Content.ReadAsStringAsync(Ct));
     }
 
-    /// <summary>
-    /// An empty object is accepted and creates a nameless view: nothing in the command declares a member
-    /// required, so every member defaults and the row is written.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the create command validates its own members. The stored name is asserted rather than
-    /// the response's, because a null that only the mapping dropped would read the same on the way out.
-    /// This is the other half of the same unvalidated-body behavior.
-    /// </remarks>
+    /// <summary>An empty object creates a view with no name.</summary>
     [Fact]
     public async Task An_empty_object_creates_a_view_with_no_name()
     {
@@ -157,9 +133,7 @@ public class MalformedRequestBodyTests(DatabaseFixture fixture, PlayerAppFactory
         Assert.Empty(await response.Content.ReadAsStringAsync(Ct));
     }
 
-    /// <summary>
-    /// Authentication runs before binding, so a caller with no identity is refused whatever it sent.
-    /// </summary>
+    /// <summary>A request with no identity and no body is a 401, because authentication runs before binding; the anonymous client is the case under test.</summary>
     [Fact]
     public async Task An_unauthenticated_request_with_no_body_is_unauthorized()
     {

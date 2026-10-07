@@ -50,16 +50,7 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
             entity.EventTypes.Select(x => x.EventType).Order());
     }
 
-    /// <summary>
-    /// The same event type twice in one request is a server error: the form's list is mapped straight to a
-    /// row each (<c>Webhooks/MappingProfile.cs:24</c>) and <c>(SubscriptionId, EventType)</c> is uniquely
-    /// indexed. Wrong — a malformed request answered as a server fault, and the subscription is lost
-    /// rather than created with the type once.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the list is deduplicated or validated. Nothing stored is asserted because the whole
-    /// insert rolls back, which is what makes this a diagnosability bug and not a data one.
-    /// </remarks>
+    /// <summary>An event type listed twice on create is answered with a 500 and nothing is stored.</summary>
     [Fact]
     public async Task Create_reports_a_repeated_event_type_as_a_server_error()
     {
@@ -81,14 +72,7 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Empty(await db.Webhooks.ToListAsync(Ct));
     }
 
-    /// <summary>
-    /// The same on edit, because all four maps in <c>Webhooks/MappingProfile.cs</c> build the rows the same
-    /// way — so the repeated type is the mapping's doing rather than one handler's.
-    /// </summary>
-    /// <remarks>
-    /// The stored types are asserted because the rollback is the difference between a subscription that
-    /// keeps the types it had and one left with none.
-    /// </remarks>
+    /// <summary>An event type listed twice on edit is answered with a 500 and the stored types are kept.</summary>
     [Fact]
     public async Task Edit_reports_a_repeated_event_type_as_a_server_error()
     {
@@ -222,14 +206,7 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Equal(EventType.ViewDeleted, Assert.Single(stored.EventTypes).EventType);
     }
 
-    /// <summary>
-    /// The other half of the secret rule, and its cost: <c>PUT</c> maps every member unconditionally, so
-    /// a client that read a subscription back and sent it again clears a secret it was never shown.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the full form stops overwriting a stored secret with an absent one — <c>PATCH</c>
-    /// is the route that already leaves it alone.
-    /// </remarks>
+    /// <summary>A full-form edit without a client secret clears the stored secret.</summary>
     [Fact]
     public async Task Edit_with_the_full_form_clears_the_client_secret_it_never_returned()
     {
@@ -311,14 +288,7 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.False(await db.Webhooks.AnyAsync(Ct));
     }
 
-    /// <summary>
-    /// Wrong: the delete handler resolves the row with <c>SingleAsync</c> where edit uses
-    /// <c>SingleOrDefaultAsync</c>, so the same missing id is a 404 from one route and a 500 from the
-    /// other.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when <c>Delete.cs:58</c> throws <c>EntityNotFoundException</c> for a row that is gone.
-    /// </remarks>
+    /// <summary>Deleting a subscription id that does not exist is answered with a 500.</summary>
     [Fact]
     public async Task Delete_reports_a_missing_subscription_as_a_server_error()
     {

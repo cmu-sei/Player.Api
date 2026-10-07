@@ -89,6 +89,7 @@ public class RoleRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             "api/roles", new { name = "Nope" }, Ct));
     }
 
+    /// <summary>A request with no identity is answered with a 401; the anonymous client is the case under test.</summary>
     [Fact]
     public async Task Create_without_an_identity_is_unauthorized()
     {
@@ -115,10 +116,11 @@ public class RoleRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             await RootClient.GetAsync($"api/roles/{Guid.NewGuid()}", Ct));
     }
 
+    /// <summary>The near miss is ViewViews where reading a role takes ViewRoles or ViewUsers.</summary>
     [Fact]
-    public async Task Get_is_forbidden_without_ViewRoles()
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ViewViews()
     {
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -182,9 +184,9 @@ public class RoleRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     [Fact]
-    public async Task GetAll_is_forbidden_without_either_permission()
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ViewViews()
     {
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/roles", Ct));
     }
@@ -212,15 +214,7 @@ public class RoleRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             $"api/roles/{Guid.NewGuid()}", new { name = "Ghost" }, Ct));
     }
 
-    /// <summary>
-    /// The same duplicate name <c>Create</c> answers with a 409 is a 500 here, because <c>Edit</c> has no
-    /// duplicate check and the unique index refuses the save. Wrong: the caller's mistake is reported as
-    /// a server fault.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when <c>Edit</c> gains <c>Create</c>'s check, or catches the update failure — either
-    /// makes this a 409.
-    /// </remarks>
+    /// <summary>A rename onto another role's name is answered with a 500 and the stored name is kept.</summary>
     [Fact]
     public async Task Edit_answers_a_name_that_is_already_taken_with_a_server_error()
     {
@@ -238,14 +232,7 @@ public class RoleRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             (await db.Roles.SingleAsync(x => x.Id == TestData.Roles.ContentDeveloper, Ct)).Name);
     }
 
-    /// <summary>
-    /// <c>Immutable</c> is on the DTO and seeded true for <c>Administrator</c>, but <c>Edit</c> never
-    /// reads it, so the role the system ships with can be renamed. Wrong: the sibling
-    /// <c>Permissions</c> and <c>TeamPermissions</c> handlers refuse the same request with a 403.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when <c>Edit</c> checks <c>Immutable</c> as <c>Permissions/Requests/Edit.cs:66</c> does.
-    /// </remarks>
+    /// <summary>An immutable role is renamed like any other and keeps its Immutable flag.</summary>
     [Fact]
     public async Task Edit_renames_an_immutable_role()
     {
@@ -305,15 +292,7 @@ public class RoleRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             await Client(actor).DeleteAsync($"api/roles/{TestData.Roles.ContentDeveloper}", Ct));
     }
 
-    /// <summary>
-    /// <c>Delete</c> does not read <c>Immutable</c> either, so a caller holding <c>ManageRoles</c> can
-    /// remove the seeded <c>Administrator</c> role and with it every account's administrator grant.
-    /// Wrong: <c>Permissions/Requests/Delete.cs:62</c> refuses the same request with a 403.
-    /// </summary>
-    /// <remarks>
-    /// The role is deleted out from under the caller's own user row, which is what makes this worth
-    /// pinning. Turns red when <c>Delete</c> checks <c>Immutable</c>.
-    /// </remarks>
+    /// <summary>An immutable role is deleted like any other, and its users' role is cleared.</summary>
     [Fact]
     public async Task Delete_removes_an_immutable_role()
     {

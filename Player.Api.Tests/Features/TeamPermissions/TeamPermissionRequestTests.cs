@@ -45,16 +45,7 @@ public class TeamPermissionRequestTests(DatabaseFixture fixture, PlayerAppFactor
         Assert.Equal("A custom one", stored.Description);
     }
 
-    /// <summary>
-    /// Names are uniquely indexed because team authorization resolves a permission by name, but the
-    /// handler saves without looking, so a client's duplicate comes back as a server error rather than a
-    /// 409. Wrong, and the same omission as <c>Permissions/Requests/Create.cs</c>.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the handler checks the name first. The detail is asserted because it is what says
-    /// the failure reached the save rather than a check; the count, because the rollback is what keeps a
-    /// name from resolving to two permissions.
-    /// </remarks>
+    /// <summary>A duplicate team permission name on create is answered with a 500 and nothing is stored.</summary>
     [Fact]
     public async Task Create_reports_a_duplicate_name_as_a_server_error()
     {
@@ -101,15 +92,7 @@ public class TeamPermissionRequestTests(DatabaseFixture fixture, PlayerAppFactor
             (await db.TeamPermissions.SingleAsync(x => x.Id == permissionId, Ct)).Description);
     }
 
-    /// <summary>
-    /// A rename onto a name another team permission holds is the same server error as the duplicate
-    /// <c>Create</c> above: neither handler reads the name before saving it.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when <c>Edit</c> checks the name first. The stored name is asserted because the rollback
-    /// is what keeps the claim key intact — see <c>Edit_refuses_an_immutable_permission</c> below for why
-    /// the name matters.
-    /// </remarks>
+    /// <summary>A rename onto another team permission's name is answered with a 500 and the name is kept.</summary>
     [Fact]
     public async Task Edit_reports_a_rename_onto_a_taken_name_as_a_server_error()
     {
@@ -208,10 +191,14 @@ public class TeamPermissionRequestTests(DatabaseFixture fixture, PlayerAppFactor
             await RootClient.GetAsync($"api/team-permissions/{Guid.NewGuid()}", Ct));
     }
 
+    /// <summary>The near miss is ViewTeam where the route admits ManageTeam on any team.</summary>
     [Fact]
-    public async Task Get_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ViewTeam()
     {
-        var actor = await Actor().SeedAsync();
+        var view = TestData.View();
+        await Seed(view);
+
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync(
             $"api/team-permissions/{TestData.TeamPermissions.ViewTeam}", Ct));
@@ -251,10 +238,14 @@ public class TeamPermissionRequestTests(DatabaseFixture fixture, PlayerAppFactor
             await Client(actor).GetAsync("api/team-permissions", Ct)));
     }
 
+    /// <summary>The near miss is ViewTeam where the route admits ManageTeam on any team.</summary>
     [Fact]
-    public async Task GetAll_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ViewTeam()
     {
-        var actor = await Actor().SeedAsync();
+        var view = TestData.View();
+        await Seed(view);
+
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -428,18 +419,7 @@ public class TeamPermissionRequestTests(DatabaseFixture fixture, PlayerAppFactor
             x => x.RoleId == roleId && x.PermissionId == permissionId, Ct));
     }
 
-    /// <summary>
-    /// Granting the same permission twice is a server error, because the grant is inserted without
-    /// looking and <c>(RoleId, PermissionId)</c> is uniquely indexed. Wrong, and asymmetric:
-    /// <c>RemoveFromRole_does_nothing_when_the_role_does_not_hold_the_permission</c> shows revoking twice
-    /// is a success, so a provisioning script that re-runs cannot tell "already granted" from a broken
-    /// server.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the handler checks the grant — as a 409, or as the no-op its counterpart already
-    /// promises. The count is asserted because the single grant surviving is what makes this a status-code
-    /// bug rather than a data one.
-    /// </remarks>
+    /// <summary>Granting a team permission the role already holds is answered with a 500; one grant stays.</summary>
     [Fact]
     public async Task AddToRole_reports_a_grant_the_role_already_holds_as_a_server_error()
     {
@@ -560,11 +540,7 @@ public class TeamPermissionRequestTests(DatabaseFixture fixture, PlayerAppFactor
             x => x.TeamId == team.Id && x.PermissionId == permissionId, Ct));
     }
 
-    /// <summary>
-    /// The same duplicate insert as <c>AddToRole</c>, on the team's own grants — <c>(TeamId,
-    /// PermissionId)</c> is uniquely indexed and nothing checks first. <c>RemoveFromTeam</c> no-ops on an
-    /// absent grant, so this pair is asymmetric in the same way.
-    /// </summary>
+    /// <summary>Assigning a team permission the team already holds is answered with a 500; one assignment stays.</summary>
     [Fact]
     public async Task AddToTeam_reports_an_assignment_the_team_already_holds_as_a_server_error()
     {
@@ -637,14 +613,16 @@ public class TeamPermissionRequestTests(DatabaseFixture fixture, PlayerAppFactor
             x => x.TeamId == team.Id && x.PermissionId == permissionId, Ct));
     }
 
+    /// <summary>The near miss is ManageView in another view: the grant is checked on the team's own view.</summary>
     [Fact]
-    public async Task AddToTeam_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task AddToTeam_is_forbidden_for_a_caller_holding_ManageView_only_in_another_view()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
-        await Seed(view, team);
+        var otherView = TestData.View("Other View");
+        await Seed(view, team, otherView);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnNewTeam(otherView.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
         var permissionId = TestData.TeamPermissions.UploadViewIsos;
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsync(

@@ -99,7 +99,7 @@ public static class TestData
 
     /// <summary>
     /// A team role granting nothing, for the team that must grant its members no permissions —
-    /// <see cref="Team"/> defaults to the seeded <c>View Member</c> role, which grants four.
+    /// <see cref="Team"/> defaults to the seeded <c>View Member</c> role, which grants five.
     /// </summary>
     public static TeamRoleEntity TeamRole(string name = null, bool allPermissions = false) =>
         new()

@@ -52,11 +52,13 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         Assert.Equal(DateTimeKind.Utc, notification.BroadcastTime.Kind);
     }
 
+    /// <summary>The near miss is ManageViews where listing every notification takes ViewViews.</summary>
     [Fact]
-    public async Task GetAsync_is_forbidden_without_ViewViews()
+    public async Task GetAsync_is_forbidden_for_a_caller_holding_only_ManageViews()
     {
-        await Assert.ThrowsAsync<ForbiddenException>(
-            () => Service(ClaimsPrincipalBuilder.Anonymous()).GetAsync(Ct));
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ManageViews).Build();
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).GetAsync(Ct));
     }
 
     /// <summary>
@@ -149,14 +151,19 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     }
 
     [Fact]
-    public async Task GetByTeamAsync_is_forbidden_without_access_to_the_team()
+    public async Task GetByTeamAsync_is_forbidden_for_a_caller_holding_ViewTeam_only_on_another_team()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
-        await Seed(view, team);
+        var other = TestData.Team(view.Id, "Other Team");
+        await Seed(view, team, other);
+
+        var caller = new ClaimsPrincipalBuilder()
+            .WithTeam(view.Id, other.Id, teamPermissions: [TeamPermission.ViewTeam])
+            .Build();
 
         await Assert.ThrowsAsync<ForbiddenException>(
-            () => Service(ClaimsPrincipalBuilder.Anonymous()).GetByTeamAsync(team.Id, Ct));
+            () => Service(caller).GetByTeamAsync(team.Id, Ct));
     }
 
     [Fact]
@@ -195,14 +202,19 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         Assert.Equal("Mine", Assert.Single(notifications).Text);
     }
 
+    /// <summary>The near miss is a member of another view asking for someone else's notifications in this one.</summary>
     [Fact]
-    public async Task GetByUserAsync_is_forbidden_for_another_users_notifications()
+    public async Task GetByUserAsync_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
     {
         var view = TestData.View();
-        await Seed(view);
+        var other = TestData.View("Other View");
+        var otherTeam = TestData.Team(other.Id);
+        await Seed(view, other, otherTeam);
+
+        var caller = Member(other.Id, otherTeam.Id, ViewPermission.ViewView);
 
         await Assert.ThrowsAsync<ForbiddenException>(
-            () => Service(ClaimsPrincipalBuilder.Anonymous()).GetByUserAsync(view.Id, Guid.NewGuid(), Ct));
+            () => Service(caller).GetByUserAsync(view.Id, Guid.NewGuid(), Ct));
     }
 
     // ---- Joining ----------------------------------------------------------------------------------
@@ -344,12 +356,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         Assert.False(notification.CanPost);
     }
 
-    /// <summary>
-    /// Characterizes current behaviour. The fallback check passes an empty required-system-permission
-    /// array, which the system handler reads as "nothing required" and succeeds — so the
-    /// <c>ViewTeam</c> check never runs and no caller is refused. Flip to <c>False</c> once the handler
-    /// stops treating empty as allow.
-    /// </summary>
+    /// <summary>A caller holding ViewTeam on another team of the view joins this team's notifications.</summary>
     [Fact]
     public async Task JoinTeam_succeeds_for_a_caller_with_no_claim_on_the_team()
     {
@@ -368,10 +375,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         Assert.False(notification.CanPost);
     }
 
-    /// <summary>
-    /// Characterizes current behaviour. Same cause as above, at its widest: a caller in no view at all
-    /// still joins any team's group. Flip to <c>False</c> alongside the test above.
-    /// </summary>
+    /// <summary>A caller in no view joins any team's notifications.</summary>
     [Fact]
     public async Task JoinTeam_succeeds_for_a_caller_who_is_in_no_view()
     {
@@ -518,7 +522,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         var team = TestData.Team(view.Id);
         await Seed(view, team);
 
-        // A member who may read the view, which is as far as the client's own gate used to go.
+        // A member who may read the view but not manage it.
         var caller = Member(view.Id, team.Id, ViewPermission.ViewView);
 
         await Assert.ThrowsAsync<ForbiddenException>(
@@ -528,14 +532,17 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     }
 
     [Fact]
-    public async Task PostToView_is_forbidden_for_a_caller_with_no_claim_on_the_view()
+    public async Task PostToView_is_forbidden_for_a_caller_holding_ManageView_only_in_another_view()
     {
         var view = TestData.View();
-        await Seed(view);
+        var other = TestData.View("Other View");
+        var otherTeam = TestData.Team(other.Id);
+        await Seed(view, other, otherTeam);
+
+        var caller = Member(other.Id, otherTeam.Id, ViewPermission.ManageView);
 
         await Assert.ThrowsAsync<ForbiddenException>(
-            () => Service(ClaimsPrincipalBuilder.Anonymous())
-                .PostToView(view.Id, new Notification { Text = "Hello" }, Ct));
+            () => Service(caller).PostToView(view.Id, new Notification { Text = "Hello" }, Ct));
 
         Assert.Empty(await Stored());
     }

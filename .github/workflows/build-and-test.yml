@@ -1,3 +1,6 @@
+# Shared by every Crucible API repository (agent-docs/api-testing/build-and-test.yml). sync.sh fills in
+# the test project's directory and assembly name and compares the rest byte for byte; do not edit in a
+# repo.
 name: Build and Test
 
 # Pull requests validate proposed changes. Pushes to main verify the result after merge.
@@ -44,7 +47,7 @@ jobs:
       # Testcontainers starts and disposes the PostgreSQL container itself, so this job
       # intentionally has no `services: postgres:` block.
       #
-      # xUnit.DiagnosticMessages surfaces DatabaseFixture's provider banner. Without it the VSTest
+      # xUnit.DiagnosticMessages surfaces the provider banner PostgresTestDatabase prints. Without it the VSTest
       # bridge discards the test host's stdout and the log never records which database the run
       # actually used. `tee` keeps it for the assertion in the next step.
       #
@@ -55,7 +58,7 @@ jobs:
       - name: Test
         run: |
           set -o pipefail
-          dotnet test --no-build --logger "trx;LogFileName=test-results.trx" \
+          dotnet test Player.Api.Tests --no-build --logger "trx;LogFileName=test-results.trx" \
             -- xUnit.DiagnosticMessages=true | tee "$RUNNER_TEMP/test.log"
 
       # This independently checks the provider the suite reported, so a future harness change cannot

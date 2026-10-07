@@ -1,10 +1,21 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
+// Shared by every Crucible API test suite (agent-docs/api-testing). Do not edit in a repo.
+#nullable disable
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
+using NSubstitute;
+using Xunit;
 
-namespace Player.Api.Tests.Support;
+namespace Crucible.Api.Testing;
 
 /// <summary>
 /// The connection-scoped state SignalR sets on a hub before invoking a method: who is calling, over which
@@ -22,19 +33,36 @@ public sealed class HubHarness
 
     private readonly Dictionary<string, IClientProxy> _groups = [];
 
-    public HubHarness(Guid? userId = null)
+    /// <param name="userId">The caller's id, the <c>sub</c> claim. A new one when omitted.</param>
+    /// <param name="user">
+    /// The caller, when a hub method reads more than its id (permission claims from the app's
+    /// <c>ClaimsPrincipalBuilder</c>). By default an authenticated principal with <c>sub</c> and
+    /// <c>name</c> claims.
+    /// </param>
+    /// <param name="connectionId">
+    /// The connection's id, <see cref="ConnectionId"/> by default; a test of two connections of one user
+    /// builds a harness per connection with ids of its own.
+    /// </param>
+    public HubHarness(Guid? userId = null, ClaimsPrincipal user = null, string connectionId = ConnectionId)
     {
         UserId = userId ?? Guid.NewGuid();
+        User = user ?? new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("sub", UserId.ToString()), new Claim("name", "Test User")], "Test"));
 
         Clients.Caller.Returns(Caller);
         Clients.Group(Arg.Any<string>()).Returns(call => Group(call.Arg<string>()));
+        Clients.Groups(Arg.Any<IReadOnlyList<string>>())
+            .Returns(call => new FanOutProxy([.. call.Arg<IReadOnlyList<string>>().Select(Group)]));
 
-        Context.ConnectionId.Returns(ConnectionId);
+        Context.ConnectionId.Returns(connectionId);
         Context.Items.Returns(Items);
-        Context.User.Returns(new ClaimsPrincipalBuilder().WithUserId(UserId).Build());
+        Context.User.Returns(User);
     }
 
     public Guid UserId { get; }
+
+    /// <summary>The principal <c>Context.User</c> answers with.</summary>
+    public ClaimsPrincipal User { get; }
 
     public IHubCallerClients Clients { get; } = Substitute.For<IHubCallerClients>();
 
@@ -46,7 +74,7 @@ public sealed class HubHarness
     public HubCallerContext Context { get; } = Substitute.For<HubCallerContext>();
 
     /// <summary>
-    /// Per-connection state that outlives a single hub method — <c>ViewHub</c> keeps its presence id here so
+    /// Per-connection state that outlives a single hub method — a hub can keep, say, a presence id here so
     /// that disconnecting can undo what joining did.
     /// </summary>
     /// <remarks>
@@ -76,6 +104,15 @@ public sealed class HubHarness
         return proxy;
     }
 
+    /// <summary>
+    /// The groups the hub added a connection to (<c>Groups.AddToGroupAsync</c>), in order. The connection
+    /// id each was added for is in <see cref="Groups"/>' received calls.
+    /// </summary>
+    public IReadOnlyList<string> JoinedGroups => GroupChanges(nameof(IGroupManager.AddToGroupAsync));
+
+    /// <summary>The groups the hub removed a connection from (<c>Groups.RemoveFromGroupAsync</c>), in order.</summary>
+    public IReadOnlyList<string> LeftGroups => GroupChanges(nameof(IGroupManager.RemoveFromGroupAsync));
+
     /// <summary>The single argument sent to <paramref name="method"/>, or a failure if it was not sent once.</summary>
     public static T Sent<T>(IClientProxy proxy, string method)
     {
@@ -89,10 +126,30 @@ public sealed class HubHarness
         Assert.Empty(Sends(proxy, method));
     }
 
+    private IReadOnlyList<string> GroupChanges(string method) =>
+        [.. Groups.ReceivedCalls()
+            .Where(x => x.GetMethodInfo().Name == method)
+            .Select(x => (string)x.GetArguments()[1])];
+
     private static IEnumerable<object[]> Sends(IClientProxy proxy, string method) =>
         proxy.ReceivedCalls()
             .Where(x => x.GetMethodInfo().Name == nameof(IClientProxy.SendCoreAsync))
             .Select(x => x.GetArguments())
             .Where(x => (string)x[0] == method)
             .Select(x => (object[])x[1]);
+
+    /// <summary>
+    /// A send to <c>Clients.Groups(list)</c>, passed to each group's proxy, which is where SignalR
+    /// delivers it, so <see cref="Sent{T}"/> reads it from the group a test names.
+    /// </summary>
+    private sealed class FanOutProxy(IReadOnlyList<IClientProxy> proxies) : IClientProxy
+    {
+        public async Task SendCoreAsync(string method, object[] args, CancellationToken cancellationToken = default)
+        {
+            foreach (var proxy in proxies)
+            {
+                await proxy.SendCoreAsync(method, args, cancellationToken);
+            }
+        }
+    }
 }

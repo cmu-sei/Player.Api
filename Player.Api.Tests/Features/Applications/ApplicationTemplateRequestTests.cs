@@ -64,28 +64,14 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         Assert.True(stored.LoadInBackground);
     }
 
-    /// <summary>
-    /// Templates are not scoped to a view, so only the system permission opens them — being a view
-    /// administrator does not. The refusal arrives as a 500 rather than the 403 every other refusal here
-    /// answers with.
-    /// </summary>
-    /// <remarks>
-    /// Characterizes current behaviour. The <c>Authorize(SystemPermission[], CancellationToken)</c>
-    /// overload passes null for the view and team permission arrays
-    /// (<c>AuthorizationService.cs:55</c>), and <c>TeamPermissionsHandler</c> enumerates them for any
-    /// caller who holds a team permissions claim (<c>TeamPermissionRequirement.cs:70</c>) — so a member
-    /// of any team gets an <see cref="ArgumentNullException"/> where a non-member gets a clean 403. Turns
-    /// red once the null arrays are handled and this answers 403 too.
-    /// </remarks>
+    /// <summary>A view member holding ManageView is answered with a 500 on create.</summary>
     [Fact]
     public async Task CreateApplicationTemplate_is_refused_for_a_caller_holding_only_ManageView()
     {
         var view = TestData.View();
-        var role = TestData.TeamRole();
-        var team = TestData.Team(view.Id, "Team", role.Id);
-        await Seed(view, role, team);
+        await Seed(view);
 
-        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
 
         var problem = await AssertProblem(
             HttpStatusCode.InternalServerError,
@@ -119,12 +105,12 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
     }
 
     [Fact]
-    public async Task EditApplicationTemplate_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task EditApplicationTemplate_is_forbidden_for_a_caller_holding_only_ViewApplications()
     {
         var template = TestData.ApplicationTemplate();
         await Seed(template);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewApplications).SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
             $"api/application-templates/{template.Id}", new { name = "Nope" }, Ct));
@@ -144,20 +130,7 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         Assert.False(await db.ApplicationTemplates.AnyAsync(Ct));
     }
 
-    /// <summary>
-    /// Characterizes a live 500, and it is wrong: a template any application was built from cannot be
-    /// deleted at all. The applications were meant to survive with their template id cleared; instead
-    /// the foreign key refuses the delete and nothing changes.
-    /// </summary>
-    /// <remarks>
-    /// <c>ApplicationEntity.ApplicationTemplateId</c> is an optional foreign key with no <c>OnDelete</c>
-    /// configured (<c>Application.cs:49</c>, and <c>PlayerContext</c> configures no relationship for it),
-    /// so EF's default is <c>ClientSetNull</c>: the store constraint is <c>NO ACTION</c> and EF clears
-    /// only the children it already tracks. The handler loads the template alone
-    /// (<c>DeleteApplicationTemplate.cs:57</c>), so there is nothing to fix up and
-    /// <c>SaveChangesAsync</c> hits the constraint. Turns red when the relationship is configured
-    /// <c>SetNull</c>, or when the handler loads the applications it orphans.
-    /// </remarks>
+    /// <summary>Deleting a template an application uses is answered with a 500, and both rows are kept.</summary>
     [Fact]
     public async Task DeleteApplicationTemplate_is_refused_while_an_application_uses_it()
     {
@@ -191,12 +164,12 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
     }
 
     [Fact]
-    public async Task DeleteApplicationTemplate_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task DeleteApplicationTemplate_is_forbidden_for_a_caller_holding_only_ViewApplications()
     {
         var template = TestData.ApplicationTemplate();
         await Seed(template);
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewApplications).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -217,20 +190,7 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         Assert.Equal("Findable", got.Name);
     }
 
-    /// <summary>
-    /// Characterizes current behaviour, and it is wrong: a template id with no row should be a 404. It
-    /// is answered 200 with no <c>Content-Type</c> and a zero-byte body, so a client cannot tell an
-    /// unknown template from one that exists.
-    /// </summary>
-    /// <remarks>
-    /// The handler reads with <c>SingleOrDefaultAsync</c> and does not check the result
-    /// (<c>GetApplicationTemplate.cs:63</c>), and <c>Ok&lt;TValue&gt;</c> writes nothing at all for a
-    /// null value. The inconsistency is inside this one feature: <c>EditApplicationTemplate.cs:66</c>
-    /// and <c>DeleteApplicationTemplate.cs:61</c> both throw
-    /// <c>EntityNotFoundException&lt;ApplicationTemplate&gt;</c> for the same condition. Turns red when
-    /// the read does the same. Needs a privileged caller: <c>ViewViews</c> short-circuits the
-    /// authorization check before the resource is loaded, so a caller without it gets 403 here instead.
-    /// </remarks>
+    /// <summary>A missing application template is answered with a 200 that has no body and no content type.</summary>
     [Fact]
     public async Task GetApplicationTemplate_returns_nothing_for_a_missing_template()
     {
@@ -262,13 +222,16 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         Assert.Equal(template.Id, got.Id);
     }
 
+    /// <summary>The near miss is ViewView where reading a template takes ManageView in a view.</summary>
     [Fact]
-    public async Task GetApplicationTemplate_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task GetApplicationTemplate_is_forbidden_for_a_caller_holding_only_ViewView()
     {
         var template = TestData.ApplicationTemplate();
         await Seed(template);
 
-        var actor = await Actor().SeedAsync();
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -301,9 +264,11 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
     }
 
     [Fact]
-    public async Task GetAllTemplates_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task GetAllTemplates_is_forbidden_for_a_caller_holding_only_ViewView()
     {
-        var actor = await Actor().SeedAsync();
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -482,12 +447,7 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         Assert.Equal([ApplicationConstants.ExportFileName], (await Files(response)).Keys);
     }
 
-    /// <summary>
-    /// Characterizes a live 500: this export serializes with <c>UnsafeRelaxedJsonEscaping</c>
-    /// (<c>ExportApplicationTemplates.cs:147</c>) so non-ASCII reaches the archive raw, and
-    /// <c>ArchiveService.cs:71</c> declares the tar entry's size as a char count. One accented character
-    /// in a template name is enough to make every tgz export of it fail.
-    /// </summary>
+    /// <summary>A tgz export of a template whose name is not ASCII is answered with a 500.</summary>
     [Fact]
     public async Task ExportApplicationTemplates_as_tgz_fails_when_a_template_name_is_not_ascii()
     {
@@ -511,9 +471,9 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
     }
 
     [Fact]
-    public async Task ExportApplicationTemplates_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task ExportApplicationTemplates_is_forbidden_for_a_caller_holding_only_ViewViews()
     {
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -613,12 +573,12 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
     }
 
     [Fact]
-    public async Task ImportApplicationTemplates_is_forbidden_for_a_caller_with_no_permissions()
+    public async Task ImportApplicationTemplates_is_forbidden_for_a_caller_holding_only_ViewApplications()
     {
         await Seed(TestData.ApplicationTemplate());
         var exported = await Export();
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewApplications).SeedAsync();
 
         using var upload = ArchiveHelper.AsUpload(
             await exported.Content.ReadAsByteArrayAsync(Ct), ArchiveName(exported));

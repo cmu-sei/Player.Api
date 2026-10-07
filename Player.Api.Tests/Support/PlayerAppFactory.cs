@@ -47,7 +47,7 @@ namespace Player.Api.Tests.Support;
 /// the collaborators that leave the process.
 /// </para>
 /// </remarks>
-public sealed class PlayerAppFactory : WebApplicationFactory<Program>
+public sealed class PlayerAppFactory : WebApplicationFactory<Program>, ITestHttpHost
 {
     /// <summary>
     /// The directory <c>FileService</c> writes uploads to, for tests that assert on what reached disk.
@@ -143,24 +143,11 @@ public sealed class PlayerAppFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Points <see cref="PlayerContext"/> at the database of the test making the request.
+    /// Points <see cref="PlayerContext"/> at the database of the test making the request, through the
+    /// shared <see cref="TestDatabaseScope"/>.
     /// </summary>
-    /// <remarks>
-    /// The scope is passed as the context's <c>ServiceProvider</c>, which is what the application's own
-    /// registration does, so <c>PublishEventsAsync</c> resolves the request's real mediator and entity
-    /// events reach the real handlers. The factory registration goes too: nothing in the application
-    /// resolves it, and leaving it would let a stray resolution reach a pooled context bound to a
-    /// database no test owns.
-    /// </remarks>
-    private static void AddPerTestDatabase(IServiceCollection services)
-    {
-        services.RemoveAll<PlayerContext>();
-        services.RemoveAll<IDbContextFactory<PlayerContext>>();
-
-        services.AddScoped(provider => TestDatabaseScope
-            .Resolve(provider.GetRequiredService<IHttpContextAccessor>().HttpContext)
-            .CreateContext(provider));
-    }
+    private static void AddPerTestDatabase(IServiceCollection services) =>
+        TestDatabaseScope.ReplaceRegistration<PlayerContext>(services);
 
     /// <summary>
     /// The collaborators that leave the process. Each is something a test can assert against.
@@ -190,25 +177,22 @@ public sealed class PlayerAppFactory : WebApplicationFactory<Program>
         services.AddSingleton<IHttpClientFactory>(new StubHttpClientFactory(OutboundHttp));
     }
 
-    /// <summary>
-    /// Hands out clients over <see cref="OutboundHttp"/>. Written out rather than substituted, because
-    /// every registration on a substitute is shared by the whole run.
-    /// </summary>
+    private readonly System.Threading.Lock _creating = new();
+    private Microsoft.Extensions.Hosting.IHost _host;
+
+    /// <summary>Builds the one host, under a lock, and hands it to every caller.</summary>
     /// <remarks>
-    /// A substitute here has to be told what to return, and a test that says so is reconfiguring a
-    /// singleton while other tests are mid-request. The value it set is then the value every test gets
-    /// until the next one says otherwise, and NSubstitute's own bookkeeping is not built for two threads
-    /// arranging the same call. Both hazards are gone once the answer is fixed at construction, and
-    /// nothing was asserted against the factory itself — tests assert on the handler.
+    /// <c>WebApplicationFactory.StartServer</c> takes no lock, so two tests asking for their first client at
+    /// once would each build a host (each running <c>Program.Main</c>), and the run would continue on two
+    /// of them. Every way into the host (<c>CreateClient</c> in any overload, <c>Services</c>,
+    /// <c>Server</c>) goes through <c>StartServer</c> to here, so this lock covers them all.
     /// </remarks>
-    private sealed class StubHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+    protected override Microsoft.Extensions.Hosting.IHost CreateHost(Microsoft.Extensions.Hosting.IHostBuilder builder)
     {
-        /// <remarks>
-        /// A client per call, and the handler outlives it: a caller that wraps its client in
-        /// <c>using</c> would otherwise dispose the run's only handler and every later test would fetch
-        /// nothing.
-        /// </remarks>
-        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+        lock (_creating)
+        {
+            return _host ??= base.CreateHost(builder);
+        }
     }
 
     public override async ValueTask DisposeAsync()

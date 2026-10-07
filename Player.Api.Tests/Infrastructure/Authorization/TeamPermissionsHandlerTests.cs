@@ -230,13 +230,10 @@ public class TeamPermissionsHandlerTests
 
     // ---- Null permission arrays -----------------------------------------------------------------
     //
-    // TeamPermissionRequirement declares every permission array as optional with a null default, and
-    // AuthorizationService takes it up on that — its system-permission-only overload constructs the
-    // requirement with both arrays null. A user who holds any team claim but lacks the required system
-    // permission then reaches HasRequiredPermissions with a null array, where Enumerable.Any throws.
+    // TeamPermissionRequirement declares every permission array as optional with a null default.
 
     [Fact]
-    public async Task Throws_rather_than_declining_when_no_permissions_are_required()
+    public async Task Throws_for_a_team_claim_when_no_permissions_are_required()
     {
         var user = new ClaimsPrincipalBuilder()
             .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.ViewTeam])
@@ -247,7 +244,7 @@ public class TeamPermissionsHandlerTests
     }
 
     [Fact]
-    public async Task Throws_rather_than_declining_when_only_team_permissions_are_required()
+    public async Task Throws_for_a_team_claim_when_only_team_permissions_are_required()
     {
         var user = new ClaimsPrincipalBuilder()
             .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.ViewTeam])
@@ -263,7 +260,7 @@ public class TeamPermissionsHandlerTests
     }
 
     [Fact]
-    public async Task Throws_rather_than_declining_when_only_view_permissions_are_required()
+    public async Task Throws_for_a_team_claim_when_only_view_permissions_are_required()
     {
         var user = new ClaimsPrincipalBuilder()
             .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.ViewTeam])

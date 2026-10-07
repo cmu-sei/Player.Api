@@ -74,6 +74,20 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             "api/users", new { id = Guid.NewGuid(), name = "Nope" }, Ct));
     }
 
+    /// <summary>A caller holding only ManageUsers creates a user with the Administrator role.</summary>
+    [Fact]
+    public async Task Create_lets_a_caller_holding_only_ManageUsers_create_an_Administrator()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageUsers).SeedAsync();
+        var userId = Guid.NewGuid();
+
+        await AssertStatus(HttpStatusCode.Created, await Client(actor).PostAsJsonAsync(
+            "api/users", new { id = userId, name = "Promoted", roleId = TestData.Roles.Administrator }, Ct));
+
+        var stored = await ReadBack(db => db.Users.SingleAsync(x => x.Id == userId, Ct));
+        Assert.Equal(TestData.Roles.Administrator, stored.RoleId);
+    }
+
     // ---- Get / GetAll ---------------------------------------------------------------------------
 
     [Fact]
@@ -109,15 +123,7 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal("Me", got.Name);
     }
 
-    /// <summary>
-    /// The fallback branch: a caller with no user-level permission may still read a user they share a
-    /// team with, provided they hold <c>ViewTeam</c> on it.
-    /// </summary>
-    /// <remarks>
-    /// The fallback's empty required-system-permission
-    /// array succeeds for every caller, so the <c>ViewTeam</c> grant is not load-bearing. It goes red
-    /// when the fallback stops consulting the target user's teams at all.
-    /// </remarks>
+    /// <summary>A caller holding ViewTeam on a team the user belongs to reads the user.</summary>
     [Fact]
     public async Task Get_is_allowed_for_a_caller_holding_ViewTeam_on_a_team_the_user_belongs_to()
     {
@@ -137,13 +143,37 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal("Teammate", got.Name);
     }
 
+    /// <summary>A caller with no rows reads a user who is on a team the caller is not on.</summary>
     [Fact]
-    public async Task Get_is_forbidden_for_a_caller_sharing_no_team_with_the_user()
+    public async Task Get_is_allowed_for_a_caller_sharing_no_team_with_a_user_who_is_on_a_team()
     {
-        var user = TestData.User();
-        await Seed(user);
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Team");
+        var subject = TestData.User(name: "Stranger");
+        var viewMembership = TestData.ViewMembership(view.Id, subject.Id);
+        await Seed(
+            view, team, subject, viewMembership,
+            TestData.TeamMembership(team.Id, subject.Id, viewMembership.Id));
 
         var actor = await Actor().SeedAsync();
+
+        var got = await ReadAsync<User>(await Client(actor).GetAsync($"api/users/{subject.Id}", Ct));
+
+        Assert.Equal("Stranger", got.Name);
+    }
+
+    /// <summary>
+    /// The near miss is <c>ViewTeam</c> on a team of its own: the team fallback has no team of the user's
+    /// to consult, so only the <c>ViewUsers</c>, <c>ViewView</c> and <c>ManageTeam</c> check decides.
+    /// </summary>
+    [Fact]
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ViewTeam_when_the_user_is_on_no_team()
+    {
+        var view = TestData.View();
+        var user = TestData.User();
+        await Seed(view, user);
+
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
@@ -165,10 +195,33 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Contains(users, x => x.Id == Root.Id);
     }
 
+    /// <summary>A view member holding ManageView is answered with a 500 when listing users.</summary>
     [Fact]
-    public async Task GetAll_is_forbidden_without_ViewUsers()
+    public async Task GetAll_fails_for_a_caller_holding_only_ManageView()
     {
-        var actor = await Actor().SeedAsync();
+        var view = TestData.View();
+        await Seed(view);
+
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        var problem = await AssertProblem(
+            HttpStatusCode.InternalServerError,
+            await Client(actor).GetAsync("api/users", Ct));
+
+        Assert.Equal("Value cannot be null. (Parameter 'source')", problem.Detail);
+    }
+
+    /// <summary>
+    /// The near miss is <c>ViewView</c> in a view: the route admits <c>ManageView</c> in any view, not
+    /// read access to one.
+    /// </summary>
+    [Fact]
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/users", Ct));
     }
@@ -262,6 +315,19 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
             $"api/users/{user.Id}", new { name = "Nope" }, Ct));
+    }
+
+    /// <summary>A caller holding only ManageUsers gives itself the Administrator role.</summary>
+    [Fact]
+    public async Task Edit_lets_a_caller_holding_only_ManageUsers_give_itself_the_Administrator_role()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageUsers).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/users/{actor.Id}", new { name = actor.Name, roleId = TestData.Roles.Administrator }, Ct));
+
+        var stored = await ReadBack(db => db.Users.SingleAsync(x => x.Id == actor.Id, Ct));
+        Assert.Equal(TestData.Roles.Administrator, stored.RoleId);
     }
 
     // ---- Delete ---------------------------------------------------------------------------------
@@ -368,17 +434,7 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             (await db.ViewMemberships.SingleAsync(x => x.Id == viewMembership.Id, Ct)).PrimaryTeamMembershipId);
     }
 
-    /// <summary>
-    /// Adding a user to a team they are already on is a server error: the membership is inserted without
-    /// looking and <c>(TeamId, UserId)</c> is uniquely indexed. Wrong — a repeated add is what a retry or a
-    /// re-run of a roster import produces, and 500 tells the caller nothing about which of the two ids was
-    /// the problem.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the handler checks the membership first, as a 409 or as a no-op. The membership count
-    /// is asserted because the rollback is what keeps the duplicate out; the claims cache is not, since the
-    /// refresh never runs.
-    /// </remarks>
+    /// <summary>Adding a user to a team they are already on is a 500, and the one membership stays.</summary>
     [Fact]
     public async Task AddToTeam_reports_a_membership_the_user_already_has_as_a_server_error()
     {
@@ -596,11 +652,7 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal("Something happened", Assert.IsType<Notification>(broadcast.Argument).Text);
     }
 
-    /// <summary>
-    /// Rejected before anything is persisted, which is right — but <c>ArgumentException</c> is not an
-    /// <c>IApiException</c>, so the caller's own mistake is answered with a 500.
-    /// </summary>
-    /// <remarks>Turns red when the handler throws something that maps to a client error.</remarks>
+    /// <summary>A user notification with no text is answered with a 500 and nothing is stored.</summary>
     [Fact]
     public async Task SendNotification_rejects_a_notification_with_no_text()
     {
@@ -620,27 +672,15 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.False(await db.Notifications.AnyAsync(Ct));
     }
 
-    /// <summary>
-    /// This handler authorizes against <c>UserEntity</c>, which
-    /// <c>AuthorizationService.GetResourceResult</c> does not handle, so every caller without
-    /// <c>ManageViews</c> gets a 500 rather than a decision. The view administrators
-    /// the call's <c>ManageView</c> argument was written for are refused along with everyone else.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when <c>GetResourceResult</c> learns <c>UserEntity</c>, or the call passes a type it
-    /// already knows. The <c>detail</c> is asserted because it is what proves the 500 came from the
-    /// unhandled type and not from somewhere else in the request.
-    /// </remarks>
+    /// <summary>A user notification from a caller without ManageViews is answered with a 500.</summary>
     [Fact]
     public async Task SendNotification_is_a_server_error_for_a_caller_without_ManageViews()
     {
         var view = TestData.View();
-        var role = TestData.TeamRole();
-        var team = TestData.Team(view.Id, "Team", role.Id);
         var user = TestData.User();
-        await Seed(view, role, team, user, TestData.ViewMembership(view.Id, user.Id));
+        await Seed(view, user, TestData.ViewMembership(view.Id, user.Id));
 
-        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
 
         var problem = await AssertProblem(
             HttpStatusCode.InternalServerError,

@@ -21,6 +21,8 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="NSubstitute" />
+    <!-- The shared harness in Support/Shared (agent-docs/api-testing). -->
+    <Using Include="Crucible.Api.Testing" />
   </ItemGroup>
 
   <ItemGroup>

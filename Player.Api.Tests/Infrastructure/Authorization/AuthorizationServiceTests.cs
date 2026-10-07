@@ -245,14 +245,9 @@ public class AuthorizationServiceTests(DatabaseFixture fixture) : DatabaseTestBa
         Assert.False(granted);
     }
 
-    /// <summary>
-    /// Covers the null-array path at the level an endpoint reaches it: the system-permission-only
-    /// <c>Authorize</c> overload passes <see langword="null"/> for both permission arrays, so any user
-    /// holding a team claim arrives at <c>HasRequiredPermissions</c> with those nulls. The
-    /// handler-level counterparts are in <c>TeamPermissionsHandlerTests</c>.
-    /// </summary>
+    /// <summary>A team member without the system permission gets an ArgumentNullException from the system-only overload.</summary>
     [Fact]
-    public async Task Authorize_throws_rather_than_refusing_for_a_team_member_without_the_system_permission()
+    public async Task Authorize_throws_for_a_team_member_without_the_system_permission()
     {
         var user = new ClaimsPrincipalBuilder()
             .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.ViewTeam])

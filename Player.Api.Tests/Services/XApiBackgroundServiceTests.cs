@@ -273,12 +273,7 @@ public class XApiBackgroundServiceTests(DatabaseFixture fixture) : ServiceTestBa
         Assert.Equal([recentCompleted.Id], remaining.Select(x => x.Id));
     }
 
-    /// <summary>
-    /// A row is marked <c>Processing</c> before it is sent, so a process that dies mid-batch leaves it
-    /// there. Characterizes current behavior: the sweep <em>deletes</em> such a row rather than returning it to
-    /// the queue, so the statement is lost.
-    /// </summary>
-    /// <remarks>Turns red when cleanup returns the abandoned statement to the pending queue.</remarks>
+    /// <summary>Cleanup deletes a statement left Processing past the timeout and keeps one still in flight.</summary>
     [Fact]
     public async Task Cleanup_deletes_a_statement_left_processing_past_the_timeout()
     {

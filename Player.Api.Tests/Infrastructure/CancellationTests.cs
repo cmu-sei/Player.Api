@@ -10,10 +10,8 @@ using Player.Api.Tests.Support;
 namespace Player.Api.Tests.Infrastructure;
 
 /// <summary>
-/// What a cancelled token does to a request. The build makes the suite pass its own token to every awaited
-/// call it can (xUnit1051), and nothing before this file asked whether the application does the same. It
-/// often does not: thirty-four database calls across fourteen production files take no token, so a caller
-/// that has gone away is still queried for — and in one handler here, still written for.
+/// What a cancelled token does to a request: whether the application passes the caller's token on to the
+/// database, as the suite passes its own (xUnit1051).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -39,8 +37,7 @@ public class CancellationTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     // ---- Honoured -----------------------------------------------------------------------------------
 
     /// <summary>
-    /// The shape the rest of the API should have: the token reaches the query, so the work is abandoned
-    /// rather than done for nobody.
+    /// A read whose token reaches the query: the work is abandoned when the caller has gone away.
     /// </summary>
     [Fact]
     public async Task A_cancelled_read_is_abandoned()
@@ -66,14 +63,7 @@ public class CancellationTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
 
     // ---- Not honoured -------------------------------------------------------------------------------
 
-    /// <summary>
-    /// Characterizes current behavior. Neither the read nor the save in this handler takes the token
-    /// (<c>Features/Permissions/Requests/Edit.cs:61</c>, <c>:70</c>), and <c>Authorize</c> never looks at
-    /// it for a caller holding the system permission, so a cancelled edit is applied and committed. The
-    /// caller is gone by then and cannot be told either way, which is the part that matters: whether the
-    /// rename happened is not answerable from either end.
-    /// </summary>
-    /// <remarks>Turns red when the handler passes its token to the read and the save.</remarks>
+    /// <summary>A permission edit sent with a cancelled token is committed.</summary>
     [Fact]
     public async Task A_cancelled_permission_edit_is_committed_anyway()
     {
@@ -112,13 +102,7 @@ public class CancellationTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
             Ct));
     }
 
-    /// <summary>
-    /// Characterizes the same cancellation gap on the read side. <c>GetAsync</c> takes a token and hands it to the
-    /// permission check, then queries without it (<c>Services/FileService.cs:106-108</c>). The check does
-    /// not look at the token for a caller holding <c>ViewViews</c>, so the whole file table is read and
-    /// mapped for a caller that is no longer there.
-    /// </summary>
-    /// <remarks>Turns red when the query takes the token.</remarks>
+    /// <summary>A file listing requested with a cancelled token is served.</summary>
     [Fact]
     public async Task A_cancelled_file_listing_is_served_anyway()
     {
@@ -130,13 +114,7 @@ public class CancellationTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
         Assert.Equal("notes.txt", Assert.Single(files).Name);
     }
 
-    /// <summary>
-    /// Characterizes the same cancellation gap in the service that ignores the token in five separate reads
-    /// (<c>Services/NotificationService.cs:75</c>, <c>:84</c>, <c>:95</c>, <c>:106</c>, <c>:362</c>). This
-    /// one is also the least guarded: it runs no permission check at all, so the token is the only thing
-    /// that could have stopped it.
-    /// </summary>
-    /// <remarks>Turns red when the query takes the token.</remarks>
+    /// <summary>A view notification listing requested with a cancelled token is served.</summary>
     [Fact]
     public async Task A_cancelled_notification_listing_is_served_anyway()
     {

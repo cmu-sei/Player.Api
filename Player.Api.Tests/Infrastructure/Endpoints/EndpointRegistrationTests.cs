@@ -249,8 +249,7 @@ public class EndpointRegistrationTests(EndpointRouteTable table) : IClassFixture
     }
 
     /// <summary>
-    /// <c>IEndpoint.GroupEndpoints</c> drops the group name's last character rather than depluralising it,
-    /// so the tags only read correctly because every feature namespace happens to end in "s".
+    /// <c>IEndpoint.GroupEndpoints</c> takes the tag by dropping the group name's last character.
     /// </summary>
     [Fact]
     public void Grouping_takes_the_tag_by_dropping_the_last_character_of_the_group_name()

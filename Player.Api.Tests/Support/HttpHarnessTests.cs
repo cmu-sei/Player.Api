@@ -111,10 +111,6 @@ public class HttpHarnessTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// Entity events reach the application's real handlers: creating a view runs
     /// <c>ViewCreatedHandler</c>, which is only registered in the application's own container.
     /// </summary>
-    /// <remarks>
-    /// The webhook service is a run-wide substitute, so the assertion matches on a name unique to this
-    /// test rather than counting calls.
-    /// </remarks>
     [Fact]
     public async Task Entity_events_reach_the_real_handlers()
     {
