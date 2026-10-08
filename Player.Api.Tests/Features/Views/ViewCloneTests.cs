@@ -36,57 +36,77 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.True(clone.DateCreated > TestData.DefaultDateCreated);
     }
 
-    /// <summary>
-    /// This is wrong: a view id naming nothing should be a 404, and is a server error instead.
-    /// </summary>
-    /// <remarks>
-    /// <c>Clone.cs:75</c> loads the view with <c>SingleOrDefaultAsync</c> and <c>:77</c>
-    /// dereferences it unguarded, where every other handler in the feature throws
-    /// <c>EntityNotFoundException&lt;View&gt;</c>. Turns red when the null is checked.
-    /// </remarks>
     [Fact]
-    public async Task Cloning_a_view_that_does_not_exist_fails_instead_of_reporting_not_found()
+    public async Task Cloning_a_view_that_does_not_exist_reports_not_found()
     {
-        var problem = await AssertProblem(
-            HttpStatusCode.InternalServerError,
+        await AssertProblem(
+            HttpStatusCode.NotFound,
             await RootClient.PostAsJsonAsync($"api/views/{Guid.NewGuid()}/clone", new { }, Ct));
-
-        Assert.Equal("A server error occurred.", problem.Title);
-        Assert.Equal("Object reference not set to an instance of an object.", problem.Detail);
     }
 
     /// <summary>
-    /// This is wrong: <c>CreateViews</c> alone clones any view by id, and the 201 body hands the caller
-    /// the name and description of a view the same caller is forbidden to <c>Get</c>.
+    /// A clone copies every team, application and file, so <c>CreateViews</c> alone is not enough: the
+    /// caller must also be able to observe the source view.
     /// </summary>
-    /// <remarks>
-    /// <c>Clone.cs:61</c> authorizes on the system permission with empty view and team lists,
-    /// so nothing is scoped to the source view and nothing bounds how many copies one caller makes.
-    /// Turns red when a read check is added.
-    /// </remarks>
-    [Fact]
-    public async Task Cloning_is_allowed_for_a_caller_who_cannot_read_the_source_view()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cloning_is_forbidden_for_a_content_developer_who_cannot_read_the_source_view(bool isTemplate)
     {
         var view = TestData.View("Someone elses");
-        view.Description = "Not for you";
+        view.IsTemplate = isTemplate;
         await Seed(view, TestData.Team(view.Id, "Alpha"));
 
-        var actor = await Actor().WithSystemPermissions(SystemPermission.CreateViews).SeedAsync();
+        var actor = await Actor().WithRole(TestData.Roles.ContentDeveloper).SeedAsync();
 
-        // The inconsistency is the finding, so the refusal this caller gets from Get is arranged
-        // alongside the clone they are allowed rather than left to another test.
         await AssertProblem(
             HttpStatusCode.Forbidden,
-            await Client(actor).GetAsync($"api/views/{view.Id}", Ct));
+            await Client(actor).PostAsJsonAsync($"api/views/{view.Id}/clone", new { }, Ct));
+
+        await using var db = NewContext();
+        Assert.Equal(1, await db.Views.CountAsync(Ct));
+    }
+
+    /// <summary>
+    /// Membership alone is not enough either: a plain member sees only their own team.
+    /// </summary>
+    [Fact]
+    public async Task Cloning_is_forbidden_for_a_plain_member_of_the_source_view()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        await Seed(view, role, team);
+
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.CreateViews)
+            .OnTeam(team)
+            .SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).PostAsJsonAsync($"api/views/{view.Id}/clone", new { }, Ct));
+    }
+
+    [Theory]
+    [InlineData(ViewPermission.ViewView)]
+    [InlineData(ViewPermission.ManageView)]
+    public async Task Cloning_is_allowed_for_a_caller_who_can_observe_the_source_view(ViewPermission permission)
+    {
+        var view = TestData.View("Source");
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        await Seed(view, role, team);
+
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.CreateViews)
+            .OnTeam(team, viewPermissions: [permission])
+            .SeedAsync();
 
         var clone = await ReadAsync<View>(await Client(actor).PostAsJsonAsync(
             $"api/views/{view.Id}/clone", new { }, Ct));
 
-        Assert.Equal("Clone of Someone elses", clone.Name);
-        Assert.Equal("Not for you", clone.Description);
-
-        await using var db = NewContext();
-        Assert.Equal("Alpha", (await db.Teams.SingleAsync(x => x.ViewId == clone.Id, Ct)).Name);
+        Assert.Equal("Clone of Source", clone.Name);
     }
 
     // ---- Applications ---------------------------------------------------------------------------

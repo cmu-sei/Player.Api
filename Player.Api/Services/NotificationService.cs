@@ -32,7 +32,7 @@ namespace Player.Api.Services
         Task<ViewModels.Notification> PostToTeam(Guid teamId, ViewModels.Notification incomingData, CancellationToken ct);
         Task<ViewModels.Notification> JoinUser(Guid viewId, Guid userId, CancellationToken ct);
         Task<ViewModels.Notification> PostToUser(Guid viewId, Guid userId, ViewModels.Notification incomingData, CancellationToken ct);
-        Task<bool> DeleteAsync(int key, CancellationToken ct);
+        Task<bool> DeleteAsync(Guid viewId, int key, CancellationToken ct);
         Task<bool> DeleteViewNotificationsAsync(Guid viewId, CancellationToken ct);
     }
 
@@ -100,10 +100,22 @@ namespace Player.Api.Services
 
         public async Task<IEnumerable<ViewModels.Notification>> GetByUserAsync(Guid viewId, Guid userId, CancellationToken ct)
         {
-            if (!_authorizationService.GetAuthorizedViewIds().Contains(viewId) && _user.GetId() != userId)
+            // A user reads their own conversation within the view, even after leaving it; anyone who can
+            // observe the whole view reads any of them. Cheapest check first.
+            var allowed =
+                _user.GetId() == userId ||
+                await _authorizationService.Authorize<ViewEntity>(
+                    viewId,
+                    [SystemPermission.ViewViews, SystemPermission.ManageViews],
+                    [ViewPermission.ViewView, ViewPermission.ManageView],
+                    [],
+                    ct);
+
+            if (!allowed)
                 throw new ForbiddenException();
+
             // get all notifications for the selected view-user, not including the System notifications
-            var items = await _context.Notifications.Where(x => x.ToId == userId && x.ToType == NotificationType.User && x.Priority != NotificationPriority.System).OrderByDescending(y => y.BroadcastTime).ToListAsync();
+            var items = await _context.Notifications.Where(x => x.ViewId == viewId && x.ToId == userId && x.ToType == NotificationType.User && x.Priority != NotificationPriority.System).OrderByDescending(y => y.BroadcastTime).ToListAsync();
             // Databases do not preserve DateTimeKind, so we need to add UTC kind
             items.ForEach(item => item.BroadcastTime = DateTime.SpecifyKind(item.BroadcastTime, DateTimeKind.Utc));
             return _mapper.Map<IEnumerable<ViewModels.Notification>>(items);
@@ -362,9 +374,16 @@ namespace Player.Api.Services
             return returnNotification;
         }
 
-        public async Task<bool> DeleteAsync(int key, CancellationToken ct)
+        public async Task<bool> DeleteAsync(Guid viewId, int key, CancellationToken ct)
         {
-            var notificationToDelete = await _context.Notifications.SingleOrDefaultAsync(n => n.Key == key, ct);
+            // Scoped to the view the caller was authorized for: keys are sequential, so an unscoped lookup
+            // would let a manager of one view delete another view's notifications. User notifications carry
+            // the view; team notifications carry only the team.
+            var viewTeamIds = _context.Teams.Where(t => t.ViewId == viewId).Select(t => t.Id);
+            var notificationToDelete = await _context.Notifications.SingleOrDefaultAsync(n => n.Key == key &&
+                ((n.ToType == NotificationType.View && n.ToId == viewId) ||
+                 n.ViewId == viewId ||
+                 (n.ToType == NotificationType.Team && viewTeamIds.Contains(n.ToId))), ct);
 
             if (notificationToDelete == null)
                 throw new EntityNotFoundException<ViewModels.Notification>();
