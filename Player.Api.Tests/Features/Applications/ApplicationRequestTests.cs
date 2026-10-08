@@ -111,6 +111,41 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     }
 
     /// <summary>
+    /// The system tier of the gate: <c>ManageApplications</c> alone, with no membership in the view, adds an
+    /// application to any view.
+    /// </summary>
+    [Fact]
+    public async Task Create_is_allowed_for_a_caller_holding_only_ManageApplications()
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageApplications).SeedAsync();
+
+        var created = await ReadAsync<Application>(await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/applications", new { name = "By An Application Manager" }, Ct));
+
+        var stored = await ReadBack(db => db.Applications.SingleAsync(x => x.Id == created.Id, Ct));
+        Assert.Equal("By An Application Manager", stored.Name);
+        Assert.Equal(view.Id, stored.ViewId);
+    }
+
+    /// <summary>The near miss of the system tier is ViewApplications, which reads applications but does not create them.</summary>
+    [Fact]
+    public async Task Create_is_forbidden_for_a_caller_holding_only_ViewApplications()
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewApplications).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/applications", new { name = "Nope" }, Ct));
+
+        Assert.False(await ReadBack(db => db.Applications.AnyAsync(x => x.ViewId == view.Id, Ct)));
+    }
+
+    /// <summary>
     /// The route carries only the id, so the body has to name the <c>viewId</c> as well: an edit replaces
     /// the whole resource, including which view it belongs to.
     /// </summary>
@@ -158,6 +193,43 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
             $"api/applications/{application.Id}", new { viewId = view.Id, name = "Nope" }, Ct));
+    }
+
+    /// <summary>
+    /// The system tier of the gate: <c>ManageApplications</c> alone, with no membership in the view, edits
+    /// an application of any view.
+    /// </summary>
+    [Fact]
+    public async Task Edit_is_allowed_for_a_caller_holding_only_ManageApplications()
+    {
+        var view = TestData.View();
+        var application = TestData.Application(view.Id, "Before");
+        await Seed(view, application);
+
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageApplications).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/applications/{application.Id}", new { viewId = view.Id, name = "After" }, Ct));
+
+        var stored = await ReadBack(db => db.Applications.SingleAsync(x => x.Id == application.Id, Ct));
+        Assert.Equal("After", stored.Name);
+        Assert.Equal(view.Id, stored.ViewId);
+    }
+
+    /// <summary>The near miss of the system tier is ViewApplications, which reads applications but does not edit them.</summary>
+    [Fact]
+    public async Task Edit_is_forbidden_for_a_caller_holding_only_ViewApplications()
+    {
+        var view = TestData.View();
+        var application = TestData.Application(view.Id, "Before");
+        await Seed(view, application);
+
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewApplications).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/applications/{application.Id}", new { viewId = view.Id, name = "Nope" }, Ct));
+
+        Assert.Equal("Before", await ReadBack(db => db.Applications.Where(x => x.Id == application.Id).Select(x => x.Name).SingleAsync(Ct)));
     }
 
     /// <summary>A caller holding ManageView on one view moves another view's application into it.</summary>
@@ -233,6 +305,43 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         await AssertProblem(
             HttpStatusCode.Forbidden,
             await Client(actor).DeleteAsync($"api/applications/{application.Id}", Ct));
+    }
+
+    /// <summary>
+    /// The system tier of the gate: <c>ManageApplications</c> alone, with no membership in the view, deletes
+    /// an application of any view.
+    /// </summary>
+    [Fact]
+    public async Task Delete_is_allowed_for_a_caller_holding_only_ManageApplications()
+    {
+        var view = TestData.View();
+        var application = TestData.Application(view.Id);
+        await Seed(view, application);
+
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageApplications).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await Client(actor).DeleteAsync($"api/applications/{application.Id}", Ct));
+
+        Assert.False(await ReadBack(db => db.Applications.AnyAsync(x => x.Id == application.Id, Ct)));
+    }
+
+    /// <summary>The near miss of the system tier is ViewApplications, which reads applications but does not delete them.</summary>
+    [Fact]
+    public async Task Delete_is_forbidden_for_a_caller_holding_only_ViewApplications()
+    {
+        var view = TestData.View();
+        var application = TestData.Application(view.Id);
+        await Seed(view, application);
+
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewApplications).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).DeleteAsync($"api/applications/{application.Id}", Ct));
+
+        Assert.True(await ReadBack(db => db.Applications.AnyAsync(x => x.Id == application.Id, Ct)));
     }
 
     // ---- Get / GetByView ------------------------------------------------------------------------
