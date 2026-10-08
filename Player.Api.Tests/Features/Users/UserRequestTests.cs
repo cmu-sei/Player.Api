@@ -692,10 +692,11 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
         var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
 
-        await AssertProblem(
+        var problem = await AssertProblem(
             HttpStatusCode.NotFound,
             await Client(actor).PostAsJsonAsync(
                 $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Nope" }, Ct));
+        Assert.Equal("User not found in this View.", problem.Title);
 
         await using var db = NewContext();
         Assert.False(await db.Notifications.AnyAsync(x => x.ToId == user.Id, Ct));

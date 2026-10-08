@@ -354,7 +354,7 @@ namespace Player.Api.Services
             // The recipient must belong to the view the caller was authorized for: managing one view does not
             // reach users outside it. An unknown user id is not found the same way.
             if (!await _context.ViewMemberships.AnyAsync(m => m.ViewId == viewId && m.UserId == userId, cancellationToken))
-                throw new EntityNotFoundException<Features.Users.User>();
+                throw new EntityNotFoundException<Features.Users.User>("User not found in this View.");
 
             var wasSuccess = true;
             var canPost = true;
