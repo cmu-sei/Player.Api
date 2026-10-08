@@ -677,6 +677,32 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
                 $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Nope" }, Ct));
     }
 
+    /// <summary>
+    /// Managing the route's view does not reach a user outside it: the recipient is not found there, and
+    /// nothing is stored or broadcast.
+    /// </summary>
+    [Fact]
+    public async Task SendNotification_is_not_found_for_a_user_outside_the_view()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var user = TestData.User();
+        await Seed(view, role, team, user);
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        var problem = await AssertProblem(
+            HttpStatusCode.NotFound,
+            await Client(actor).PostAsJsonAsync(
+                $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Nope" }, Ct));
+        Assert.Equal("User not found in this View.", problem.Title);
+
+        await using var db = NewContext();
+        Assert.False(await db.Notifications.AnyAsync(x => x.ToId == user.Id, Ct));
+        Assert.Empty(UserBroadcasts(view.Id, user.Id));
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
 
     /// <summary>
