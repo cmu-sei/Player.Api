@@ -48,13 +48,16 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// A clone copies every team, application and file, so <c>CreateViews</c> alone is not enough: the
     /// caller must also be able to observe the source view.
     /// </summary>
-    [Fact]
-    public async Task Cloning_is_forbidden_for_a_caller_who_cannot_read_the_source_view()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cloning_is_forbidden_for_a_content_developer_who_cannot_read_the_source_view(bool isTemplate)
     {
         var view = TestData.View("Someone elses");
+        view.IsTemplate = isTemplate;
         await Seed(view, TestData.Team(view.Id, "Alpha"));
 
-        var actor = await Actor().WithSystemPermissions(SystemPermission.CreateViews).SeedAsync();
+        var actor = await Actor().WithRole(TestData.Roles.ContentDeveloper).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,

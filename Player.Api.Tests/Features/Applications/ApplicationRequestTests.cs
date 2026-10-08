@@ -139,6 +139,20 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     }
 
     [Fact]
+    public async Task Edit_is_forbidden_for_a_view_manager_when_the_application_does_not_exist()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        await Seed(view, role, team);
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/applications/{Guid.NewGuid()}", new { name = "Ghost" }, Ct));
+    }
+
+    [Fact]
     public async Task Edit_is_forbidden_for_a_caller_with_no_permissions()
     {
         var view = TestData.View();
@@ -552,6 +566,21 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
             $"api/application-instances/{Guid.NewGuid()}",
             new { applicationId = application.Id },
             Ct));
+    }
+
+    [Fact]
+    public async Task EditApplicationInstance_is_forbidden_for_a_view_manager_when_the_instance_does_not_exist()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var application = TestData.Application(view.Id);
+        await Seed(view, role, team, application);
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/application-instances/{Guid.NewGuid()}", new { applicationId = application.Id }, Ct));
     }
 
     /// <summary>
