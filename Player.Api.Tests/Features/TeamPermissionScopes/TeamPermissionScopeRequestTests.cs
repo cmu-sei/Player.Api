@@ -301,4 +301,24 @@ public class TeamPermissionScopeRequestTests(DatabaseFixture fixture, PlayerAppF
             HttpStatusCode.Forbidden,
             await Client(actor).GetAsync($"api/teams/{target.Id}", Ct));
     }
+
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    /// <summary>The granting team's own role grants nothing, so ManageView on its view is the only grant in play.</summary>
+    [Fact]
+    public async Task Remove_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Granting", role.Id);
+        var target = TestData.Team(view.Id, "Target");
+        await Seed(view, role, team, target, TestData.TeamPermissionScope(team.Id, target.Id));
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).DeleteAsync(
+            $"api/teams/{team.Id}/scopes/{target.Id}", Ct));
+
+        Assert.False(await ReadBack(db => db.TeamPermissionScopes.AnyAsync(
+            x => x.TeamId == team.Id && x.TargetTeamId == target.Id, Ct)));
+    }
 }

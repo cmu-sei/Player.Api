@@ -74,8 +74,7 @@ public class AuthorizationServiceTests(DatabaseFixture fixture) : DatabaseTestBa
     public void GetAuthorizedViewIds_returns_one_entry_per_team_claim()
     {
         // Not distinct: two teams in one view yield that view twice. Pinned as-is because callers
-        // treat it as a membership filter, where duplicates are harmless — but a caller that counts
-        // views would be wrong.
+        // treat it as a membership filter, where duplicates are harmless.
         var user = new ClaimsPrincipalBuilder()
             .WithTeam(ViewId, TeamId)
             .WithTeam(ViewId, OtherTeamId)

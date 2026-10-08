@@ -668,6 +668,92 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         Assert.False(await Service().DeleteViewNotificationsAsync(Guid.NewGuid(), Ct));
     }
 
+    // ---- Who may call -----------------------------------------------------------------------------
+
+    /// <summary>ViewTeam on the team itself admits the caller, without a view or system permission.</summary>
+    [Fact]
+    public async Task GetByTeamAsync_is_allowed_for_a_caller_holding_ViewTeam_on_the_team()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team, TestData.Notification(team.Id, NotificationType.Team, text: "For the team"));
+
+        var caller = new ClaimsPrincipalBuilder()
+            .WithTeam(view.Id, team.Id, teamPermissions: [TeamPermission.ViewTeam])
+            .Build();
+
+        var notifications = await Service(caller).GetByTeamAsync(team.Id, Ct);
+
+        Assert.Equal("For the team", Assert.Single(notifications).Text);
+    }
+
+    /// <summary>
+    /// ViewViews alone admits a caller who is in no view, so the system tier of the read check is the
+    /// grant; it reads but does not post.
+    /// </summary>
+    [Fact]
+    public async Task JoinView_lets_a_caller_holding_only_ViewViews_listen_without_posting()
+    {
+        var view = TestData.View("My View");
+        await Seed(view);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ViewViews).Build();
+        var notification = await Service(caller).JoinView(view.Id, Ct);
+
+        Assert.True(notification.WasSuccess);
+        Assert.False(notification.CanPost);
+    }
+
+    [Fact]
+    public async Task JoinTeam_lets_a_caller_holding_only_ViewViews_listen_without_posting()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Blue Team");
+        await Seed(view, team);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ViewViews).Build();
+        var notification = await Service(caller).JoinTeam(team.Id, Ct);
+
+        Assert.True(notification.WasSuccess);
+        Assert.False(notification.CanPost);
+    }
+
+    /// <summary>
+    /// The near miss is ViewView in another view: the caller is a member there and not here, so neither
+    /// the read check nor membership admits it, and the refusal does not name the view.
+    /// </summary>
+    [Fact]
+    public async Task JoinView_refuses_a_caller_holding_ViewView_only_in_another_view()
+    {
+        var view = TestData.View("My View");
+        var other = TestData.View("Other View");
+        var otherTeam = TestData.Team(other.Id);
+        await Seed(view, other, otherTeam);
+
+        var notification = await Service(Member(other.Id, otherTeam.Id, ViewPermission.ViewView)).JoinView(view.Id, Ct);
+
+        Assert.False(notification.WasSuccess);
+        Assert.Null(notification.ToName);
+    }
+
+    /// <summary>
+    /// The near miss is membership of another view: the caller asks for its own conversation, so only the
+    /// membership of the view asked for is missing.
+    /// </summary>
+    [Fact]
+    public async Task JoinUser_refuses_a_caller_joining_its_own_conversation_in_a_view_it_is_not_in()
+    {
+        var view = TestData.View();
+        var other = TestData.View("Other View");
+        var otherTeam = TestData.Team(other.Id);
+        await Seed(view, other, otherTeam);
+
+        var caller = new ClaimsPrincipalBuilder().WithTeam(other.Id, otherTeam.Id).Build();
+        var notification = await Service(caller).JoinUser(view.Id, caller.GetId(), Ct);
+
+        Assert.False(notification.WasSuccess);
+    }
+
     // ---- Helpers ----------------------------------------------------------------------------------
 
     /// <summary>

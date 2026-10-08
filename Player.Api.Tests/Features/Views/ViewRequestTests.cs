@@ -115,10 +115,7 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal(teamMembership.Id, viewMembership.PrimaryTeamMembershipId);
     }
 
-    /// <summary>
-    /// A <c>Roles:DefaultViewCreatorRole</c> (<c>appsettings.json</c>, <c>View Admin</c>) that names no
-    /// team role fails view creation with a 500.
-    /// </summary>
+    /// <summary>A view creator role setting that names no team role fails view creation with a 500.</summary>
     [Fact]
     public async Task Create_fails_when_the_configured_view_creator_role_does_not_exist()
     {
@@ -131,6 +128,7 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             await RootClient.PostAsJsonAsync("api/views", new { name = "Doomed" }, Ct));
 
         Assert.Equal("A server error occurred.", problem.Title);
+        Assert.Equal("Sequence contains no elements.", problem.Detail);
     }
 
     [Fact]
@@ -886,6 +884,223 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         await AssertStatus(HttpStatusCode.BadRequest, response);
         Assert.Null(response.Content.Headers.ContentType);
         Assert.Empty(await response.Content.ReadAsByteArrayAsync(Ct));
+    }
+
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Create_is_allowed_for_a_caller_holding_only_CreateViews()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.CreateViews).SeedAsync();
+
+        var created = await ReadAsync<View>(await Client(actor).PostAsJsonAsync(
+            "api/views", new { name = "Created By A View Creator" }, Ct));
+
+        Assert.True(await ReadBack(db => db.Views.AnyAsync(x => x.Id == created.Id, Ct)));
+    }
+
+    /// <summary>ViewViews opens a view the caller is not a member of.</summary>
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View("Findable");
+        await Seed(view);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        var got = await ReadAsync<View>(await Client(actor).GetAsync($"api/views/{view.Id}", Ct));
+
+        Assert.Equal("Findable", got.Name);
+    }
+
+    [Fact]
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View("Listed");
+        await Seed(view);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        var views = await ReadAsync<View[]>(await Client(actor).GetAsync("api/views", Ct));
+
+        Assert.Equal(view.Id, Assert.Single(views).Id);
+    }
+
+    [Fact]
+    public async Task GetByUser_is_allowed_for_a_caller_holding_only_ViewUsers()
+    {
+        var member = TestData.View("Member of");
+        var user = TestData.User();
+        await Seed(member, user, TestData.ViewMembership(member.Id, user.Id));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
+
+        var views = await ReadAsync<View[]>(await Client(actor).GetAsync($"api/users/{user.Id}/views", Ct));
+
+        Assert.Equal(member.Id, Assert.Single(views).Id);
+    }
+
+    [Fact]
+    public async Task Delete_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.NoContent, await Client(actor).DeleteAsync($"api/views/{view.Id}", Ct));
+
+        Assert.False(await ReadBack(db => db.Views.AnyAsync(x => x.Id == view.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task SendNotification_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/notifications", new { text = "From a view manager" }, Ct));
+
+        Assert.Equal(actor.Id, await ReadBack(db => db.Notifications.Where(x => x.ToId == view.Id).Select(x => x.FromId).SingleAsync(Ct)));
+    }
+
+    /// <summary>The near miss is ViewView on the view where broadcasting to it takes ManageView; nothing is stored.</summary>
+    [Fact]
+    public async Task SendNotification_is_forbidden_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/notifications", new { text = "Nope" }, Ct));
+
+        Assert.False(await ReadBack(db => db.Notifications.AnyAsync(x => x.ToId == view.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task GetNotifications_is_allowed_for_a_caller_holding_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view, TestData.Notification(view.Id, text: "Readable"));
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var notifications = await ReadAsync<Notification[]>(
+            await Client(actor).GetAsync($"api/views/{view.Id}/notifications", Ct));
+
+        Assert.Equal("Readable", Assert.Single(notifications).Text);
+    }
+
+    [Fact]
+    public async Task DeleteNotification_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        var notification = TestData.Notification(view.Id);
+        await Seed(view, notification);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).DeleteAsync(
+            $"api/views/{view.Id}/notifications/{notification.Key}", Ct));
+
+        Assert.False(await ReadBack(db => db.Notifications.AnyAsync(x => x.Key == notification.Key, Ct)));
+    }
+
+    /// <summary>The near miss is ManageView in another view: the grant is checked on the route's view; the notification stays.</summary>
+    [Fact]
+    public async Task DeleteNotification_is_forbidden_for_a_caller_holding_ManageView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var other = TestData.View("Other View");
+        var notification = TestData.Notification(view.Id);
+        await Seed(view, other, notification);
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync(
+            $"api/views/{view.Id}/notifications/{notification.Key}", Ct));
+
+        Assert.True(await ReadBack(db => db.Notifications.AnyAsync(x => x.Key == notification.Key, Ct)));
+    }
+
+    [Fact]
+    public async Task DeleteAllNotifications_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        await Seed(view, TestData.Notification(view.Id));
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).DeleteAsync($"api/views/{view.Id}/notifications", Ct));
+
+        Assert.False(await ReadBack(db => db.Notifications.AnyAsync(x => x.ToId == view.Id, Ct)));
+    }
+
+    /// <summary>The near miss is ViewView on the view where clearing its notifications takes ManageView; they stay.</summary>
+    [Fact]
+    public async Task DeleteAllNotifications_is_forbidden_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view, TestData.Notification(view.Id));
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync($"api/views/{view.Id}/notifications", Ct));
+
+        Assert.True(await ReadBack(db => db.Notifications.AnyAsync(x => x.ToId == view.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task Export_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View("Exported");
+        await Seed(view);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        var response = await Client(actor).GetAsync($"api/views/actions/export?ids={view.Id}&archiveType=zip", Ct);
+
+        await AssertStatus(HttpStatusCode.OK, response);
+        Assert.Equal(
+            view.Id,
+            Assert.Single(ArchiveHelper.ReadExportedViews(await response.Content.ReadAsByteArrayAsync(Ct), ArchiveName(response))).Id);
+    }
+
+    /// <summary>The near miss is ViewView on the very view asked for: exporting takes the system permission.</summary>
+    [Fact]
+    public async Task Export_is_forbidden_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/views/actions/export?ids={view.Id}&archiveType=zip", Ct));
+    }
+
+    [Fact]
+    public async Task Import_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View("Imported");
+        await Seed(view);
+        var exported = await Export(view.Id, ArchiveType.zip);
+        await AssertStatus(HttpStatusCode.NoContent, await RootClient.DeleteAsync($"api/views/{view.Id}", Ct));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        using var upload = ArchiveHelper.AsUpload(
+            await exported.Content.ReadAsByteArrayAsync(Ct), ArchiveName(exported));
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PostAsync(ImportRoute, upload, Ct));
+
+        Assert.True(await ReadBack(db => db.Views.AnyAsync(x => x.Id == view.Id, Ct)));
+    }
+
+    /// <summary>CreateViews admits a member of the source view, and the clone is stored as a view of its own.</summary>
+    [Fact]
+    public async Task Clone_is_allowed_for_a_caller_holding_CreateViews()
+    {
+        var view = TestData.View("Source");
+        await Seed(view);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.CreateViews).OnNewTeam(view.Id).SeedAsync();
+
+        var cloned = await ReadAsync<View>(await Client(actor).PostAsJsonAsync($"api/views/{view.Id}/clone", new { }, Ct));
+
+        Assert.NotEqual(view.Id, cloned.Id);
+        Assert.True(await ReadBack(db => db.Views.AnyAsync(x => x.Id == cloned.Id, Ct)));
     }
 
     // ---- Helpers --------------------------------------------------------------------------------

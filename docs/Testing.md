@@ -134,7 +134,7 @@ Both fixtures arrive by constructor injection, which xUnit v3 satisfies from the
 
 `PlayerAppFactory` boots the real `Startup` with the real middleware chain, the real endpoint delegates, the real authorization stack and the real claims transformer. Three things are not the application's own:
 
-- **Token validation.** `TestAuthHandler` replaces the bearer scheme and mints the identity a validated token would have produced, from an `X-Test-User` header. Everything downstream is real: `AuthorizationClaimsTransformer` runs on that identity and derives every permission claim from the database, so what an actor may do is decided by the rows the test seeded rather than by claims the test wrote. `TestActor` seeds those rows.
+- **Token validation.** `TestAuthHandler` replaces the bearer scheme and mints the identity a validated token would have produced, from an `X-Test-User` header. It is registered under its own scheme name, the default, and under `Bearer` as well, because the three hubs name that scheme in their `[Authorize(AuthenticationSchemes = "Bearer")]`: `Startup`'s `AddJwtBearer` registrations of `AuthenticationOptions` are removed first, since `AddScheme` refuses a name already taken (the standard's Bearer recipe in `AppFactory.template.cs`). Everything downstream is real: `AuthorizationClaimsTransformer` runs on that identity and derives every permission claim from the database, so what an actor may do is decided by the rows the test seeded rather than by claims the test wrote. `TestActor` seeds those rows.
 - **The `PlayerContext` registration.** The application builds pooled options once for the process, while the suite gives every test an isolated database. A request therefore resolves the database of the test that sent it, by an `X-Test-Session` header through `TestDatabaseScope`. The request's own scope is the context's `ServiceProvider`, as in production, which is what makes entity events reach the real handlers.
 - **The collaborators that leave the process**, each something a test can assert against: the three `IHubContext<T>` over `Factory.Hub<T>()`, `IBackgroundWebhookService` over `Factory.Webhooks`, and `IHttpClientFactory` over `Factory.OutboundHttp`.
 
@@ -168,6 +168,10 @@ The host is the opposite, because starting one costs about a second. Everything 
 
 The migrations emit `CREATE EXTENSION "uuid-ossp"`, which requires superuser. The default `postgres` user in the official image is a superuser, so the container must not be reconfigured to a restricted role.
 
+## Hub connections
+
+`HubConnectionTests` connects a real SignalR client (`Microsoft.AspNetCore.SignalR.Client`, at the version the standard pins) to each hub over the in-process `TestServer`, as an `Actor()`, and invokes `Join`; and it sends each hub's `negotiate` with `Client()` and no identity, which is a 401. The connection uses WebSockets with negotiation skipped, through `Factory.Server.CreateWebSocketClient()` with the actor's `X-Test-User` and `X-Test-Name` headers and the test's `X-Test-Session` header, so every invocation runs inside the upgrade request: the claims transformer reads the test's rows and the hub's services read the test's database. Under long polling an invocation has no request carrying `X-Test-Session`, so the one-argument `TestDatabaseScope` registration would throw. The client's JSON protocol reads enums as strings, as `Startup`'s `AddJsonProtocol` writes them. `IHubContext<T>` is still the recorder: a connection's own `Clients.Caller` is the real connection, which is how the tests read the hub's `Reply`.
+
 # Adding a test
 
 1. Put the file where the code under test lives. A view request goes in `Features/Views/`, a service in `Services/`.
@@ -175,7 +179,8 @@ The migrations emit `CREATE EXTENSION "uuid-ossp"`, which requires superuser. Th
 3. Seed with the `TestData` object mothers rather than building entities inline, and add a new mother there if one is missing. Seed a caller with `Actor()`, which is what decides what the request is allowed to do.
 4. Name the method as a sentence, and pass `Ct` to anything awaited.
 5. Assert on the response (`ReadAsync`, `AssertStatus`, `AssertProblem` for a minimal-API route, `AssertJsonError` for an MVC controller) and on the database through `NewContext()` or `ReadBack`, not on the seeded objects that are still held. The change tracker will only confirm what was already set.
-6. Allowed and denied cases follow section 4 of `agent-docs/api-testing/CONVENTIONS.md`: the allowed caller holds exactly the required permission (never `Root`), and each denied caller is a near miss seeded with `OnNewTeam`.
+6. Allowed and denied cases follow section 4 of `agent-docs/api-testing/CONVENTIONS.md`: the allowed caller holds exactly the required permission (never `Root`), and each denied caller is a near miss seeded with `OnNewTeam`. Each feature's test file keeps these in a `Who may call` section where the operation's own section does not already hold them.
+7. Run `node agent-docs/api-testing/check-repo.js gates <repo> player.api` from the workspace root (`verify.sh` runs it too). It inventories every authorization call site, and a gate it reports without a non-`Root` allowed case and a near-miss denied case is a blocker, not a follow-up. A gate the harness genuinely cannot reach goes in the workspace's `agent-docs/api-test-gaps/player.api.txt` with its reason, never in a file in this repository. That file lists each allow-listed gate with its reason, and where the reason is a defect, the entry in `agent-docs/api-test-bugs/player.api.md` it names.
 
 # Layout
 
@@ -187,7 +192,7 @@ Player.Api.Tests/
   Controllers/       the three MVC controllers, also over HTTP: files, xAPI, health
   Services/          FileService, NotificationService, UserClaimsService, XApi*, ArchiveService, webhooks
   Infrastructure/    authorization, endpoints, exceptions, filters, extensions, JSON converters, mapping
-  Hubs/              the three SignalR hubs
+  Hubs/              the three SignalR hubs: their methods with HubHarness, their [Authorize] over real connections (HubConnectionTests)
   Events/            entity event handlers
   Support/           the harness, described below: Player's own files, the self-tests and the extras
     Shared/          the standard's shared files, copied by sync.sh and never edited here
@@ -202,6 +207,7 @@ The harness itself lives in `Support/`. The shared files of the standard are in 
 - `TestAuthHandler` - Mints the identity a validated token would have produced, from `X-Test-User` and `X-Test-Name`. Its opt-ins (`X-Test-Email`, `X-Test-Scope`, `TestAuthentication:Issuer`, `TestAuthentication:UserFromBearer`) are not used here.
 - `HubRecorder` - Takes the place of an `IHubContext<T>` and keeps what was broadcast, per audience. `ToGroup(id)` is what a test reads (a `Clients.Groups(list)` send is recorded for each group in it, and `ToGroups(a, b)` reads the call itself), and each message is a `HubBroadcast` naming the client method and its arguments. `ToUser`, `ToAll`, `Recipients(method)` and `FailsFor(group, exception)` are there for a recorder a test owns.
 - `HubHarness` - The connection-scoped state that SignalR sets on a hub before invoking a method, with the groups a connection joined and left (`JoinedGroups`, `LeftGroups`).
+- `HubRecorder.Calls` and `CallsOf(method)` - Every call the application made on a recorder's `Clients`, in order, for "nothing was sent" and counts across audiences.
 - `StubHttpMessageHandler` - Answers outbound HTTP from a table of absolute urls (`Respond`, `RespondJson`). `Requests` and `Sent` are snapshots, so a test can read them while a background sender is still recording. Ordered route rules (`Answers`, `AnswersOnce`, `Throws`) and `RefusesUnmatched()` are for a handler one test owns, never the run-wide `Factory.OutboundHttp`. `StubHttpClientFactory` hands out clients over it, with named clients' base addresses where production configures them (Player's need none).
 - `RecordingLogger` and `Waits` - A logger that keeps what it was told, and the polling behind `WaitUntil`.
 

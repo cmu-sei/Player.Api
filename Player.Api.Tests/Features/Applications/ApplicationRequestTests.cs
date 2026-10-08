@@ -859,6 +859,162 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
             await Move(Client(actor), instance.Id, "up"));
     }
 
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Delete_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        var application = TestData.Application(view.Id);
+        await Seed(view, application);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await Client(actor).DeleteAsync($"api/applications/{application.Id}", Ct));
+
+        Assert.False(await ReadBack(db => db.Applications.AnyAsync(x => x.Id == application.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task GetByView_is_allowed_for_a_caller_holding_ViewView()
+    {
+        var view = TestData.View();
+        var application = TestData.Application(view.Id, "Visible");
+        await Seed(view, application);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var applications = await ReadAsync<Application[]>(
+            await Client(actor).GetAsync($"api/views/{view.Id}/applications", Ct));
+
+        Assert.Equal(application.Id, Assert.Single(applications).Id);
+    }
+
+    /// <summary>The team's own role grants nothing, so ManageView on its view is the only grant in play.</summary>
+    [Fact]
+    public async Task CreateApplicationInstance_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var application = TestData.Application(view.Id);
+        await Seed(view, role, team, application);
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        var created = await ReadAsync<ApplicationInstance>(await Client(actor).PostAsJsonAsync(
+            $"api/teams/{team.Id}/application-instances",
+            new { applicationId = application.Id },
+            Ct));
+
+        Assert.Equal(team.Id, await ReadBack(db => db.ApplicationInstances.Where(x => x.Id == created.Id).Select(x => x.TeamId).SingleAsync(Ct)));
+    }
+
+    /// <summary>The near miss is ViewView on the team's view where editing takes ManageView; the instance stays.</summary>
+    [Fact]
+    public async Task EditApplicationInstance_is_forbidden_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var first = TestData.Application(view.Id, "First");
+        var second = TestData.Application(view.Id, "Second");
+        var instance = TestData.ApplicationInstance(team.Id, first.Id);
+        await Seed(view, team, first, second, instance);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/application-instances/{instance.Id}",
+            new { teamId = team.Id, applicationId = second.Id },
+            Ct));
+
+        Assert.Equal(first.Id, await ReadBack(db => db.ApplicationInstances.Where(x => x.Id == instance.Id).Select(x => x.ApplicationId).SingleAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task DeleteApplicationInstance_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var application = TestData.Application(view.Id);
+        var instance = TestData.ApplicationInstance(team.Id, application.Id);
+        await Seed(view, team, application, instance);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await Client(actor).DeleteAsync($"api/application-instances/{instance.Id}", Ct));
+
+        Assert.False(await ReadBack(db => db.ApplicationInstances.AnyAsync(x => x.Id == instance.Id, Ct)));
+    }
+
+    /// <summary>The team's own role grants nothing, so ViewTeam on the team itself is the only grant in play.</summary>
+    [Fact]
+    public async Task GetApplicationInstancesByTeam_is_allowed_for_a_caller_holding_ViewTeam_on_the_team()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var application = TestData.Application(view.Id);
+        var instance = TestData.ApplicationInstance(team.Id, application.Id);
+        await Seed(view, role, team, application, instance);
+        var actor = await Actor().OnTeam(team, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        var instances = await ReadAsync<ApplicationInstance[]>(
+            await Client(actor).GetAsync($"api/teams/{team.Id}/application-instances", Ct));
+
+        Assert.Equal(instance.Id, Assert.Single(instances).Id);
+    }
+
+    [Fact]
+    public async Task GetApplicationInstancesByTeam_is_allowed_for_a_caller_holding_ViewView_on_the_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var application = TestData.Application(view.Id);
+        var instance = TestData.ApplicationInstance(team.Id, application.Id);
+        await Seed(view, team, application, instance);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var instances = await ReadAsync<ApplicationInstance[]>(
+            await Client(actor).GetAsync($"api/teams/{team.Id}/application-instances", Ct));
+
+        Assert.Equal(instance.Id, Assert.Single(instances).Id);
+    }
+
+    /// <summary>ManageView on the application's own view, which the body names too, admits the edit.</summary>
+    [Fact]
+    public async Task Edit_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        var application = TestData.Application(view.Id, "Before");
+        await Seed(view, application);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/applications/{application.Id}", new { name = "After", viewId = view.Id }, Ct));
+
+        Assert.Equal("After", await ReadBack(db => db.Applications.Where(x => x.Id == application.Id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    /// <summary>ManageView on the view of the instance's own team, which the body names too, admits the edit.</summary>
+    [Fact]
+    public async Task EditApplicationInstance_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var first = TestData.Application(view.Id, "First");
+        var second = TestData.Application(view.Id, "Second");
+        var instance = TestData.ApplicationInstance(team.Id, first.Id);
+        await Seed(view, team, first, second, instance);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/application-instances/{instance.Id}",
+            new { teamId = team.Id, applicationId = second.Id },
+            Ct));
+
+        Assert.Equal(second.Id, await ReadBack(db => db.ApplicationInstances.Where(x => x.Id == instance.Id).Select(x => x.ApplicationId).SingleAsync(Ct)));
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
 
     /// <summary>

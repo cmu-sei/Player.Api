@@ -176,4 +176,21 @@ public class ViewMembershipRequestTests(DatabaseFixture fixture, PlayerAppFactor
 
         Assert.Equal("Nullable object must have a value.", problem.Detail);
     }
+
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetByUser_is_allowed_for_a_caller_holding_only_ViewUsers()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+        var user = await Actor().WithName("Subject").OnTeam(team).SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
+
+        var memberships = await ReadAsync<ViewMembership[]>(
+            await Client(actor).GetAsync($"api/users/{user.Id}/view-memberships", Ct));
+
+        Assert.Equal(view.Id, Assert.Single(memberships).ViewId);
+    }
 }

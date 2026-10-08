@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -12,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Player.Api.Data.Data;
 using Player.Api.Hubs;
 using Player.Api.Services;
@@ -131,15 +133,25 @@ public sealed class PlayerAppFactory : WebApplicationFactory<Program>, ITestHttp
     /// Replaces token validation, and only token validation.
     /// </summary>
     /// <remarks>
-    /// Registered after <c>Startup</c>'s <c>AddAuthentication(JwtBearerDefaults.AuthenticationScheme)</c>,
-    /// so this call's default scheme wins. The bearer scheme stays registered and unused; its options
-    /// contact the authority only on first use, and nothing uses it.
+    /// <para>
+    /// The three hubs name their scheme (<c>[Authorize(AuthenticationSchemes = "Bearer")]</c>), so the
+    /// test handler is registered under that name as well as its own, and a real SignalR connection
+    /// authenticates through it as a request does. <c>Startup</c>'s <c>AddJwtBearer</c> has already claimed
+    /// "Bearer", and <c>AddScheme</c> refuses a duplicate name, so every
+    /// <see cref="IConfigureOptions{AuthenticationOptions}"/> it registered (the default scheme and the
+    /// bearer scheme) is removed first. This is the standard's Bearer recipe.
+    /// </para>
+    /// <para>
+    /// The default scheme is the test handler's own name, so a request authenticates exactly as before.
+    /// </para>
     /// </remarks>
     private static void AddTestAuthentication(IServiceCollection services)
     {
+        services.RemoveAll<IConfigureOptions<AuthenticationOptions>>();
         services
             .AddAuthentication(TestAuthHandler.SchemeName)
-            .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, null);
+            .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, null)
+            .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(JwtBearerDefaults.AuthenticationScheme, null);
     }
 
     /// <summary>

@@ -344,6 +344,100 @@ public class TeamRoleRequestTests(DatabaseFixture fixture, PlayerAppFactory fact
         Assert.True(await db.TeamRoles.AnyAsync(x => x.Id == TestData.TeamRoles.Observer, Ct));
     }
 
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Create_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        var created = await ReadAsync<TeamRole>(await Client(actor).PostAsJsonAsync(
+            "api/team-roles", new { name = "Created By A Role Manager" }, Ct));
+
+        Assert.True(await ReadBack(db => db.TeamRoles.AnyAsync(x => x.Id == created.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        var got = await ReadAsync<TeamRole>(
+            await Client(actor).GetAsync($"api/team-roles/{TestData.TeamRoles.Observer}", Ct));
+
+        Assert.Equal("Observer", got.Name);
+    }
+
+    /// <summary>Team administrators read the role they assign, so ManageTeam on any team admits the caller.</summary>
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ManageTeam()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ManageTeam]).SeedAsync();
+
+        var got = await ReadAsync<TeamRole>(
+            await Client(actor).GetAsync($"api/team-roles/{TestData.TeamRoles.Observer}", Ct));
+
+        Assert.Equal("Observer", got.Name);
+    }
+
+    /// <summary>The near miss is ViewTeam where the route admits ManageTeam on any team.</summary>
+    [Fact]
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ViewTeam()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/team-roles/{TestData.TeamRoles.Observer}", Ct));
+    }
+
+    [Fact]
+    public async Task Edit_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/team-roles/{TestData.TeamRoles.Observer}", new { name = "Renamed By A Role Manager" }, Ct));
+
+        Assert.Equal(
+            "Renamed By A Role Manager",
+            await ReadBack(db => db.TeamRoles.Where(x => x.Id == TestData.TeamRoles.Observer).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    /// <summary>
+    /// The near miss is ManageTeam, which reads team roles but does not change them; the name stays.
+    /// </summary>
+    [Fact]
+    public async Task Edit_is_forbidden_for_a_caller_holding_only_ManageTeam()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ManageTeam]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/team-roles/{TestData.TeamRoles.Observer}", new { name = "Not Renamed" }, Ct));
+
+        Assert.Equal(
+            "Observer",
+            await ReadBack(db => db.TeamRoles.Where(x => x.Id == TestData.TeamRoles.Observer).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task Delete_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await Client(actor).DeleteAsync($"api/team-roles/{TestData.TeamRoles.Observer}", Ct));
+
+        Assert.False(await ReadBack(db => db.TeamRoles.AnyAsync(x => x.Id == TestData.TeamRoles.Observer, Ct)));
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
 
     /// <summary>

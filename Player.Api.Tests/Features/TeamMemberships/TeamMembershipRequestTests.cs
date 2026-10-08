@@ -303,4 +303,41 @@ public class TeamMembershipRequestTests(DatabaseFixture fixture, PlayerAppFactor
             new { roleId = TestData.TeamRoles.ViewAdmin },
             Ct));
     }
+
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetByUserView_is_allowed_for_a_caller_holding_ViewView()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "In view");
+        await Seed(view, team);
+        var user = await Actor().WithName("Subject").OnTeam(team).SeedAsync();
+        var caller = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var memberships = await ReadAsync<TeamMembership[]>(await Client(caller).GetAsync(
+            $"api/users/{user.Id}/views/{view.Id}/team-memberships", Ct));
+
+        Assert.Equal(team.Id, Assert.Single(memberships).TeamId);
+    }
+
+    /// <summary>ManageView on the membership's view admits the caller, who moves the member to another role.</summary>
+    [Fact]
+    public async Task Edit_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+        var member = await Actor().WithName("Member").OnTeam(team, roleId: TestData.TeamRoles.Observer).SeedAsync();
+        var caller = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(caller).PutAsJsonAsync(
+            $"api/team-memberships/{member.Membership.TeamMembershipId}",
+            new { roleId = TestData.TeamRoles.ViewMember },
+            Ct));
+
+        Assert.Equal(
+            TestData.TeamRoles.ViewMember,
+            await ReadBack(db => db.TeamMemberships.Where(x => x.Id == member.Membership.TeamMembershipId).Select(x => x.RoleId).SingleAsync(Ct)));
+    }
 }

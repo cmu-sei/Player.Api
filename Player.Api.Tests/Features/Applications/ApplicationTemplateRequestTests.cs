@@ -588,6 +588,91 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
             await Client(actor).PostAsync(ImportRoute(), upload, Ct));
     }
 
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task CreateApplicationTemplate_is_allowed_for_a_caller_holding_only_ManageApplications()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageApplications).SeedAsync();
+
+        var created = await ReadAsync<ApplicationTemplate>(await Client(actor).PostAsJsonAsync(
+            "api/application-templates", new { name = "Created By An Application Manager" }, Ct));
+
+        Assert.True(await ReadBack(db => db.ApplicationTemplates.AnyAsync(x => x.Id == created.Id, Ct)));
+    }
+
+    /// <summary>The near miss is ViewApplications, which reads templates but does not create them.</summary>
+    [Fact]
+    public async Task CreateApplicationTemplate_is_forbidden_for_a_caller_holding_only_ViewApplications()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewApplications).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsJsonAsync(
+            "api/application-templates", new { name = "Nope" }, Ct));
+
+        Assert.False(await ReadBack(db => db.ApplicationTemplates.AnyAsync(x => x.Name == "Nope", Ct)));
+    }
+
+    [Fact]
+    public async Task EditApplicationTemplate_is_allowed_for_a_caller_holding_only_ManageApplications()
+    {
+        var template = TestData.ApplicationTemplate("Before");
+        await Seed(template);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageApplications).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/application-templates/{template.Id}", new { name = "After" }, Ct));
+
+        Assert.Equal("After", await ReadBack(db => db.ApplicationTemplates.Where(x => x.Id == template.Id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task DeleteApplicationTemplate_is_allowed_for_a_caller_holding_only_ManageApplications()
+    {
+        var template = TestData.ApplicationTemplate();
+        await Seed(template);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageApplications).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await Client(actor).DeleteAsync($"api/application-templates/{template.Id}", Ct));
+
+        Assert.False(await ReadBack(db => db.ApplicationTemplates.AnyAsync(x => x.Id == template.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task ExportApplicationTemplates_is_allowed_for_a_caller_holding_only_ViewApplications()
+    {
+        var template = TestData.ApplicationTemplate("Exported");
+        await Seed(template);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewApplications).SeedAsync();
+
+        var response = await Client(actor).GetAsync(ExportRoute(), Ct);
+
+        await AssertStatus(HttpStatusCode.OK, response);
+        Assert.Equal(template.Id, Assert.Single(await ReadTemplates(response)).Id);
+    }
+
+    [Fact]
+    public async Task ImportApplicationTemplates_is_allowed_for_a_caller_holding_only_ManageApplications()
+    {
+        var template = TestData.ApplicationTemplate("Imported");
+        await Seed(template);
+        var exported = await Export();
+
+        // Stand in for the receiving installation, which does not have it yet.
+        Db.ApplicationTemplates.Remove(template);
+        await Db.SaveChangesAsync(Ct);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageApplications).SeedAsync();
+
+        using var upload = ArchiveHelper.AsUpload(
+            await exported.Content.ReadAsByteArrayAsync(Ct), ArchiveName(exported));
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PostAsync(ImportRoute(), upload, Ct));
+
+        Assert.True(await ReadBack(db => db.ApplicationTemplates.AnyAsync(x => x.Id == template.Id, Ct)));
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
 
     /// <summary>

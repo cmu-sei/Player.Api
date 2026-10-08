@@ -352,6 +352,181 @@ public class PermissionRequestTests(DatabaseFixture fixture, PlayerAppFactory fa
             $"api/roles/{roleId}/permissions/{Guid.NewGuid()}", Ct));
     }
 
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Create_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        var created = await ReadAsync<Permission>(await Client(actor).PostAsJsonAsync(
+            "api/permissions", new { name = "Created By A Role Manager" }, Ct));
+
+        Assert.True(await ReadBack(db => db.Permissions.AnyAsync(x => x.Id == created.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task Edit_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var permissionId = TestData.Permissions.ViewNetworks;
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/permissions/{permissionId}",
+            new { name = "ViewNetworks", description = "Reworded by a role manager" },
+            Ct));
+
+        Assert.Equal(
+            "Reworded by a role manager",
+            await ReadBack(db => db.Permissions.Where(x => x.Id == permissionId).Select(x => x.Description).SingleAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task Delete_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var permissionId = TestData.Permissions.ViewNetworks;
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await Client(actor).DeleteAsync($"api/permissions/{permissionId}", Ct));
+
+        Assert.False(await ReadBack(db => db.Permissions.AnyAsync(x => x.Id == permissionId, Ct)));
+    }
+
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        var got = await ReadAsync<Permission>(await Client(actor).GetAsync(
+            $"api/permissions/{TestData.Permissions.CreateViews}", Ct));
+
+        Assert.Equal(TestData.Permissions.CreateViews, got.Id);
+    }
+
+    /// <summary>ViewView in any view opens the permission rows too, without a system permission.</summary>
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var got = await ReadAsync<Permission>(await Client(actor).GetAsync(
+            $"api/permissions/{TestData.Permissions.CreateViews}", Ct));
+
+        Assert.Equal(TestData.Permissions.CreateViews, got.Id);
+    }
+
+    [Fact]
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_ViewRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        var permissions = await ReadAsync<Permission[]>(await Client(actor).GetAsync("api/permissions", Ct));
+
+        Assert.Contains(permissions, x => x.Id == TestData.Permissions.CreateViews);
+    }
+
+    [Fact]
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var permissions = await ReadAsync<Permission[]>(await Client(actor).GetAsync("api/permissions", Ct));
+
+        Assert.Contains(permissions, x => x.Id == TestData.Permissions.CreateViews);
+    }
+
+    /// <summary>The near miss is ViewUsers, which opens roles but not permissions.</summary>
+    [Fact]
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ViewUsers()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/permissions", Ct));
+    }
+
+    [Fact]
+    public async Task AddToRole_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var roleId = TestData.Roles.ContentDeveloper;
+        var permissionId = TestData.Permissions.ViewNetworks;
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PostAsync(
+            $"api/roles/{roleId}/permissions/{permissionId}", null, Ct));
+
+        Assert.True(await ReadBack(db => db.RolePermissions.AnyAsync(
+            x => x.RoleId == roleId && x.PermissionId == permissionId, Ct)));
+    }
+
+    [Fact]
+    public async Task RemoveFromRole_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var roleId = TestData.Roles.ContentDeveloper;
+        var permissionId = TestData.Permissions.ViewNetworks;
+        await Seed(new RolePermissionEntity(roleId, permissionId) { Id = Guid.NewGuid() });
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).DeleteAsync(
+            $"api/roles/{roleId}/permissions/{permissionId}", Ct));
+
+        Assert.False(await ReadBack(db => db.RolePermissions.AnyAsync(
+            x => x.RoleId == roleId && x.PermissionId == permissionId, Ct)));
+    }
+
+    /// <summary>The near miss is ViewRoles, which reads grants but does not change them; the grant stays.</summary>
+    [Fact]
+    public async Task RemoveFromRole_is_forbidden_for_a_caller_holding_only_ViewRoles()
+    {
+        var roleId = TestData.Roles.ContentDeveloper;
+        var permissionId = TestData.Permissions.ViewNetworks;
+        await Seed(new RolePermissionEntity(roleId, permissionId) { Id = Guid.NewGuid() });
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync(
+            $"api/roles/{roleId}/permissions/{permissionId}", Ct));
+
+        Assert.True(await ReadBack(db => db.RolePermissions.AnyAsync(
+            x => x.RoleId == roleId && x.PermissionId == permissionId, Ct)));
+    }
+
+    /// <summary>The near miss is ViewRoles, which reads permissions but does not change them; the row is kept as it was.</summary>
+    [Fact]
+    public async Task Edit_is_forbidden_for_a_caller_holding_only_ViewRoles()
+    {
+        var permissionId = TestData.Permissions.ViewNetworks;
+        var seeded = await Db.Permissions.Where(x => x.Id == permissionId).Select(x => x.Description).SingleAsync(Ct);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/permissions/{permissionId}",
+            new { name = "ViewNetworks", description = "Not reworded" },
+            Ct));
+
+        Assert.Equal(
+            seeded,
+            await ReadBack(db => db.Permissions.Where(x => x.Id == permissionId).Select(x => x.Description).SingleAsync(Ct)));
+    }
+
+    /// <summary>The near miss is ViewRoles, which reads permissions but does not delete them; the row stays.</summary>
+    [Fact]
+    public async Task Delete_is_forbidden_for_a_caller_holding_only_ViewRoles()
+    {
+        var permissionId = TestData.Permissions.ViewNetworks;
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).DeleteAsync($"api/permissions/{permissionId}", Ct));
+
+        Assert.True(await ReadBack(db => db.Permissions.AnyAsync(x => x.Id == permissionId, Ct)));
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
 
     /// <summary>

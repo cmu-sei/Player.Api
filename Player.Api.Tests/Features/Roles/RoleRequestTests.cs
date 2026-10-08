@@ -305,6 +305,101 @@ public class RoleRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Null((await db.Users.SingleAsync(x => x.Id == Root.Id, Ct)).RoleId);
     }
 
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Create_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        var created = await ReadAsync<Role>(await Client(actor).PostAsJsonAsync(
+            "api/roles", new { name = "Created By A Role Manager" }, Ct));
+
+        Assert.True(await ReadBack(db => db.Roles.AnyAsync(x => x.Id == created.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        var got = await ReadAsync<Role>(
+            await Client(actor).GetAsync($"api/roles/{TestData.Roles.ContentDeveloper}", Ct));
+
+        Assert.Equal("Content Developer", got.Name);
+    }
+
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewUsers()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
+
+        var got = await ReadAsync<Role>(
+            await Client(actor).GetAsync($"api/roles/{TestData.Roles.ContentDeveloper}", Ct));
+
+        Assert.Equal("Content Developer", got.Name);
+    }
+
+    [Fact]
+    public async Task GetByName_is_allowed_for_a_caller_holding_only_ViewRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        var got = await ReadAsync<Role>(await Client(actor).GetAsync(ByName("Content Developer"), Ct));
+
+        Assert.Equal(TestData.Roles.ContentDeveloper, got.Id);
+    }
+
+    /// <summary>The near miss is ViewViews where reading a role takes ViewRoles or ViewUsers.</summary>
+    [Fact]
+    public async Task GetByName_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync(ByName("Content Developer"), Ct));
+    }
+
+    [Fact]
+    public async Task Edit_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/roles/{TestData.Roles.ContentDeveloper}", new { name = "Renamed By A Role Manager" }, Ct));
+
+        Assert.Equal(
+            "Renamed By A Role Manager",
+            await ReadBack(db => db.Roles.Where(x => x.Id == TestData.Roles.ContentDeveloper).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    /// <summary>The near miss is ViewRoles, which reads roles but does not change them; the name stays.</summary>
+    [Fact]
+    public async Task Edit_is_forbidden_for_a_caller_holding_only_ViewRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/roles/{TestData.Roles.ContentDeveloper}", new { name = "Not Renamed" }, Ct));
+
+        Assert.Equal(
+            "Content Developer",
+            await ReadBack(db => db.Roles.Where(x => x.Id == TestData.Roles.ContentDeveloper).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task Delete_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await Client(actor).DeleteAsync($"api/roles/{TestData.Roles.ContentDeveloper}", Ct));
+
+        Assert.False(await ReadBack(db => db.Roles.AnyAsync(x => x.Id == TestData.Roles.ContentDeveloper, Ct)));
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
 
     /// <summary>

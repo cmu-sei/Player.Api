@@ -600,6 +600,192 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             $"api/teams/{team.Id}/notifications", new { text = "Nope" }, Ct));
     }
 
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Create_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        var created = await ReadAsync<Team>(await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/teams", new { name = "Created By A View Manager" }, Ct));
+
+        Assert.Equal(view.Id, await ReadBack(db => db.Teams.Where(x => x.Id == created.Id).Select(x => x.ViewId).SingleAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Listed");
+        await Seed(view, team);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        var teams = await ReadAsync<Team[]>(await Client(actor).GetAsync("api/teams", Ct));
+
+        Assert.Equal(team.Id, Assert.Single(teams).Id);
+    }
+
+    /// <summary>The near miss is ViewView on a view: listing every team takes the system permission.</summary>
+    [Fact]
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/teams", Ct));
+    }
+
+    [Fact]
+    public async Task GetByView_is_allowed_for_a_caller_holding_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var teams = await ReadAsync<Team[]>(await Client(actor).GetAsync($"api/views/{view.Id}/teams", Ct));
+
+        Assert.Equal(actor.Membership.TeamId, Assert.Single(teams).Id);
+    }
+
+    [Fact]
+    public async Task GetByView_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var other = TestData.View("Other View");
+        await Seed(view, other, TestData.Team(view.Id));
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/views/{view.Id}/teams", Ct));
+    }
+
+    /// <summary>
+    /// ViewView on the view admits a caller asking about another user, and answers with every team of the
+    /// view rather than only the user's own.
+    /// </summary>
+    [Fact]
+    public async Task GetByUserView_returns_every_team_in_the_view_for_a_caller_holding_ViewView()
+    {
+        var view = TestData.View();
+        var member = TestData.Team(view.Id, "Member of");
+        var notMember = TestData.Team(view.Id, "Not a member of");
+        await Seed(view, member, notMember);
+        var subject = await Actor().WithName("Subject").OnTeam(member).SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var teams = await ReadAsync<Team[]>(
+            await Client(actor).GetAsync($"api/users/{subject.Id}/views/{view.Id}/teams", Ct));
+
+        Assert.Contains(teams, x => x.Id == notMember.Id);
+    }
+
+    [Fact]
+    public async Task Edit_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Before");
+        await Seed(view, team);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/teams/{team.Id}", new { name = "After" }, Ct));
+
+        Assert.Equal("After", await ReadBack(db => db.Teams.Where(x => x.Id == team.Id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    /// <summary>The near miss is ViewView on the team's view where editing takes ManageView; the name stays.</summary>
+    [Fact]
+    public async Task Edit_is_forbidden_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Before");
+        await Seed(view, team);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/teams/{team.Id}", new { name = "After" }, Ct));
+
+        Assert.Equal("Before", await ReadBack(db => db.Teams.Where(x => x.Id == team.Id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task Delete_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.NoContent, await Client(actor).DeleteAsync($"api/teams/{team.Id}", Ct));
+
+        Assert.False(await ReadBack(db => db.Teams.AnyAsync(x => x.Id == team.Id, Ct)));
+    }
+
+    /// <summary>The near miss is ManageView in another view: the grant is checked on the team's own view.</summary>
+    [Fact]
+    public async Task Delete_is_forbidden_for_a_caller_holding_ManageView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var other = TestData.View("Other View");
+        await Seed(view, team, other);
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync($"api/teams/{team.Id}", Ct));
+
+        Assert.True(await ReadBack(db => db.Teams.AnyAsync(x => x.Id == team.Id, Ct)));
+    }
+
+    /// <summary>
+    /// ManageView on the team's view admits the caller at the handler and again in
+    /// <c>NotificationService.PostToTeam</c>, and the notification is stored from them.
+    /// </summary>
+    [Fact]
+    public async Task SendNotification_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Recipients");
+        await Seed(view, team);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PostAsJsonAsync(
+            $"api/teams/{team.Id}/notifications", new { text = "From a view manager" }, Ct));
+
+        var stored = await ReadBack(db => db.Notifications.SingleAsync(x => x.ToId == team.Id, Ct));
+        Assert.Equal(actor.Id, stored.FromId);
+    }
+
+    /// <summary>
+    /// Each team carries whether the caller is on it and whether it is the caller's primary team, from the
+    /// caller's own claims (<c>TeamMemberRequirement</c>, <c>PrimaryTeamRequirement</c>); the UI filters on
+    /// them. A second membership separates the two flags, and a team the caller is not on reads neither.
+    /// </summary>
+    [Fact]
+    public async Task GetByView_marks_the_callers_teams_and_its_primary_team()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var primary = TestData.Team(view.Id, "Primary", role.Id);
+        var secondary = TestData.Team(view.Id, "Secondary", role.Id);
+        var sibling = TestData.Team(view.Id, "Sibling", role.Id);
+        await Seed(view, role, primary, secondary, sibling);
+        var actor = await Actor()
+            .OnTeam(primary, primary: true, viewPermissions: [ViewPermission.ViewView])
+            .OnTeam(secondary)
+            .SeedAsync();
+
+        var teams = await ReadAsync<Team[]>(await Client(actor).GetAsync($"api/views/{view.Id}/teams", Ct));
+
+        Assert.Equal(
+            [("Primary", true, true), ("Secondary", true, false), ("Sibling", false, false)],
+            teams.Select(x => (x.Name, x.IsMember, x.IsPrimary)).OrderBy(x => x.Name, StringComparer.Ordinal));
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
 
     /// <summary>What the team notification handler broadcast to a team's group.</summary>

@@ -44,6 +44,8 @@
     <!-- Hosts Player.Api in-process over TestServer, so the tests drive the real Startup. -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Testcontainers.PostgreSql" />
+    <!-- Connects real SignalR clients to the in-process hubs, for their [Authorize] tests. -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
   </ItemGroup>
 
   <ItemGroup>

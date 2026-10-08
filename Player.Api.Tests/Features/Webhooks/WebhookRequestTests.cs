@@ -79,7 +79,7 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
         var webhook = TestData.Webhook(eventTypes: [EventType.ViewCreated]);
         await Seed(webhook);
 
-        await AssertProblem(
+        var problem = await AssertProblem(
             HttpStatusCode.InternalServerError,
             await RootClient.PutAsJsonAsync(
                 $"api/webhooks/{webhook.Id}",
@@ -90,6 +90,8 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
                     eventTypes = new[] { EventType.ViewDeleted, EventType.ViewDeleted }
                 },
                 Ct));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", problem.Detail);
 
         await using var db = NewContext();
         var stored = await db.Webhooks.Include(x => x.EventTypes).SingleAsync(Ct);
@@ -317,5 +319,70 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
         // unpredicated count holds if the refused delete removed this one and left another behind.
         await using var db = NewContext();
         Assert.True(await db.Webhooks.AnyAsync(x => x.Id == webhook.Id, Ct));
+    }
+
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Create_is_allowed_for_a_caller_holding_only_ManageWebhookSubscriptions()
+    {
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.ManageWebhookSubscriptions)
+            .SeedAsync();
+
+        var created = await ReadAsync<WebhookSubscription>(await Client(actor).PostAsJsonAsync(
+            CreateRoute,
+            new { name = "Subscribed By A Manager", callbackUri = "https://example.test/hook", eventTypes = Array.Empty<EventType>() },
+            Ct));
+
+        Assert.True(await ReadBack(db => db.Webhooks.AnyAsync(x => x.Id == created.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_ViewWebhookSubscriptions()
+    {
+        var webhook = TestData.Webhook("Listed");
+        await Seed(webhook);
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.ViewWebhookSubscriptions)
+            .SeedAsync();
+
+        var subscriptions = await ReadAsync<WebhookSubscription[]>(
+            await Client(actor).GetAsync("api/webhooks", Ct));
+
+        Assert.Equal(webhook.Id, Assert.Single(subscriptions).Id);
+    }
+
+    [Fact]
+    public async Task Edit_is_allowed_for_a_caller_holding_only_ManageWebhookSubscriptions()
+    {
+        var webhook = TestData.Webhook("Original");
+        await Seed(webhook);
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.ManageWebhookSubscriptions)
+            .SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PatchAsJsonAsync(
+            $"api/webhooks/{webhook.Id}", new { name = "Renamed By A Manager" }, Ct));
+
+        Assert.Equal(
+            "Renamed By A Manager",
+            await ReadBack(db => db.Webhooks.Where(x => x.Id == webhook.Id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task Delete_is_allowed_for_a_caller_holding_only_ManageWebhookSubscriptions()
+    {
+        var webhook = TestData.Webhook();
+        await Seed(webhook);
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.ManageWebhookSubscriptions)
+            .SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await Client(actor).DeleteAsync($"api/webhooks/{webhook.Id}", Ct));
+
+        Assert.False(await ReadBack(db => db.Webhooks.AnyAsync(x => x.Id == webhook.Id, Ct)));
     }
 }

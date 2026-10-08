@@ -649,10 +649,12 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
             .WithTeam(view.Id, team.Id, viewPermissions: [ViewPermission.ViewView])
             .Build();
 
-        await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).UpdateAsync(
+        var refused = await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).UpdateAsync(
             file.Id,
             new FileUpdateForm { Name = "renamed.txt", TeamIds = [team.Id] },
             Ct));
+
+        Assert.Equal("Insufficient Permissions", refused.Message);
     }
 
     // ---- Delete -----------------------------------------------------------------------------------
