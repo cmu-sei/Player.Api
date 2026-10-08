@@ -66,17 +66,8 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
 
     /// <summary>
     /// Templates are not scoped to a view, so only the system permission opens them — being a view
-    /// administrator does not. The refusal arrives as a 500 rather than the 403 every other refusal here
-    /// answers with.
+    /// administrator does not. A team claim must not turn that refusal into a server error.
     /// </summary>
-    /// <remarks>
-    /// Characterizes current behaviour. The <c>Authorize(SystemPermission[], CancellationToken)</c>
-    /// overload passes null for the view and team permission arrays
-    /// (<c>AuthorizationService.cs:55</c>), and <c>TeamPermissionsHandler</c> enumerates them for any
-    /// caller who holds a team permissions claim (<c>TeamPermissionRequirement.cs:70</c>) — so a member
-    /// of any team gets an <see cref="ArgumentNullException"/> where a non-member gets a clean 403. Turns
-    /// red once the null arrays are handled and this answers 403 too.
-    /// </remarks>
     [Fact]
     public async Task CreateApplicationTemplate_is_refused_for_a_caller_holding_only_ManageView()
     {
@@ -87,12 +78,13 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
 
         var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
 
-        var problem = await AssertProblem(
-            HttpStatusCode.InternalServerError,
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
             await Client(actor).PostAsJsonAsync(
                 "api/application-templates", new { name = "Nope" }, Ct));
 
-        Assert.Equal("Value cannot be null. (Parameter 'source')", problem.Detail);
+        await using var db = NewContext();
+        Assert.False(await db.ApplicationTemplates.AnyAsync(Ct));
     }
 
     [Fact]
@@ -128,6 +120,24 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
             $"api/application-templates/{template.Id}", new { name = "Nope" }, Ct));
+    }
+
+    [Fact]
+    public async Task EditApplicationTemplate_is_forbidden_for_a_caller_holding_only_ManageView()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var template = TestData.ApplicationTemplate("Before");
+        await Seed(view, role, team, template);
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/application-templates/{template.Id}", new { name = "Nope" }, Ct));
+
+        await using var db = NewContext();
+        Assert.Equal("Before", (await db.ApplicationTemplates.SingleAsync(x => x.Id == template.Id, Ct)).Name);
     }
 
     [Fact]
@@ -201,6 +211,24 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         await AssertProblem(
             HttpStatusCode.Forbidden,
             await Client(actor).DeleteAsync($"api/application-templates/{template.Id}", Ct));
+    }
+
+    [Fact]
+    public async Task DeleteApplicationTemplate_is_forbidden_for_a_caller_holding_only_ManageView()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var template = TestData.ApplicationTemplate();
+        await Seed(view, role, team, template);
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden,
+            await Client(actor).DeleteAsync($"api/application-templates/{template.Id}", Ct));
+
+        await using var db = NewContext();
+        Assert.True(await db.ApplicationTemplates.AnyAsync(x => x.Id == template.Id, Ct));
     }
 
     // ---- Reads ----------------------------------------------------------------------------------

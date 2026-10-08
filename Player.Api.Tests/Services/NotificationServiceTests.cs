@@ -59,6 +59,17 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
             () => Service(ClaimsPrincipalBuilder.Anonymous()).GetAsync(Ct));
     }
 
+    [Fact]
+    public async Task GetAsync_is_forbidden_for_a_view_member_without_ViewViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service(Member(view.Id, team.Id, ViewPermission.ViewView)).GetAsync(Ct));
+    }
+
     /// <summary>
     /// The view's own conversation: only view-addressed messages, and not the system ones a join emits.
     /// </summary>
