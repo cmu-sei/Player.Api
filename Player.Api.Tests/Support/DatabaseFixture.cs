@@ -24,6 +24,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
     public async Task<ITestDatabaseSession> BeginSessionAsync() => await _database.BeginSessionAsync();
 
+    public async Task<IUpgradeTestDatabaseSession> BeginSessionAtMigrationAsync(string migrationId) =>
+        await _database.BeginSessionAtMigrationAsync(migrationId);
+
     public async ValueTask DisposeAsync() => await _database.DisposeAsync();
 
     /// <summary>

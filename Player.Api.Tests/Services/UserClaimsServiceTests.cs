@@ -123,11 +123,13 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
         Assert.Equal(view.Id, claim.ViewId);
         Assert.Equal(team.Id, claim.TeamId);
         Assert.True(claim.IsPrimary);
-        // Observer's five, the team's own UploadViewIsos, and View Member's five.
+        // Observer's seven, the team's own UploadViewIsos, and View Member's six. Each built-in role
+        // also holds the ViewTeamVms (and, for Observer, ViewTeamMaps) that Add_Vm_And_Map_Permissions
+        // maps from ViewTeam, though a stronger grant covers it.
         Assert.Equal(
             [
-                "ControlTeamVms", "UploadTeamIsos", "UploadViewIsos", "UploadVmFiles",
-                "ViewNetworks", "ViewTeam", "ViewTeamMaps", "ViewView", "ViewViewMaps", "ViewViewVms"
+                "ControlTeamVms", "UploadTeamIsos", "UploadViewIsos", "UploadVmFiles", "ViewNetworks",
+                "ViewTeam", "ViewTeamMaps", "ViewTeamVms", "ViewView", "ViewViewMaps", "ViewViewVms"
             ],
             claim.PermissionValues.Order());
     }
@@ -186,7 +188,10 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
         Assert.Equal([team.Id], scoped.SourceTeamIds);
         Assert.Empty(scoped.DirectPermissionValues);
         Assert.Equal(
-            ["ViewNetworks", "ViewTeam", "ViewView", "ViewViewMaps", "ViewViewVms"],
+            [
+                "ViewNetworks", "ViewTeam", "ViewTeamMaps", "ViewTeamVms", "ViewView", "ViewViewMaps",
+                "ViewViewVms"
+            ],
             scoped.PermissionValues.Order());
         Assert.False(scoped.IsPrimary);
     }
@@ -212,13 +217,13 @@ public class UserClaimsServiceTests(DatabaseFixture fixture) : ServiceTestBase(f
         Assert.Equal(
             [
                 "ControlTeamVms", "UploadTeamIsos", "UploadVmFiles", "ViewNetworks", "ViewTeam",
-                "ViewTeamMaps", "ViewView", "ViewViewMaps", "ViewViewVms"
+                "ViewTeamMaps", "ViewTeamVms", "ViewView", "ViewViewMaps", "ViewViewVms"
             ],
             merged.PermissionValues.Order());
 
         // Only what the membership itself grants, so a scoped grant cannot widen the direct set.
         Assert.Equal(
-            ["ControlTeamVms", "UploadTeamIsos", "UploadVmFiles", "ViewTeam", "ViewTeamMaps"],
+            ["ControlTeamVms", "UploadTeamIsos", "UploadVmFiles", "ViewTeam", "ViewTeamMaps", "ViewTeamVms"],
             merged.DirectPermissionValues.Order());
     }
 
