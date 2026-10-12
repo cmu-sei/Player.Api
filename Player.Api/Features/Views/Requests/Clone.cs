@@ -20,6 +20,7 @@ using Player.Api.Data.Data.Models;
 using Player.Api.Features.Teams;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
+using Player.Api.Infrastructure.Exceptions;
 
 namespace Player.Api.Features.Views;
 
@@ -58,7 +59,14 @@ public class Clone
     public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, View>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
-            await authorizationService.Authorize([SystemPermission.CreateViews], [], [], cancellationToken);
+            await authorizationService.Authorize([SystemPermission.CreateViews], [], [], cancellationToken) &&
+            // A clone copies every team, application and file, so the caller must be able to observe the source.
+            await authorizationService.Authorize<ViewEntity>(
+                request.ViewId,
+                [SystemPermission.ViewViews, SystemPermission.ManageViews],
+                [ViewPermission.ViewView, ViewPermission.ManageView],
+                [],
+                cancellationToken);
 
         public override async Task<View> HandleRequest(Command request, CancellationToken cancellationToken)
         {
@@ -73,6 +81,9 @@ public class Clone
                     .ThenInclude(o => o.Template)
                 .Include(o => o.Files)
                 .SingleOrDefaultAsync(o => o.Id == request.ViewId, cancellationToken);
+
+            if (view == null)
+                throw new EntityNotFoundException<View>();
 
             var newView = view.Clone();
             newView.Name = $"Clone of {newView.Name}";

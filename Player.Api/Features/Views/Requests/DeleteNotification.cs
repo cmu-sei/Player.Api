@@ -57,7 +57,7 @@ public class DeleteNotification
 
         public override async Task<string> HandleRequest(Command request, CancellationToken cancellationToken)
         {
-            await notificationService.DeleteAsync(request.Key, cancellationToken);
+            await notificationService.DeleteAsync(request.ViewId, request.Key, cancellationToken);
             await viewHub.Clients.Group(request.ViewId.ToString()).SendAsync("Delete", request.Key);
             return $"Notification deleted - {request.Key}";
         }

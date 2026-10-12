@@ -353,6 +353,39 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal("Allowed", edited.Name);
     }
 
+    [Fact]
+    public async Task Edit_sets_a_default_team_of_the_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        var edited = await ReadAsync<View>(await RootClient.PutAsJsonAsync(
+            $"api/views/{view.Id}", new { name = "Defaulted", defaultTeamId = team.Id }, Ct));
+
+        Assert.Equal(team.Id, edited.DefaultTeamId);
+    }
+
+    /// <summary>
+    /// A view's default team is one of its own teams; a team of another view is refused.
+    /// </summary>
+    [Fact]
+    public async Task Edit_refuses_a_default_team_of_another_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var elsewhere = TestData.Team(otherView.Id, "Elsewhere");
+        await Seed(view, otherView, elsewhere);
+
+        var problem = await AssertProblem(HttpStatusCode.Conflict, await RootClient.PutAsJsonAsync(
+            $"api/views/{view.Id}", new { name = "Nope", defaultTeamId = elsewhere.Id }, Ct));
+
+        Assert.Equal("The default Team must belong to this View.", problem.Title);
+
+        await using var db = NewContext();
+        Assert.Null((await db.Views.SingleAsync(x => x.Id == view.Id, Ct)).DefaultTeamId);
+    }
+
     // ---- Delete ---------------------------------------------------------------------------------
 
     [Fact]
@@ -645,6 +678,33 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Contains(
             ViewBroadcasts(view.Id),
             x => x.Method == "Delete" && Equals(x.Argument, key));
+    }
+
+    /// <summary>
+    /// Keys are sequential, so the route's view is what scopes the delete: a manager of one view cannot
+    /// remove another view's notification by naming its key.
+    /// </summary>
+    [Fact]
+    public async Task DeleteNotification_does_not_find_a_notification_of_another_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        await Seed(view, otherView, role, team);
+        await Broadcast(otherView.Id, "Not yours");
+
+        var key = Assert.Single(await ReadAsync<Notification[]>(
+            await RootClient.GetAsync($"api/views/{otherView.Id}/notifications", Ct))).Key;
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.NotFound,
+            await Client(actor).DeleteAsync($"api/views/{view.Id}/notifications/{key}", Ct));
+
+        await using var db = NewContext();
+        Assert.True(await db.Notifications.AnyAsync(x => x.Key == key, Ct));
     }
 
     [Fact]
