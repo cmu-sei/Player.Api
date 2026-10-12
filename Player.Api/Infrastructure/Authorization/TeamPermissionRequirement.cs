@@ -43,11 +43,15 @@ namespace Player.Api.Infrastructure.Authorization
 
         private bool HasRequiredPermissions(List<TeamPermissionsClaim> claims, TeamPermissionRequirement requirement)
         {
+            // Omitted permission lists grant nothing, just like empty lists.
+            var requiredViewPermissions = requirement.RequiredViewPermissions ?? [];
+            var requiredTeamPermissions = requirement.RequiredTeamPermissions ?? [];
+
             // Check team-specific permissions
             if (requirement.TeamId.HasValue)
             {
                 var teamClaim = claims.FirstOrDefault(x => x.TeamId == requirement.TeamId.Value);
-                if (teamClaim?.TeamPermissions.Intersect(requirement.RequiredTeamPermissions).Any() == true)
+                if (teamClaim?.TeamPermissions.Intersect(requiredTeamPermissions).Any() == true)
                 {
                     return true;
                 }
@@ -57,7 +61,7 @@ namespace Player.Api.Infrastructure.Authorization
             if (requirement.ViewId.HasValue)
             {
                 var viewClaims = claims.Where(x => x.ViewId == requirement.ViewId.Value);
-                if (requirement.RequiredViewPermissions.Any(x => viewClaims.SelectMany(y => y.ViewPermissions).Contains(x)))
+                if (requiredViewPermissions.Any(x => viewClaims.SelectMany(y => y.ViewPermissions).Contains(x)))
                 {
                     return true;
                 }
@@ -67,8 +71,8 @@ namespace Player.Api.Infrastructure.Authorization
             if (!requirement.TeamId.HasValue && !requirement.ViewId.HasValue)
             {
                 return
-                    requirement.RequiredViewPermissions.Any(x => claims.SelectMany(y => y.ViewPermissions).Contains(x)) ||
-                    requirement.RequiredTeamPermissions.Any(x => claims.SelectMany(y => y.TeamPermissions).Contains(x));
+                    requiredViewPermissions.Any(x => claims.SelectMany(y => y.ViewPermissions).Contains(x)) ||
+                    requiredTeamPermissions.Any(x => claims.SelectMany(y => y.TeamPermissions).Contains(x));
             }
 
             return false;

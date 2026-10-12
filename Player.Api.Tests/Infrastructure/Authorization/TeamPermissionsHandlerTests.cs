@@ -230,51 +230,104 @@ public class TeamPermissionsHandlerTests
 
     // ---- Null permission arrays -----------------------------------------------------------------
     //
-    // TeamPermissionRequirement declares every permission array as optional with a null default, and
-    // AuthorizationService takes it up on that — its system-permission-only overload constructs the
-    // requirement with both arrays null. A user who holds any team claim but lacks the required system
-    // permission then reaches HasRequiredPermissions with a null array, where Enumerable.Any throws.
+    // The system-only authorization overload omits both arrays. A team claim must not turn an omitted
+    // list into a grant or an exception, and omitting one list must not prevent the other from granting.
 
-    [Fact]
-    public async Task Throws_rather_than_declining_when_no_permissions_are_required()
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, true)]
+    public async Task Does_not_succeed_when_no_permissions_are_required(
+        bool useEmptyArrays, bool scopeToView, bool scopeToTeam)
     {
         var user = new ClaimsPrincipalBuilder()
-            .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.ViewTeam])
+            .WithTeam(ViewId, TeamId,
+                viewPermissions: [ViewPermission.ManageView], teamPermissions: [TeamPermission.ManageTeam])
             .Build();
+        var requirement = new TeamPermissionRequirement(
+            RequiredViewPermissions: useEmptyArrays ? [] : null,
+            RequiredTeamPermissions: useEmptyArrays ? [] : null,
+            ViewId: scopeToView ? ViewId : null,
+            TeamId: scopeToTeam ? TeamId : null);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => AuthorizationHarness.HandleAsync(_handler, new TeamPermissionRequirement(), user));
+        var context = await AuthorizationHarness.HandleAsync(_handler, requirement, user);
+
+        Assert.False(context.HasSucceeded);
+        Assert.False(context.HasFailed);
     }
 
     [Fact]
-    public async Task Throws_rather_than_declining_when_only_team_permissions_are_required()
+    public async Task Does_not_succeed_when_only_team_permissions_are_required_but_not_granted()
     {
         var user = new ClaimsPrincipalBuilder()
             .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.ViewTeam])
             .Build();
 
-        // RequiredViewPermissions is left null, which is the array that throws.
         var requirement = new TeamPermissionRequirement(
             RequiredTeamPermissions: [TeamPermission.ManageTeam],
             ViewId: ViewId);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => AuthorizationHarness.HandleAsync(_handler, requirement, user));
+        var context = await AuthorizationHarness.HandleAsync(_handler, requirement, user);
+
+        Assert.False(context.HasSucceeded);
+        Assert.False(context.HasFailed);
     }
 
     [Fact]
-    public async Task Throws_rather_than_declining_when_only_view_permissions_are_required()
+    public async Task Does_not_succeed_when_only_view_permissions_are_required_but_not_granted()
     {
         var user = new ClaimsPrincipalBuilder()
             .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.ViewTeam])
             .Build();
 
-        // The mirror image: RequiredTeamPermissions is the null one here.
         var requirement = new TeamPermissionRequirement(
             RequiredViewPermissions: [ViewPermission.ManageView],
             TeamId: TeamId);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => AuthorizationHarness.HandleAsync(_handler, requirement, user));
+        var context = await AuthorizationHarness.HandleAsync(_handler, requirement, user);
+
+        Assert.False(context.HasSucceeded);
+        Assert.False(context.HasFailed);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Succeeds_when_view_permissions_are_granted_and_team_requirements_are_omitted(bool scoped)
+    {
+        var user = new ClaimsPrincipalBuilder()
+            .WithTeam(ViewId, TeamId, viewPermissions: [ViewPermission.ManageView])
+            .Build();
+        var requirement = new TeamPermissionRequirement(
+            RequiredViewPermissions: [ViewPermission.ManageView],
+            ViewId: scoped ? ViewId : null,
+            TeamId: scoped ? TeamId : null);
+
+        var context = await AuthorizationHarness.HandleAsync(_handler, requirement, user);
+
+        Assert.True(context.HasSucceeded);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Succeeds_when_team_permissions_are_granted_and_view_requirements_are_omitted(bool scoped)
+    {
+        var user = new ClaimsPrincipalBuilder()
+            .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.ManageTeam])
+            .Build();
+        var requirement = new TeamPermissionRequirement(
+            RequiredTeamPermissions: [TeamPermission.ManageTeam],
+            ViewId: scoped ? ViewId : null,
+            TeamId: scoped ? TeamId : null);
+
+        var context = await AuthorizationHarness.HandleAsync(_handler, requirement, user);
+
+        Assert.True(context.HasSucceeded);
     }
 }

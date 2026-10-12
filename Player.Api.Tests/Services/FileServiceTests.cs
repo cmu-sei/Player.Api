@@ -358,12 +358,11 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     }
 
     /// <summary>
-    /// Characterizes current behaviour. The system-permission-only overload leaves both team permission
-    /// arrays null, and the requirement handler enumerates them for any caller who holds a team claim —
-    /// so a view member without <c>ViewViews</c> gets a 500 instead of a 403.
+    /// The system-only permission check must refuse a view member without <c>ViewViews</c>, even though
+    /// that check omits its view and team requirements.
     /// </summary>
     [Fact]
-    public async Task GetAsync_throws_for_a_view_member_without_ViewViews()
+    public async Task GetAsync_is_forbidden_for_a_view_member_without_ViewViews()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
@@ -373,7 +372,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
             .WithTeam(view.Id, team.Id, viewPermissions: [ViewPermission.ViewView])
             .Build();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => Service(caller).GetAsync(Ct));
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).GetAsync(Ct));
     }
 
     [Fact]

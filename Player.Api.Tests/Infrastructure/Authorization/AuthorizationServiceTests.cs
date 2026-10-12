@@ -214,6 +214,17 @@ public class AuthorizationServiceTests(DatabaseFixture fixture) : DatabaseTestBa
     }
 
     [Fact]
+    public async Task Authorize_grants_on_a_system_permission_even_when_the_caller_has_team_claims()
+    {
+        var user = new ClaimsPrincipalBuilder()
+            .WithSystemPermissions(SystemPermission.ManageViews)
+            .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.ViewTeam])
+            .Build();
+
+        Assert.True(await ServiceFor(user).Authorize([SystemPermission.ManageViews], Ct));
+    }
+
+    [Fact]
     public async Task Authorize_grants_on_a_team_permission_when_the_system_permission_is_absent()
     {
         var user = new ClaimsPrincipalBuilder()
@@ -252,14 +263,13 @@ public class AuthorizationServiceTests(DatabaseFixture fixture) : DatabaseTestBa
     /// handler-level counterparts are in <c>TeamPermissionsHandlerTests</c>.
     /// </summary>
     [Fact]
-    public async Task Authorize_throws_rather_than_refusing_for_a_team_member_without_the_system_permission()
+    public async Task Authorize_refuses_for_a_team_member_without_the_system_permission()
     {
         var user = new ClaimsPrincipalBuilder()
             .WithTeam(ViewId, TeamId, teamPermissions: [TeamPermission.ViewTeam])
             .Build();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => ServiceFor(user).Authorize([SystemPermission.ManageViews], Ct));
+        Assert.False(await ServiceFor(user).Authorize([SystemPermission.ManageViews], Ct));
     }
 
     [Fact]
