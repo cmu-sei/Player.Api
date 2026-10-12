@@ -10,6 +10,7 @@ using Player.Api.Infrastructure.Exceptions;
 using Player.Api.Services;
 using Player.Api.Tests.Support;
 using Notification = Player.Api.ViewModels.Notification;
+using User = Player.Api.Features.Users.User;
 
 namespace Player.Api.Tests.Services;
 
@@ -567,7 +568,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     {
         var view = TestData.View();
         var user = TestData.User(name: "Recipient");
-        await Seed(view, user);
+        await Seed(view, user, TestData.ViewMembership(view.Id, user.Id));
 
         await Service().PostToUser(view.Id, user.Id, new Notification { Text = "Hello" }, Ct);
 
@@ -640,6 +641,54 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
 
         await Assert.ThrowsAsync<ForbiddenException>(
             () => Service(caller).PostToUser(view.Id, user.Id, new Notification { Text = "Hello" }, Ct));
+
+        Assert.Empty(await Stored());
+    }
+
+    /// <summary>
+    /// The recipient has to belong to the view the caller manages: <c>ManageView</c> on one view does not
+    /// reach a user outside it, and neither does a system administrator naming that view.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PostToUser_rejects_a_user_outside_the_view_and_stores_nothing(bool asViewManager)
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var user = TestData.User();
+        await Seed(view, team, user);
+
+        var service = asViewManager ? Service(Member(view.Id, team.Id, ViewPermission.ManageView)) : Service();
+
+        await Assert.ThrowsAsync<EntityNotFoundException<User>>(
+            () => service.PostToUser(view.Id, user.Id, new Notification { Text = "Hello" }, Ct));
+
+        Assert.Empty(await Stored());
+    }
+
+    [Fact]
+    public async Task PostToUser_rejects_a_user_who_belongs_only_to_another_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var user = TestData.User();
+        await Seed(view, otherView, user, TestData.ViewMembership(otherView.Id, user.Id));
+
+        await Assert.ThrowsAsync<EntityNotFoundException<User>>(
+            () => Service().PostToUser(view.Id, user.Id, new Notification { Text = "Hello" }, Ct));
+
+        Assert.Empty(await Stored());
+    }
+
+    [Fact]
+    public async Task PostToUser_rejects_a_user_who_does_not_exist()
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        await Assert.ThrowsAsync<EntityNotFoundException<User>>(
+            () => Service().PostToUser(view.Id, Guid.NewGuid(), new Notification { Text = "Hello" }, Ct));
 
         Assert.Empty(await Stored());
     }
