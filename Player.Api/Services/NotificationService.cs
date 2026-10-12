@@ -81,7 +81,7 @@ namespace Player.Api.Services
         public async Task<IEnumerable<ViewModels.Notification>> GetAllViewNotificationsAsync(Guid viewId, CancellationToken ct)
         {
             // get all notifications for the selected view
-            var items = await _context.Notifications.Where(n => n.ToId == viewId || n.ViewId == viewId).OrderByDescending(y => y.BroadcastTime).ToListAsync();
+            var items = await ViewNotifications(viewId).OrderByDescending(y => y.BroadcastTime).ToListAsync();
             // Databases do not preserve DateTimeKind, so we need to add UTC kind
             items.ForEach(item => item.BroadcastTime = DateTime.SpecifyKind(item.BroadcastTime, DateTimeKind.Utc));
             return _mapper.Map<IEnumerable<ViewModels.Notification>>(items);
@@ -382,13 +382,8 @@ namespace Player.Api.Services
         public async Task<bool> DeleteAsync(Guid viewId, int key, CancellationToken ct)
         {
             // Scoped to the view the caller was authorized for: keys are sequential, so an unscoped lookup
-            // would let a manager of one view delete another view's notifications. User notifications carry
-            // the view; team notifications carry only the team.
-            var viewTeamIds = _context.Teams.Where(t => t.ViewId == viewId).Select(t => t.Id);
-            var notificationToDelete = await _context.Notifications.SingleOrDefaultAsync(n => n.Key == key &&
-                ((n.ToType == NotificationType.View && n.ToId == viewId) ||
-                 n.ViewId == viewId ||
-                 (n.ToType == NotificationType.Team && viewTeamIds.Contains(n.ToId))), ct);
+            // would let a manager of one view delete another view's notifications.
+            var notificationToDelete = await ViewNotifications(viewId).SingleOrDefaultAsync(n => n.Key == key, ct);
 
             if (notificationToDelete == null)
                 throw new EntityNotFoundException<ViewModels.Notification>();
@@ -401,7 +396,7 @@ namespace Player.Api.Services
 
         public async Task<bool> DeleteViewNotificationsAsync(Guid viewId, CancellationToken ct)
         {
-            var notificationsToDelete = await _context.Notifications.Where(n => n.ToId == viewId || n.ViewId == viewId).ToListAsync();
+            var notificationsToDelete = await ViewNotifications(viewId).ToListAsync(ct);
 
             if (notificationsToDelete == null || !notificationsToDelete.Any())
                 return false;
@@ -411,7 +406,18 @@ namespace Player.Api.Services
 
             return true;
         }
-
+        /// <summary>
+        /// The notifications that belong to a view. User notifications carry the view; team notifications
+        /// carry only the team, so they belong to the view their team is in.
+        /// </summary>
+        private IQueryable<NotificationEntity> ViewNotifications(Guid viewId)
+        {
+            var viewTeamIds = _context.Teams.Where(t => t.ViewId == viewId).Select(t => t.Id);
+            return _context.Notifications.Where(n =>
+                (n.ToType == NotificationType.View && n.ToId == viewId) ||
+                n.ViewId == viewId ||
+                (n.ToType == NotificationType.Team && viewTeamIds.Contains(n.ToId)));
+        }
 
         private string GetIconUrl(NotificationPriority notificationPriority, string userName)
         {
