@@ -483,6 +483,42 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         await Assert.ThrowsAsync<ForbiddenException>(() => Service().GetByIdAsync(file.Id, Ct));
     }
 
+    /// <summary>
+    /// The per-team check runs for the file's one team and refuses a caller whose ViewTeam is on a
+    /// sibling team of the same view.
+    /// </summary>
+    [Fact]
+    public async Task GetByIdAsync_is_forbidden_for_a_caller_holding_ViewTeam_only_on_another_team()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var other = TestData.Team(view.Id, "Other Team");
+        await Seed(view, team, other);
+        var file = await SeedFile(view, teamIds: [team.Id]);
+
+        var caller = new ClaimsPrincipalBuilder()
+            .WithTeam(view.Id, other.Id, teamPermissions: [TeamPermission.ViewTeam])
+            .Build();
+
+        // Gate: Player.Api/Services/FileService.cs#FileService.EnsureAccessFile
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).GetByIdAsync(file.Id, Ct));
+    }
+
+    /// <summary>The near miss is the system permission ManageViews where reading a file takes ViewViews.</summary>
+    [Fact]
+    public async Task GetByIdAsync_is_forbidden_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+        var file = await SeedFile(view, teamIds: [team.Id]);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ManageViews).Build();
+
+        // Gate: Player.Api/Services/FileService.cs#FileService.EnsureAccessFile
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).GetByIdAsync(file.Id, Ct));
+    }
+
     [Fact]
     public async Task DownloadAsync_returns_the_bytes_under_the_original_name()
     {
@@ -505,6 +541,28 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
     {
         await Assert.ThrowsAsync<EntityNotFoundException<FileModel>>(
             () => Service().DownloadAsync(Guid.NewGuid(), Ct));
+    }
+
+    /// <summary>
+    /// The near miss is ViewView in another view: the grant is checked on the view of the file's team,
+    /// so the download is refused and no stream is opened.
+    /// </summary>
+    [Fact]
+    public async Task DownloadAsync_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var other = TestData.View("Other View");
+        var otherTeam = TestData.Team(other.Id, "Other Team");
+        await Seed(view, team, other, otherTeam);
+        var file = await SeedFile(view, teamIds: [team.Id]);
+
+        var caller = new ClaimsPrincipalBuilder()
+            .WithTeam(other.Id, otherTeam.Id, viewPermissions: [ViewPermission.ViewView])
+            .Build();
+
+        // Gate: Player.Api/Services/FileService.cs#FileService.EnsureAccessFile
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).DownloadAsync(file.Id, Ct));
     }
 
     // ---- Update -----------------------------------------------------------------------------------

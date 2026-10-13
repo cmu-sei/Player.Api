@@ -400,6 +400,28 @@ public class RoleRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.False(await ReadBack(db => db.Roles.AnyAsync(x => x.Id == TestData.Roles.ContentDeveloper, Ct)));
     }
 
+    // ---- One allowed case per permission value ---------------------------------------------------
+
+    [Fact]
+    public async Task GetAll_is_allowed_with_only_ViewRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        var roles = await ReadAsync<Role[]>(await Client(actor).GetAsync("api/roles", Ct));
+
+        Assert.Contains(roles, x => x.Id == TestData.Roles.ContentDeveloper);
+    }
+
+    [Fact]
+    public async Task GetByName_is_allowed_for_a_caller_holding_only_ViewUsers()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
+
+        var got = await ReadAsync<Role>(await Client(actor).GetAsync(ByName("Content Developer"), Ct));
+
+        Assert.Equal(TestData.Roles.ContentDeveloper, got.Id);
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
 
     /// <summary>

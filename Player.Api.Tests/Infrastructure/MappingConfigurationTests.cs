@@ -128,7 +128,7 @@ public class MappingConfigurationTests
     /// </para>
     /// <para>
     /// No profile declares <c>MemberList.Source</c> today, so the test skips itself rather than passing
-    /// vacuously — an empty set would make it green while asserting nothing. It needs no edit to become
+    /// vacuously — over an empty set it would pass while asserting nothing. It needs no edit to become
     /// live: the first <c>CreateMap&lt;T, TEntity&gt;(MemberList.Source)</c> anywhere in the application
     /// enrols that map and every one added after it.
     /// </para>

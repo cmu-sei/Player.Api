@@ -438,6 +438,105 @@ public class TeamRoleRequestTests(DatabaseFixture fixture, PlayerAppFactory fact
         Assert.False(await ReadBack(db => db.TeamRoles.AnyAsync(x => x.Id == TestData.TeamRoles.Observer, Ct)));
     }
 
+    // ---- One allowed case per permission value ---------------------------------------------------
+
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        var got = await ReadAsync<TeamRole>(
+            await Client(actor).GetAsync($"api/team-roles/{TestData.TeamRoles.Observer}", Ct));
+
+        Assert.Equal("Observer", got.Name);
+    }
+
+    /// <summary>The view tier: ViewView in any view, held on a team of its own that grants nothing.</summary>
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var got = await ReadAsync<TeamRole>(
+            await Client(actor).GetAsync($"api/team-roles/{TestData.TeamRoles.Observer}", Ct));
+
+        Assert.Equal("Observer", got.Name);
+    }
+
+    /// <summary>Each system permission the gate accepts admits the listing on its own, with no membership.</summary>
+    [Theory]
+    [InlineData(SystemPermission.ViewRoles)]
+    [InlineData(SystemPermission.ViewViews)]
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_the_system_permission(SystemPermission permission)
+    {
+        var actor = await Actor().WithSystemPermissions(permission).SeedAsync();
+
+        var roles = await ReadAsync<TeamRole[]>(await Client(actor).GetAsync("api/team-roles", Ct));
+
+        Assert.Contains(roles, x => x.Id == TestData.TeamRoles.Observer);
+    }
+
+    /// <summary>The view tier: ViewView in any view, held on a team of its own that grants nothing.</summary>
+    [Fact]
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var roles = await ReadAsync<TeamRole[]>(await Client(actor).GetAsync("api/team-roles", Ct));
+
+        Assert.Contains(roles, x => x.Id == TestData.TeamRoles.Observer);
+    }
+
+    // ---- One near miss per tier -------------------------------------------------------------------
+
+    /// <summary>The system tier: ManageRoles where reading a team role takes ViewRoles or ViewViews.</summary>
+    [Fact]
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/team-roles/{TestData.TeamRoles.Observer}", Ct));
+    }
+
+    /// <summary>The view tier: ManageView in a view, where reading a team role takes ViewView in any view.</summary>
+    [Fact]
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ManageView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/team-roles/{TestData.TeamRoles.Observer}", Ct));
+    }
+
+    /// <summary>The system tier: ManageRoles where listing team roles takes ViewRoles or ViewViews.</summary>
+    [Fact]
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/team-roles", Ct));
+    }
+
+    /// <summary>The view tier: ManageView in a view, where listing team roles takes ViewView in any view.</summary>
+    [Fact]
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ManageView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/team-roles", Ct));
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
 
     /// <summary>

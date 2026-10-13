@@ -394,6 +394,45 @@ public class PermissionRequestTests(DatabaseFixture fixture, PlayerAppFactory fa
         Assert.False(await ReadBack(db => db.Permissions.AnyAsync(x => x.Id == permissionId, Ct)));
     }
 
+    /// <summary>
+    /// The near miss is the row, not the caller: a caller holding exactly ManageRoles is refused an
+    /// immutable permission by the flag's own message, and the name stays.
+    /// </summary>
+    [Fact]
+    public async Task Edit_refuses_an_immutable_permission_to_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        var problem = await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).PutAsJsonAsync(
+                $"api/permissions/{TestData.Permissions.CreateViews}",
+                new { name = "Renamed" },
+                Ct));
+
+        Assert.Equal("Cannot update an Immutable Permission", problem.Title);
+        Assert.Equal(
+            "CreateViews",
+            await ReadBack(db => db.Permissions.Where(x => x.Id == TestData.Permissions.CreateViews).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    /// <summary>
+    /// The near miss is the row, not the caller: a caller holding exactly ManageRoles is refused an
+    /// immutable permission by the flag's own message, and the row stays.
+    /// </summary>
+    [Fact]
+    public async Task Delete_refuses_an_immutable_permission_to_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        var problem = await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).DeleteAsync($"api/permissions/{TestData.Permissions.CreateViews}", Ct));
+
+        Assert.Equal("Cannot delete an Immutable Permission", problem.Title);
+        Assert.True(await ReadBack(db => db.Permissions.AnyAsync(x => x.Id == TestData.Permissions.CreateViews, Ct)));
+    }
+
     [Fact]
     public async Task Get_is_allowed_for_a_caller_holding_only_ViewRoles()
     {
@@ -525,6 +564,31 @@ public class PermissionRequestTests(DatabaseFixture fixture, PlayerAppFactory fa
             await Client(actor).DeleteAsync($"api/permissions/{permissionId}", Ct));
 
         Assert.True(await ReadBack(db => db.Permissions.AnyAsync(x => x.Id == permissionId, Ct)));
+    }
+
+    // ---- One near miss per tier -------------------------------------------------------------------
+
+    /// <summary>The view tier: ManageView in a view, where reading a permission takes ViewView in any view.</summary>
+    [Fact]
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ManageView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync(
+            $"api/permissions/{TestData.Permissions.CreateViews}", Ct));
+    }
+
+    /// <summary>The view tier: ManageView in a view, where listing permissions takes ViewView in any view.</summary>
+    [Fact]
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ManageView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/permissions", Ct));
     }
 
     // ---- Helpers --------------------------------------------------------------------------------

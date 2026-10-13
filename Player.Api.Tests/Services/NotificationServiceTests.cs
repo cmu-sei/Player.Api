@@ -112,6 +112,23 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     }
 
     /// <summary>
+    /// The near miss is a member of another view holding ViewView there: the check is membership of this
+    /// view, and a claim on another view does not count.
+    /// </summary>
+    [Fact]
+    public async Task GetByViewAsync_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var other = TestData.View("Other View");
+        var otherTeam = TestData.Team(other.Id);
+        await Seed(view, other, otherTeam, TestData.Notification(view.Id, text: "For the view"));
+
+        var caller = Member(other.Id, otherTeam.Id, ViewPermission.ViewView);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).GetByViewAsync(view.Id, Ct));
+    }
+
+    /// <summary>
     /// Unlike the others this one authorizes nothing — the request handler does it, and the sweep behind
     /// a view delete needs every message including the system ones.
     /// </summary>
@@ -752,6 +769,267 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         var notification = await Service(caller).JoinUser(view.Id, caller.GetId(), Ct);
 
         Assert.False(notification.WasSuccess);
+    }
+
+    // ---- One allowed case per permission value ---------------------------------------------------
+
+    [Fact]
+    public async Task GetByTeamAsync_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team, TestData.Notification(team.Id, NotificationType.Team, text: "For the team"));
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ViewViews).Build();
+
+        var notifications = await Service(caller).GetByTeamAsync(team.Id, Ct);
+
+        Assert.Equal("For the team", Assert.Single(notifications).Text);
+    }
+
+    /// <summary>The view tier: ViewView on the team's view, held on another team of that view.</summary>
+    [Fact]
+    public async Task GetByTeamAsync_is_allowed_for_a_caller_holding_ViewView_on_the_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var other = TestData.Team(view.Id, "Other Team");
+        await Seed(view, team, other, TestData.Notification(team.Id, NotificationType.Team, text: "For the team"));
+
+        var caller = Member(view.Id, other.Id, ViewPermission.ViewView);
+
+        var notifications = await Service(caller).GetByTeamAsync(team.Id, Ct);
+
+        Assert.Equal("For the team", Assert.Single(notifications).Text);
+    }
+
+    [Fact]
+    public async Task JoinView_lets_a_caller_holding_only_ManageViews_post()
+    {
+        var view = TestData.View("My View");
+        await Seed(view);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ManageViews).Build();
+        var notification = await Service(caller).JoinView(view.Id, Ct);
+
+        Assert.True(notification.WasSuccess);
+        Assert.True(notification.CanPost);
+        Assert.Equal("Successfully joined My View notifications.", notification.Text);
+    }
+
+    [Fact]
+    public async Task JoinTeam_lets_a_caller_holding_only_ManageViews_post()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Blue Team");
+        await Seed(view, team);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ManageViews).Build();
+        var notification = await Service(caller).JoinTeam(team.Id, Ct);
+
+        Assert.True(notification.WasSuccess);
+        Assert.True(notification.CanPost);
+        Assert.Equal("Successfully joined Blue Team notifications.", notification.Text);
+    }
+
+    [Fact]
+    public async Task JoinUser_lets_a_caller_holding_only_ManageViews_post_to_anyone()
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ManageViews).Build();
+        var notification = await Service(caller).JoinUser(view.Id, Guid.NewGuid(), Ct);
+
+        Assert.True(notification.WasSuccess);
+        Assert.True(notification.CanPost);
+    }
+
+    [Fact]
+    public async Task JoinUser_lets_a_caller_holding_only_ViewViews_listen_to_anyone_without_posting()
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ViewViews).Build();
+        var notification = await Service(caller).JoinUser(view.Id, Guid.NewGuid(), Ct);
+
+        Assert.True(notification.WasSuccess);
+        Assert.False(notification.CanPost);
+    }
+
+    [Fact]
+    public async Task PostToView_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View("My View");
+        await Seed(view);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ManageViews).Build();
+        await Service(caller).PostToView(view.Id, new Notification { Text = "Hello" }, Ct);
+
+        var stored = await ReadBack(db => db.Notifications.SingleAsync(x => x.ToId == view.Id, Ct));
+        Assert.Equal("Hello", stored.Text);
+        Assert.Equal(caller.GetId(), stored.FromId);
+    }
+
+    [Fact]
+    public async Task PostToTeam_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Blue Team");
+        await Seed(view, team);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ManageViews).Build();
+        await Service(caller).PostToTeam(team.Id, new Notification { Text = "Hello" }, Ct);
+
+        var stored = await ReadBack(db => db.Notifications.SingleAsync(x => x.ToId == team.Id, Ct));
+        Assert.Equal("Hello", stored.Text);
+        Assert.Equal(caller.GetId(), stored.FromId);
+    }
+
+    /// <summary>The view tier: ManageView on the view, held on a team of that view.</summary>
+    [Fact]
+    public async Task PostToUser_is_allowed_for_a_caller_holding_ManageView_on_the_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var user = TestData.User(name: "Recipient");
+        await Seed(view, team, user);
+
+        var caller = Member(view.Id, team.Id, ViewPermission.ManageView);
+        await Service(caller).PostToUser(view.Id, user.Id, new Notification { Text = "Hello" }, Ct);
+
+        var stored = await ReadBack(db => db.Notifications.SingleAsync(x => x.ToId == user.Id, Ct));
+        Assert.Equal("Hello", stored.Text);
+        Assert.Equal(view.Id, stored.ViewId);
+    }
+
+    // ---- One near miss per tier -------------------------------------------------------------------
+
+    /// <summary>The system tier: ManageViews where reading a team's notifications takes ViewViews.</summary>
+    [Fact]
+    public async Task GetByTeamAsync_is_forbidden_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ManageViews).Build();
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).GetByTeamAsync(team.Id, Ct));
+    }
+
+    /// <summary>The view tier: ViewView in another view, where the team's own view is the one checked.</summary>
+    [Fact]
+    public async Task GetByTeamAsync_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var other = TestData.View("Other View");
+        var otherTeam = TestData.Team(other.Id, "Other Team");
+        await Seed(view, team, other, otherTeam);
+
+        var caller = Member(other.Id, otherTeam.Id, ViewPermission.ViewView);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).GetByTeamAsync(team.Id, Ct));
+    }
+
+    /// <summary>The system tier: ViewViews where posting to a view takes ManageViews; nothing is stored.</summary>
+    [Fact]
+    public async Task PostToView_is_forbidden_for_a_caller_holding_only_ViewViews_and_stores_nothing()
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ViewViews).Build();
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service(caller).PostToView(view.Id, new Notification { Text = "Hello" }, Ct));
+        Assert.Empty(await Stored());
+    }
+
+    /// <summary>The system tier: ViewViews where posting to a team takes ManageViews; nothing is stored.</summary>
+    [Fact]
+    public async Task PostToTeam_is_forbidden_for_a_caller_holding_only_ViewViews_and_stores_nothing()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ViewViews).Build();
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service(caller).PostToTeam(team.Id, new Notification { Text = "Hello" }, Ct));
+        Assert.Empty(await Stored());
+    }
+
+    /// <summary>The system tier: ViewViews where posting to a user takes ManageViews; nothing is stored.</summary>
+    [Fact]
+    public async Task PostToUser_is_forbidden_for_a_caller_holding_only_ViewViews_and_stores_nothing()
+    {
+        var view = TestData.View();
+        var user = TestData.User();
+        await Seed(view, user);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ViewViews).Build();
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service(caller).PostToUser(view.Id, user.Id, new Notification { Text = "Hello" }, Ct));
+        Assert.Empty(await Stored());
+    }
+
+    /// <summary>
+    /// The system tier of both join checks: ViewUsers, a system permission neither accepts, joins nothing
+    /// and is not offered posting.
+    /// </summary>
+    [Fact]
+    public async Task JoinView_refuses_a_caller_holding_only_ViewUsers()
+    {
+        var view = TestData.View("My View");
+        await Seed(view);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ViewUsers).Build();
+        var notification = await Service(caller).JoinView(view.Id, Ct);
+
+        Assert.False(notification.WasSuccess);
+        Assert.False(notification.CanPost);
+        Assert.Equal("Failed to join View notifications.", notification.Text);
+    }
+
+    /// <summary>
+    /// The system tier of both join checks: ViewUsers, a system permission neither accepts, does not join
+    /// another user's conversation and is not offered posting.
+    /// </summary>
+    [Fact]
+    public async Task JoinUser_refuses_a_caller_holding_only_ViewUsers()
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ViewUsers).Build();
+        var notification = await Service(caller).JoinUser(view.Id, Guid.NewGuid(), Ct);
+
+        Assert.False(notification.WasSuccess);
+        Assert.False(notification.CanPost);
+    }
+
+    /// <summary>
+    /// The view tier of both join checks: ViewView in another view does not join a conversation in this
+    /// one and is not offered posting.
+    /// </summary>
+    [Fact]
+    public async Task JoinUser_refuses_a_caller_holding_ViewView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var other = TestData.View("Other View");
+        var otherTeam = TestData.Team(other.Id, "Other Team");
+        await Seed(view, other, otherTeam);
+
+        var caller = Member(other.Id, otherTeam.Id, ViewPermission.ViewView);
+        var notification = await Service(caller).JoinUser(view.Id, Guid.NewGuid(), Ct);
+
+        Assert.False(notification.WasSuccess);
+        Assert.False(notification.CanPost);
     }
 
     // ---- Helpers ----------------------------------------------------------------------------------

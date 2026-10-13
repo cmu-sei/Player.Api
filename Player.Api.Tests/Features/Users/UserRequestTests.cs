@@ -787,6 +787,23 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.False(await ReadBack(db => db.Users.AnyAsync(x => x.Id == user.Id, Ct)));
     }
 
+    /// <summary>
+    /// The near miss is the subject, not the permission: a caller holding exactly ManageUsers, which
+    /// deletes another user, is refused its own account by the identity check's message, and stays.
+    /// </summary>
+    [Fact]
+    public async Task Delete_refuses_a_caller_holding_only_ManageUsers_its_own_account()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageUsers).SeedAsync();
+
+        var problem = await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).DeleteAsync($"api/users/{actor.Id}", Ct));
+
+        Assert.Equal("You cannot delete your own account", problem.Title);
+        Assert.True(await ReadBack(db => db.Users.AnyAsync(x => x.Id == actor.Id, Ct)));
+    }
+
     /// <summary>The team's own role grants nothing, so ManageTeam on the team itself is the only grant in play.</summary>
     [Fact]
     public async Task AddToTeam_is_allowed_for_a_caller_holding_ManageTeam_on_the_team()
@@ -895,6 +912,288 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             $"api/users/{user.Id}", new { name = "After" }, Ct));
 
         Assert.Equal("After", await ReadBack(db => db.Users.Where(x => x.Id == user.Id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    // ---- One allowed case per permission value ---------------------------------------------------
+
+    /// <summary>ViewView in any view admits the read; the subject is on no team, so no team check is in play.</summary>
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewView_in_any_view()
+    {
+        var view = TestData.View();
+        var user = TestData.User(name: "Findable");
+        await Seed(view, user);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var got = await ReadAsync<User>(await Client(actor).GetAsync($"api/users/{user.Id}", Ct));
+
+        Assert.Equal("Findable", got.Name);
+    }
+
+    /// <summary>ManageTeam on any team admits the read; the subject is on no team, so no team check is in play.</summary>
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ManageTeam_on_any_team()
+    {
+        var view = TestData.View();
+        var user = TestData.User(name: "Findable");
+        await Seed(view, user);
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ManageTeam]).SeedAsync();
+
+        var got = await ReadAsync<User>(await Client(actor).GetAsync($"api/users/{user.Id}", Ct));
+
+        Assert.Equal("Findable", got.Name);
+    }
+
+    /// <summary>A team member holding ManageTeam is answered with a 500 when listing users.</summary>
+    [Fact]
+    public async Task GetAll_fails_for_a_caller_holding_only_ManageTeam()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ManageTeam]).SeedAsync();
+
+        var problem = await AssertProblem(
+            HttpStatusCode.InternalServerError,
+            await Client(actor).GetAsync("api/users", Ct));
+
+        Assert.Equal("Value cannot be null. (Parameter 'source')", problem.Detail);
+    }
+
+    [Fact]
+    public async Task GetByTeam_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Team");
+        await Seed(view, team);
+        var member = await Actor().WithName("Member").OnTeam(team).SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        var users = await ReadAsync<User[]>(await Client(actor).GetAsync($"api/teams/{team.Id}/users", Ct));
+
+        Assert.Equal(member.Id, Assert.Single(users).Id);
+    }
+
+    /// <summary>The view tier: ViewView on the team's view, held on a team of its own that grants nothing.</summary>
+    [Fact]
+    public async Task GetByTeam_is_allowed_for_a_caller_holding_ViewView_on_the_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Team");
+        await Seed(view, team);
+        var member = await Actor().WithName("Member").OnTeam(team).SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var users = await ReadAsync<User[]>(await Client(actor).GetAsync($"api/teams/{team.Id}/users", Ct));
+
+        Assert.Equal(member.Id, Assert.Single(users).Id);
+    }
+
+    [Fact]
+    public async Task GetByView_is_allowed_for_a_caller_holding_only_ViewUsers()
+    {
+        var view = TestData.View();
+        var member = TestData.User(name: "Member");
+        await Seed(view, member, TestData.ViewMembership(view.Id, member.Id));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
+
+        var users = await ReadAsync<User[]>(await Client(actor).GetAsync($"api/views/{view.Id}/users", Ct));
+
+        Assert.Equal(member.Id, Assert.Single(users).Id);
+    }
+
+    [Fact]
+    public async Task AddToTeam_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var user = TestData.User();
+        await Seed(view, team, user);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await AddToTeam(Client(actor), team.Id, user.Id));
+
+        Assert.True(await ReadBack(db => db.TeamMemberships.AnyAsync(x => x.TeamId == team.Id && x.UserId == user.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task RemoveFromTeam_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Team");
+        await Seed(view, team);
+        var member = await Actor().WithName("Member").OnTeam(team).SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.OK,
+            await Client(actor).DeleteAsync($"api/teams/{team.Id}/users/{member.Id}", Ct));
+
+        Assert.False(await ReadBack(db => db.TeamMemberships.AnyAsync(x => x.UserId == member.Id, Ct)));
+    }
+
+    /// <summary>The view tier: ManageView on the team's view, held on a team of its own that grants nothing.</summary>
+    [Fact]
+    public async Task RemoveFromTeam_is_allowed_for_a_caller_holding_ManageView_on_the_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Team");
+        await Seed(view, team);
+        var member = await Actor().WithName("Member").OnTeam(team).SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.OK,
+            await Client(actor).DeleteAsync($"api/teams/{team.Id}/users/{member.Id}", Ct));
+
+        Assert.False(await ReadBack(db => db.TeamMemberships.AnyAsync(x => x.UserId == member.Id, Ct)));
+    }
+
+    // ---- One near miss per tier -------------------------------------------------------------------
+
+    /// <summary>The system tier: ViewViews where reading a user on no team takes ViewUsers.</summary>
+    [Fact]
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ViewViews_when_the_user_is_on_no_team()
+    {
+        var user = TestData.User();
+        await Seed(user);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync($"api/users/{user.Id}", Ct));
+    }
+
+    /// <summary>The view tier: ManageView in a view where reading a user on no team takes ViewView in any view.</summary>
+    [Fact]
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ManageView_when_the_user_is_on_no_team()
+    {
+        var view = TestData.View();
+        var user = TestData.User();
+        await Seed(view, user);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync($"api/users/{user.Id}", Ct));
+    }
+
+    /// <summary>The system tier: ViewViews where listing users takes ViewUsers.</summary>
+    [Fact]
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/users", Ct));
+    }
+
+    /// <summary>The team tier: ViewTeam on a team where listing users takes ManageTeam on any team.</summary>
+    [Fact]
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ViewTeam()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/users", Ct));
+    }
+
+    /// <summary>The system tier: ManageViews where listing a team's users takes ViewViews.</summary>
+    [Fact]
+    public async Task GetByTeam_is_forbidden_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Team");
+        await Seed(view, team);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync($"api/teams/{team.Id}/users", Ct));
+    }
+
+    /// <summary>The view tier: ViewView in another view, where the team's own view is the one checked.</summary>
+    [Fact]
+    public async Task GetByTeam_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var other = TestData.View("Other View");
+        var team = TestData.Team(view.Id, "Team");
+        await Seed(view, other, team);
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync($"api/teams/{team.Id}/users", Ct));
+    }
+
+    /// <summary>The system tier: ViewViews where listing a view's users takes ViewUsers.</summary>
+    [Fact]
+    public async Task GetByView_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var member = TestData.User(name: "Member");
+        await Seed(view, member, TestData.ViewMembership(view.Id, member.Id));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync($"api/views/{view.Id}/users", Ct));
+    }
+
+    /// <summary>The system tier: ViewViews where adding a user to a team takes ManageViews; no membership is made.</summary>
+    [Fact]
+    public async Task AddToTeam_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var user = TestData.User();
+        await Seed(view, team, user);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await AddToTeam(Client(actor), team.Id, user.Id));
+
+        Assert.False(await ReadBack(db => db.TeamMemberships.AnyAsync(x => x.UserId == user.Id, Ct)));
+    }
+
+    /// <summary>The view tier: ManageView in another view, where the team's own view is the one checked; no membership is made.</summary>
+    [Fact]
+    public async Task AddToTeam_is_forbidden_for_a_caller_holding_ManageView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var other = TestData.View("Other View");
+        var team = TestData.Team(view.Id);
+        var user = TestData.User();
+        await Seed(view, other, team, user);
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await AddToTeam(Client(actor), team.Id, user.Id));
+
+        Assert.False(await ReadBack(db => db.TeamMemberships.AnyAsync(x => x.UserId == user.Id, Ct)));
+    }
+
+    /// <summary>The system tier: ViewViews where removing a user from a team takes ManageViews; the membership stays.</summary>
+    [Fact]
+    public async Task RemoveFromTeam_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Team");
+        await Seed(view, team);
+        var member = await Actor().WithName("Member").OnTeam(team).SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).DeleteAsync($"api/teams/{team.Id}/users/{member.Id}", Ct));
+
+        Assert.True(await ReadBack(db => db.TeamMemberships.AnyAsync(x => x.UserId == member.Id, Ct)));
+    }
+
+    /// <summary>The view tier: ManageView in another view, where the team's own view is the one checked; the membership stays.</summary>
+    [Fact]
+    public async Task RemoveFromTeam_is_forbidden_for_a_caller_holding_ManageView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var other = TestData.View("Other View");
+        var team = TestData.Team(view.Id, "Team");
+        await Seed(view, other, team);
+        var member = await Actor().WithName("Member").OnTeam(team).SeedAsync();
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).DeleteAsync($"api/teams/{team.Id}/users/{member.Id}", Ct));
+
+        Assert.True(await ReadBack(db => db.TeamMemberships.AnyAsync(x => x.UserId == member.Id, Ct)));
     }
 
     // ---- Helpers --------------------------------------------------------------------------------

@@ -321,4 +321,106 @@ public class TeamPermissionScopeRequestTests(DatabaseFixture fixture, PlayerAppF
         Assert.False(await ReadBack(db => db.TeamPermissionScopes.AnyAsync(
             x => x.TeamId == team.Id && x.TargetTeamId == target.Id, Ct)));
     }
+
+    // ---- One allowed case per permission value ---------------------------------------------------
+
+    [Fact]
+    public async Task Add_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Granting");
+        var target = TestData.Team(view.Id, "Target");
+        await Seed(view, team, target);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PostAsync(
+            $"api/teams/{team.Id}/scopes/{target.Id}", null, Ct));
+
+        Assert.True(await ReadBack(db => db.TeamPermissionScopes.AnyAsync(
+            x => x.TeamId == team.Id && x.TargetTeamId == target.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task Remove_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Granting");
+        var target = TestData.Team(view.Id, "Target");
+        await Seed(view, team, target, TestData.TeamPermissionScope(team.Id, target.Id));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).DeleteAsync(
+            $"api/teams/{team.Id}/scopes/{target.Id}", Ct));
+
+        Assert.False(await ReadBack(db => db.TeamPermissionScopes.AnyAsync(
+            x => x.TeamId == team.Id && x.TargetTeamId == target.Id, Ct)));
+    }
+
+    // ---- One near miss per tier -------------------------------------------------------------------
+
+    /// <summary>The system tier: ViewViews where adding a scope takes ManageViews; no scope is stored.</summary>
+    [Fact]
+    public async Task Add_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Granting");
+        var target = TestData.Team(view.Id, "Target");
+        await Seed(view, team, target);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsync(
+            $"api/teams/{team.Id}/scopes/{target.Id}", null, Ct));
+
+        Assert.False(await ReadBack(db => db.TeamPermissionScopes.AnyAsync(x => x.TeamId == team.Id, Ct)));
+    }
+
+    /// <summary>The view tier: ManageView in another view, where the granting team's view is the one checked.</summary>
+    [Fact]
+    public async Task Add_is_forbidden_for_a_caller_holding_ManageView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var other = TestData.View("Other View");
+        var team = TestData.Team(view.Id, "Granting");
+        var target = TestData.Team(view.Id, "Target");
+        await Seed(view, other, team, target);
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsync(
+            $"api/teams/{team.Id}/scopes/{target.Id}", null, Ct));
+
+        Assert.False(await ReadBack(db => db.TeamPermissionScopes.AnyAsync(x => x.TeamId == team.Id, Ct)));
+    }
+
+    /// <summary>The system tier: ViewViews where removing a scope takes ManageViews; the scope stays.</summary>
+    [Fact]
+    public async Task Remove_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Granting");
+        var target = TestData.Team(view.Id, "Target");
+        await Seed(view, team, target, TestData.TeamPermissionScope(team.Id, target.Id));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync(
+            $"api/teams/{team.Id}/scopes/{target.Id}", Ct));
+
+        Assert.True(await ReadBack(db => db.TeamPermissionScopes.AnyAsync(x => x.TeamId == team.Id, Ct)));
+    }
+
+    /// <summary>The view tier: ManageView in another view, where the granting team's view is the one checked; the scope stays.</summary>
+    [Fact]
+    public async Task Remove_is_forbidden_for_a_caller_holding_ManageView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var other = TestData.View("Other View");
+        var team = TestData.Team(view.Id, "Granting");
+        var target = TestData.Team(view.Id, "Target");
+        await Seed(view, other, team, target, TestData.TeamPermissionScope(team.Id, target.Id));
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync(
+            $"api/teams/{team.Id}/scopes/{target.Id}", Ct));
+
+        Assert.True(await ReadBack(db => db.TeamPermissionScopes.AnyAsync(x => x.TeamId == team.Id, Ct)));
+    }
 }

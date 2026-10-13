@@ -673,6 +673,64 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         Assert.True(await ReadBack(db => db.ApplicationTemplates.AnyAsync(x => x.Id == template.Id, Ct)));
     }
 
+    // ---- One allowed case per permission value ---------------------------------------------------
+
+    /// <summary>Each system permission the gate accepts admits the listing on its own, with no membership.</summary>
+    [Theory]
+    [InlineData(SystemPermission.ViewApplications)]
+    [InlineData(SystemPermission.ViewViews)]
+    public async Task GetAllTemplates_is_allowed_for_a_caller_holding_only_the_system_permission(SystemPermission permission)
+    {
+        var template = TestData.ApplicationTemplate();
+        await Seed(template);
+        var actor = await Actor().WithSystemPermissions(permission).SeedAsync();
+
+        var templates = await ReadAsync<ApplicationTemplate[]>(
+            await Client(actor).GetAsync("api/application-templates", Ct));
+
+        Assert.Equal(template.Id, Assert.Single(templates).Id);
+    }
+
+    [Fact]
+    public async Task GetApplicationTemplate_is_allowed_for_a_caller_holding_only_ViewApplications()
+    {
+        var template = TestData.ApplicationTemplate();
+        await Seed(template);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewApplications).SeedAsync();
+
+        var got = await ReadAsync<ApplicationTemplate>(
+            await Client(actor).GetAsync($"api/application-templates/{template.Id}", Ct));
+
+        Assert.Equal(template.Id, got.Id);
+    }
+
+    // ---- One near miss per tier -------------------------------------------------------------------
+
+    /// <summary>The system tier: ManageApplications where listing templates takes ViewApplications or ViewViews.</summary>
+    [Fact]
+    public async Task GetAllTemplates_is_forbidden_for_a_caller_holding_only_ManageApplications()
+    {
+        await Seed(TestData.ApplicationTemplate());
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageApplications).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync("api/application-templates", Ct));
+    }
+
+    /// <summary>The system tier: ViewViews where reading one template takes ViewApplications.</summary>
+    [Fact]
+    public async Task GetApplicationTemplate_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var template = TestData.ApplicationTemplate();
+        await Seed(template);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/application-templates/{template.Id}", Ct));
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
 
     /// <summary>

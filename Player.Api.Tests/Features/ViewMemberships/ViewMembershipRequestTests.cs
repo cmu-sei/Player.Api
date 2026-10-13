@@ -84,17 +84,16 @@ public class ViewMembershipRequestTests(DatabaseFixture fixture, PlayerAppFactor
     public async Task Get_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
     {
         var view = TestData.View();
-        var user = TestData.User();
-        var viewMembership = TestData.ViewMembership(view.Id, user.Id);
-        await Seed(view, user, viewMembership);
-
         var other = TestData.View("Other View");
-        await Seed(other);
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        await Seed(view, other, role, team);
+        var member = await Actor().WithName("Member").OnTeam(team).SeedAsync();
         var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         await AssertProblem(
             HttpStatusCode.Forbidden,
-            await Client(actor).GetAsync($"api/view-memberships/{viewMembership.Id}", Ct));
+            await Client(actor).GetAsync($"api/view-memberships/{member.Membership.ViewMembershipId}", Ct));
     }
 
     // ---- GetByUser ------------------------------------------------------------------------------
@@ -192,5 +191,38 @@ public class ViewMembershipRequestTests(DatabaseFixture fixture, PlayerAppFactor
             await Client(actor).GetAsync($"api/users/{user.Id}/view-memberships", Ct));
 
         Assert.Equal(view.Id, Assert.Single(memberships).ViewId);
+    }
+
+    // ---- One allowed case per permission value ---------------------------------------------------
+
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        await Seed(view, role, team);
+        var member = await Actor().WithName("Member").OnTeam(team).SeedAsync();
+        var caller = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        var got = await ReadAsync<ViewMembership>(await Client(caller).GetAsync(
+            $"api/view-memberships/{member.Membership.ViewMembershipId}", Ct));
+
+        Assert.Equal(member.Membership.ViewMembershipId, got.Id);
+    }
+
+    /// <summary>The system tier: ManageViews where reading a view membership takes ViewViews.</summary>
+    [Fact]
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        await Seed(view, role, team);
+        var member = await Actor().WithName("Member").OnTeam(team).SeedAsync();
+        var caller = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(caller).GetAsync(
+            $"api/view-memberships/{member.Membership.ViewMembershipId}", Ct));
     }
 }

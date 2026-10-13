@@ -776,7 +776,7 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     /// <summary>
     /// The only test that the exporter's archive key and the importer's lookup agree — `Export.cs:122`
     /// writes <c>{id}-{name}</c> and <c>ViewImporter.cs:168</c> reads it back, with nothing shared
-    /// between them. A rename on either side turns this red and leaves every hand-built archive green.
+    /// between them. A rename on either side fails this test and no test that builds its archive by hand.
     /// </summary>
     [Fact]
     public async Task Export_round_trips_a_file_through_Import_with_its_bytes()
@@ -1101,6 +1101,158 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
         Assert.NotEqual(view.Id, cloned.Id);
         Assert.True(await ReadBack(db => db.Views.AnyAsync(x => x.Id == cloned.Id, Ct)));
+    }
+
+    // ---- One allowed case per permission value ---------------------------------------------------
+
+    [Fact]
+    public async Task Edit_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        var edited = await ReadAsync<View>(await Client(actor).PutAsJsonAsync(
+            $"api/views/{view.Id}", new { name = "Allowed" }, Ct));
+
+        Assert.Equal("Allowed", edited.Name);
+        Assert.Equal("Allowed", await ReadBack(db => db.Views.Where(x => x.Id == view.Id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task SendNotification_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/notifications", new { text = "From a system view manager" }, Ct));
+
+        Assert.Equal(actor.Id, await ReadBack(db => db.Notifications.Where(x => x.ToId == view.Id).Select(x => x.FromId).SingleAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task GetNotifications_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        await Seed(view, TestData.Notification(view.Id, text: "Readable"));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        var notifications = await ReadAsync<Notification[]>(
+            await Client(actor).GetAsync($"api/views/{view.Id}/notifications", Ct));
+
+        Assert.Equal("Readable", Assert.Single(notifications).Text);
+    }
+
+    [Fact]
+    public async Task DeleteNotification_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        var notification = TestData.Notification(view.Id);
+        await Seed(view, notification);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).DeleteAsync(
+            $"api/views/{view.Id}/notifications/{notification.Key}", Ct));
+
+        Assert.False(await ReadBack(db => db.Notifications.AnyAsync(x => x.Key == notification.Key, Ct)));
+    }
+
+    [Fact]
+    public async Task DeleteAllNotifications_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        await Seed(view, TestData.Notification(view.Id));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).DeleteAsync($"api/views/{view.Id}/notifications", Ct));
+
+        Assert.False(await ReadBack(db => db.Notifications.AnyAsync(x => x.ToId == view.Id, Ct)));
+    }
+
+    // ---- One near miss per tier -------------------------------------------------------------------
+
+    /// <summary>The system tier: ViewViews where renaming a view takes ManageViews; the name stays.</summary>
+    [Fact]
+    public async Task Edit_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View("Before");
+        await Seed(view);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/views/{view.Id}", new { name = "Refused" }, Ct));
+
+        Assert.Equal("Before", await ReadBack(db => db.Views.Where(x => x.Id == view.Id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    /// <summary>The system tier: ViewViews where deleting a view takes ManageViews; the view stays.</summary>
+    [Fact]
+    public async Task Delete_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync($"api/views/{view.Id}", Ct));
+
+        Assert.True(await ReadBack(db => db.Views.AnyAsync(x => x.Id == view.Id, Ct)));
+    }
+
+    /// <summary>The system tier: ViewViews where notifying a view takes ManageViews; nothing is stored.</summary>
+    [Fact]
+    public async Task SendNotification_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/notifications", new { text = "Refused" }, Ct));
+
+        Assert.False(await ReadBack(db => db.Notifications.AnyAsync(x => x.ToId == view.Id, Ct)));
+    }
+
+    /// <summary>The system tier: ManageViews where reading a view's notifications takes ViewViews.</summary>
+    [Fact]
+    public async Task GetNotifications_is_forbidden_for_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        await Seed(view, TestData.Notification(view.Id));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/views/{view.Id}/notifications", Ct));
+    }
+
+    /// <summary>The system tier: ViewViews where deleting a notification takes ManageViews; it stays.</summary>
+    [Fact]
+    public async Task DeleteNotification_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var notification = TestData.Notification(view.Id);
+        await Seed(view, notification);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync(
+            $"api/views/{view.Id}/notifications/{notification.Key}", Ct));
+
+        Assert.True(await ReadBack(db => db.Notifications.AnyAsync(x => x.Key == notification.Key, Ct)));
+    }
+
+    /// <summary>The system tier: ViewViews where clearing a view's notifications takes ManageViews; they stay.</summary>
+    [Fact]
+    public async Task DeleteAllNotifications_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        await Seed(view, TestData.Notification(view.Id));
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync($"api/views/{view.Id}/notifications", Ct));
+
+        Assert.True(await ReadBack(db => db.Notifications.AnyAsync(x => x.ToId == view.Id, Ct)));
     }
 
     // ---- Helpers --------------------------------------------------------------------------------
