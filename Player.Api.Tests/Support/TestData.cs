@@ -121,6 +121,15 @@ public static class TestData
             RoleId = roleId
         };
 
+    public static UserIdentityAttributeEntity UserIdentityAttribute(Guid userId, string key, string value) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Key = key,
+            Value = value
+        };
+
     public static ViewMembershipEntity ViewMembership(Guid viewId, Guid userId) =>
         new(viewId, userId) { Id = Guid.NewGuid() };
 

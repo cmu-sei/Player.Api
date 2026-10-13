@@ -114,6 +114,7 @@ public class UserHubTests
             () => Hub().Post(_viewId.ToString(), _userId.ToString(), "Your VM is ready."));
 
         HubHarness.NothingSent(_harness.Group(Group), "Reply");
+        _harness.NothingAddressed();
     }
 
     [Fact]

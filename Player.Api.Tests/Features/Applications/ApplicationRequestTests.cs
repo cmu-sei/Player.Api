@@ -285,9 +285,12 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         Assert.Equal("Before", await ReadBack(db => db.Applications.Where(x => x.Id == application.Id).Select(x => x.Name).SingleAsync(Ct)));
     }
 
-    /// <summary>A caller holding ManageView on one view moves another view's application into it.</summary>
+    /// <summary>
+    /// ManageView on the view the body names does not reach an application stored in another view: the
+    /// application keeps its view and its name.
+    /// </summary>
     [Fact]
-    public async Task Edit_moves_an_application_out_of_a_view_the_caller_does_not_manage_into_one_it_does()
+    public async Task Edit_is_forbidden_for_a_caller_managing_only_the_view_the_body_names()
     {
         var elsewhere = TestData.View("Elsewhere");
         var managed = TestData.View("Managed");
@@ -296,12 +299,12 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
 
         var actor = await Actor().OnNewTeam(managed.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
 
-        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
             $"api/applications/{application.Id}", new { viewId = managed.Id, name = "Mine now" }, Ct));
 
         var stored = await ReadBack(db => db.Applications.SingleAsync(x => x.Id == application.Id, Ct));
-        Assert.Equal(managed.Id, stored.ViewId);
-        Assert.Equal("Mine now", stored.Name);
+        Assert.Equal(elsewhere.Id, stored.ViewId);
+        Assert.Equal("Theirs", stored.Name);
     }
 
     [Fact]
@@ -734,9 +737,12 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         Assert.Equal("The Team and Application must belong to the same View.", problem.Title);
     }
 
-    /// <summary>A caller holding ManageView on one view moves another view's application instance onto its own team.</summary>
+    /// <summary>
+    /// ManageView on the view of the team the body names does not reach an instance on a team of another
+    /// view: the instance keeps its team and its application.
+    /// </summary>
     [Fact]
-    public async Task EditApplicationInstance_moves_an_instance_off_a_team_the_caller_does_not_manage_onto_one_it_does()
+    public async Task EditApplicationInstance_is_forbidden_for_a_caller_managing_only_the_team_the_body_names()
     {
         var elsewhere = TestData.View("Elsewhere");
         var managed = TestData.View("Managed");
@@ -748,14 +754,14 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
 
         var actor = await Actor().OnNewTeam(managed.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
 
-        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
             $"api/application-instances/{instance.Id}",
             new { teamId = actor.Membership.TeamId, applicationId = managedApplication.Id },
             Ct));
 
         var stored = await ReadBack(db => db.ApplicationInstances.SingleAsync(x => x.Id == instance.Id, Ct));
-        Assert.Equal(actor.Membership.TeamId, stored.TeamId);
-        Assert.Equal(managedApplication.Id, stored.ApplicationId);
+        Assert.Equal(theirTeam.Id, stored.TeamId);
+        Assert.Equal(theirApplication.Id, stored.ApplicationId);
     }
 
     /// <summary>

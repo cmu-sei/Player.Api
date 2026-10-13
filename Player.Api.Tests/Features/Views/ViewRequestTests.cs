@@ -558,6 +558,7 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
         var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
 
+        // Gate: Player.Api/Features/Views/Requests/Clone.cs#Clone.Handler.Authorize:1
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PostAsJsonAsync(
             $"api/views/{view.Id}/clone", new { }, Ct));
     }
@@ -1149,13 +1150,19 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.True(await ReadBack(db => db.Views.AnyAsync(x => x.Id == view.Id, Ct)));
     }
 
-    /// <summary>CreateViews admits a member of the source view, and the clone is stored as a view of its own.</summary>
+    /// <summary>
+    /// CreateViews, with ViewView on the source to observe it, admits the clone, and the clone is stored as
+    /// a view of its own.
+    /// </summary>
     [Fact]
-    public async Task Clone_is_allowed_for_a_caller_holding_CreateViews()
+    public async Task Clone_is_allowed_for_a_caller_holding_CreateViews_and_ViewView_on_the_source()
     {
         var view = TestData.View("Source");
         await Seed(view);
-        var actor = await Actor().WithSystemPermissions(SystemPermission.CreateViews).OnNewTeam(view.Id).SeedAsync();
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.CreateViews)
+            .OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView])
+            .SeedAsync();
 
         var cloned = await ReadAsync<View>(await Client(actor).PostAsJsonAsync($"api/views/{view.Id}/clone", new { }, Ct));
 

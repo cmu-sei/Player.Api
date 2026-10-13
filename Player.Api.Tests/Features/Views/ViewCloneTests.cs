@@ -22,6 +22,9 @@ namespace Player.Api.Tests.Features.Views;
 public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
     : ApiTestBase(fixture, factory)
 {
+    /// <summary>A description the clone can only carry by copying it from the source.</summary>
+    private const string SourceDescription = "Not for you";
+
     // ---- The cloned view ------------------------------------------------------------------------
 
     [Fact]
@@ -88,14 +91,19 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
             await Client(actor).PostAsJsonAsync($"api/views/{view.Id}/clone", new { }, Ct));
     }
 
+    /// <summary>
+    /// The clone a caller who can observe the source receives carries the source's description, and its
+    /// teams are copied.
+    /// </summary>
     [Theory]
     [InlineData(ViewPermission.ViewView)]
     [InlineData(ViewPermission.ManageView)]
     public async Task Cloning_is_allowed_for_a_caller_who_can_observe_the_source_view(ViewPermission permission)
     {
         var view = TestData.View("Source");
+        view.Description = SourceDescription;
         var role = TestData.TeamRole();
-        var team = TestData.Team(view.Id, "Team", role.Id);
+        var team = TestData.Team(view.Id, "Alpha", role.Id);
         await Seed(view, role, team);
 
         var actor = await Actor()
@@ -107,6 +115,70 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
             $"api/views/{view.Id}/clone", new { }, Ct));
 
         Assert.Equal("Clone of Source", clone.Name);
+        Assert.Equal(SourceDescription, clone.Description);
+        Assert.Equal("Alpha", (await ReadBack(db => db.Teams.SingleAsync(x => x.ViewId == clone.Id, Ct))).Name);
+    }
+
+    /// <summary>
+    /// The system tier of the read check: <c>ViewViews</c> alongside <c>CreateViews</c>, with no
+    /// membership in the source view.
+    /// </summary>
+    [Fact]
+    public async Task Cloning_is_allowed_for_a_caller_holding_only_CreateViews_and_ViewViews()
+    {
+        var view = TestData.View("Source");
+        await Seed(view, TestData.Team(view.Id, "Alpha"));
+
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.CreateViews, SystemPermission.ViewViews)
+            .SeedAsync();
+
+        var clone = await ReadAsync<View>(await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/clone", new { }, Ct));
+
+        Assert.Equal("Clone of Source", clone.Name);
+        Assert.Equal(view.Id, (await ReadBack(db => db.Views.SingleAsync(x => x.Id == clone.Id, Ct))).ParentViewId);
+    }
+
+    /// <summary>The same system tier through <c>ManageViews</c>, which observes every view too.</summary>
+    [Fact]
+    public async Task Cloning_is_allowed_for_a_caller_holding_only_CreateViews_and_ManageViews()
+    {
+        var view = TestData.View("Source");
+        await Seed(view, TestData.Team(view.Id, "Alpha"));
+
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.CreateViews, SystemPermission.ManageViews)
+            .SeedAsync();
+
+        var clone = await ReadAsync<View>(await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/clone", new { }, Ct));
+
+        Assert.Equal("Clone of Source", clone.Name);
+        Assert.Equal(view.Id, (await ReadBack(db => db.Views.SingleAsync(x => x.Id == clone.Id, Ct))).ParentViewId);
+    }
+
+    /// <summary>
+    /// The near miss of the view tier: <c>ViewView</c> on another view does not observe the source, and no
+    /// clone is stored.
+    /// </summary>
+    [Fact]
+    public async Task Cloning_is_forbidden_for_a_caller_holding_CreateViews_and_ViewView_only_in_another_view()
+    {
+        var view = TestData.View("Source");
+        var otherView = TestData.View("Other");
+        await Seed(view, otherView, TestData.Team(view.Id, "Alpha"));
+
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.CreateViews)
+            .OnNewTeam(otherView.Id, viewPermissions: [ViewPermission.ViewView])
+            .SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).PostAsJsonAsync($"api/views/{view.Id}/clone", new { }, Ct));
+
+        Assert.False(await ReadBack(db => db.Views.AnyAsync(x => x.ParentViewId == view.Id, Ct)));
     }
 
     // ---- Applications ---------------------------------------------------------------------------

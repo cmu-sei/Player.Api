@@ -167,9 +167,12 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             await Client(actor).GetAsync($"api/users/{subject.Id}", Ct));
     }
 
-    /// <summary>A caller with no rows reads a user who is on a team the caller is not on.</summary>
+    /// <summary>
+    /// The team fallback checks <c>ViewTeam</c> on each of the user's own teams, so the same permission on
+    /// another team of the same view does not reach a user who is on a team.
+    /// </summary>
     [Fact]
-    public async Task Get_is_allowed_for_a_caller_sharing_no_team_with_a_user_who_is_on_a_team()
+    public async Task Get_is_forbidden_for_a_caller_holding_ViewTeam_only_on_another_team_of_the_users_view()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id, "Team");
@@ -179,11 +182,12 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             view, team, subject, viewMembership,
             TestData.TeamMembership(team.Id, subject.Id, viewMembership.Id));
 
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
-        var got = await ReadAsync<User>(await Client(actor).GetAsync($"api/users/{subject.Id}", Ct));
-
-        Assert.Equal("Stranger", got.Name);
+        // Gate: Player.Api/Features/Users/Requests/Get.cs#Get.Handler.Authorize:2
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/users/{subject.Id}", Ct));
     }
 
     /// <summary>
@@ -219,20 +223,22 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Contains(users, x => x.Id == Root.Id);
     }
 
-    /// <summary>A view member holding ManageView is answered with a 500 when listing users.</summary>
+    /// <summary>
+    /// The route admits <c>ManageView</c> in any view. What the directory leaves out for such a caller is in
+    /// <see cref="UserDirectoryTests"/>, which configures an identity attribute.
+    /// </summary>
     [Fact]
-    public async Task GetAll_fails_for_a_caller_holding_only_ManageView()
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_ManageView()
     {
         var view = TestData.View();
-        await Seed(view);
+        var user = TestData.User(name: "Listed");
+        await Seed(view, user);
 
         var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
 
-        var problem = await AssertProblem(
-            HttpStatusCode.InternalServerError,
-            await Client(actor).GetAsync("api/users", Ct));
+        var users = await ReadAsync<UserDirectoryEntry[]>(await Client(actor).GetAsync("api/users", Ct));
 
-        Assert.Equal("Value cannot be null. (Parameter 'source')", problem.Detail);
+        Assert.Equal("Listed", Assert.Single(users, x => x.Id == user.Id).Name);
     }
 
     /// <summary>
@@ -732,6 +738,43 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
                 $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Nope" }, Ct));
     }
 
+    /// <summary>The near miss of the system tier is ViewViews, which reads every view but sends nothing.</summary>
+    [Fact]
+    public async Task SendNotification_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var user = TestData.User();
+        await Seed(view, user, TestData.ViewMembership(view.Id, user.Id));
+
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).PostAsJsonAsync(
+                $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Nope" }, Ct));
+
+        Assert.False(await ReadBack(db => db.Notifications.AnyAsync(x => x.ToId == user.Id, Ct)));
+    }
+
+    /// <summary>ManageView on another view does not reach the route's view, where the recipient is a member.</summary>
+    [Fact]
+    public async Task SendNotification_is_forbidden_for_a_caller_holding_ManageView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var user = TestData.User();
+        await Seed(view, otherView, user, TestData.ViewMembership(view.Id, user.Id));
+
+        var actor = await Actor().OnNewTeam(otherView.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).PostAsJsonAsync(
+                $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Nope" }, Ct));
+
+        Assert.False(await ReadBack(db => db.Notifications.AnyAsync(x => x.ToId == user.Id, Ct)));
+    }
+
     /// <summary>
     /// Managing the route's view does not reach a user outside it: the recipient is not found there, and
     /// nothing is stored or broadcast.
@@ -938,8 +981,8 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     /// <summary>
-    /// ManageViews is the one grant the handler's check answers without a resource lookup, and
-    /// <c>NotificationService.PostToUser</c> admits the caller on it too.
+    /// The system tier of the check on the route's view: ManageViews admits the caller without a membership
+    /// in the view, and <c>NotificationService.PostToUser</c>, which checks the same view, admits it too.
     /// </summary>
     [Fact]
     public async Task SendNotification_is_allowed_for_a_caller_holding_only_ManageViews()
@@ -1011,19 +1054,18 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal("Findable", got.Name);
     }
 
-    /// <summary>A team member holding ManageTeam is answered with a 500 when listing users.</summary>
+    /// <summary>The route admits <c>ManageTeam</c> on any team.</summary>
     [Fact]
-    public async Task GetAll_fails_for_a_caller_holding_only_ManageTeam()
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_ManageTeam()
     {
         var view = TestData.View();
-        await Seed(view);
+        var user = TestData.User(name: "Listed");
+        await Seed(view, user);
         var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ManageTeam]).SeedAsync();
 
-        var problem = await AssertProblem(
-            HttpStatusCode.InternalServerError,
-            await Client(actor).GetAsync("api/users", Ct));
+        var users = await ReadAsync<UserDirectoryEntry[]>(await Client(actor).GetAsync("api/users", Ct));
 
-        Assert.Equal("Value cannot be null. (Parameter 'source')", problem.Detail);
+        Assert.Equal("Listed", Assert.Single(users, x => x.Id == user.Id).Name);
     }
 
     [Fact]

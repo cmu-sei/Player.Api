@@ -287,6 +287,57 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         Assert.Equal("Mine", Assert.Single(notifications).Text);
     }
 
+    /// <summary>The system tier: ViewViews observes every view, so it reads anyone's conversation without membership.</summary>
+    [Fact]
+    public async Task GetByUserAsync_returns_the_users_notifications_to_a_caller_holding_only_ViewViews()
+    {
+        var view = TestData.View();
+        var user = TestData.User();
+        await Seed(
+            view,
+            user,
+            TestData.Notification(user.Id, NotificationType.User, viewId: view.Id, text: "For the user"));
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ViewViews).Build();
+        var notifications = await Service(caller).GetByUserAsync(view.Id, user.Id, Ct);
+
+        Assert.Equal("For the user", Assert.Single(notifications).Text);
+    }
+
+    /// <summary>The same system tier through ManageViews.</summary>
+    [Fact]
+    public async Task GetByUserAsync_returns_the_users_notifications_to_a_caller_holding_only_ManageViews()
+    {
+        var view = TestData.View();
+        var user = TestData.User();
+        await Seed(
+            view,
+            user,
+            TestData.Notification(user.Id, NotificationType.User, viewId: view.Id, text: "For the user"));
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ManageViews).Build();
+        var notifications = await Service(caller).GetByUserAsync(view.Id, user.Id, Ct);
+
+        Assert.Equal("For the user", Assert.Single(notifications).Text);
+    }
+
+    /// <summary>The near miss of the system tier is ViewUsers, which reads the user directory but not a conversation.</summary>
+    [Fact]
+    public async Task GetByUserAsync_is_forbidden_for_a_caller_holding_only_ViewUsers()
+    {
+        var view = TestData.View();
+        var user = TestData.User();
+        await Seed(
+            view,
+            user,
+            TestData.Notification(user.Id, NotificationType.User, viewId: view.Id, text: "Not yours"));
+
+        var caller = new ClaimsPrincipalBuilder().WithSystemPermissions(SystemPermission.ViewUsers).Build();
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service(caller).GetByUserAsync(view.Id, user.Id, Ct));
+    }
+
     /// <summary>The near miss is a member of another view asking for someone else's notifications in this one.</summary>
     [Fact]
     public async Task GetByUserAsync_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
@@ -496,6 +547,48 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         var notification = await Service(ClaimsPrincipalBuilder.Anonymous()).JoinTeam(team.Id, Ct);
 
         Assert.False(notification.WasSuccess);
+    }
+
+    /// <summary>
+    /// The near miss of the view check: ViewView on another view does not observe the team's view, so the
+    /// join fails and the reply does not name the team.
+    /// </summary>
+    [Fact]
+    public async Task JoinTeam_refuses_a_caller_holding_ViewView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var team = TestData.Team(view.Id, "Blue Team");
+        var mine = TestData.Team(otherView.Id, "Red Team");
+        await Seed(view, otherView, team, mine);
+
+        var notification = await Service(Member(otherView.Id, mine.Id, ViewPermission.ViewView)).JoinTeam(team.Id, Ct);
+
+        Assert.False(notification.WasSuccess);
+        Assert.False(notification.CanPost);
+        Assert.Null(notification.ToName);
+    }
+
+    /// <summary>
+    /// The near miss of the team check: ManageTeam on the team is not the ViewTeam the join asks for, so the
+    /// join fails and the reply does not name the team.
+    /// </summary>
+    [Fact]
+    public async Task JoinTeam_refuses_a_caller_holding_only_ManageTeam_on_the_team()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Blue Team");
+        await Seed(view, team);
+
+        var caller = new ClaimsPrincipalBuilder()
+            .WithTeam(view.Id, team.Id, teamPermissions: [TeamPermission.ManageTeam])
+            .Build();
+
+        var notification = await Service(caller).JoinTeam(team.Id, Ct);
+
+        Assert.False(notification.WasSuccess);
+        Assert.False(notification.CanPost);
+        Assert.Null(notification.ToName);
     }
 
     /// <summary>
@@ -1087,7 +1180,7 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         var view = TestData.View();
         var team = TestData.Team(view.Id);
         var user = TestData.User(name: "Recipient");
-        await Seed(view, team, user);
+        await Seed(view, team, user, TestData.ViewMembership(view.Id, user.Id));
 
         var caller = Member(view.Id, team.Id, ViewPermission.ManageView);
         await Service(caller).PostToUser(view.Id, user.Id, new Notification { Text = "Hello" }, Ct);
