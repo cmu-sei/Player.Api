@@ -339,9 +339,12 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).GetAsync(Ct));
     }
 
-    /// <summary>A view member without ViewViews gets an ArgumentNullException when listing every file.</summary>
+    /// <summary>
+    /// The system-only permission check must refuse a view member without <c>ViewViews</c>, even though
+    /// that check omits its view and team requirements.
+    /// </summary>
     [Fact]
-    public async Task GetAsync_throws_for_a_view_member_without_ViewViews()
+    public async Task GetAsync_is_forbidden_for_a_view_member_without_ViewViews()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
@@ -351,7 +354,7 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
             .WithTeam(view.Id, team.Id, viewPermissions: [ViewPermission.ViewView])
             .Build();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => Service(caller).GetAsync(Ct));
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service(caller).GetAsync(Ct));
     }
 
     [Fact]

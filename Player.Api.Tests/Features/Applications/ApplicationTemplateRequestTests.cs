@@ -64,7 +64,10 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         Assert.True(stored.LoadInBackground);
     }
 
-    /// <summary>A view member holding ManageView is answered with a 500 on create.</summary>
+    /// <summary>
+    /// Templates are not scoped to a view, so only the system permission opens them — being a view
+    /// administrator does not. A team claim must not turn that refusal into a server error.
+    /// </summary>
     [Fact]
     public async Task CreateApplicationTemplate_is_refused_for_a_caller_holding_only_ManageView()
     {
@@ -73,12 +76,13 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
 
         var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
 
-        var problem = await AssertProblem(
-            HttpStatusCode.InternalServerError,
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
             await Client(actor).PostAsJsonAsync(
                 "api/application-templates", new { name = "Nope" }, Ct));
 
-        Assert.Equal("Value cannot be null. (Parameter 'source')", problem.Detail);
+        await using var db = NewContext();
+        Assert.False(await db.ApplicationTemplates.AnyAsync(Ct));
     }
 
     [Fact]
@@ -114,6 +118,24 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
             $"api/application-templates/{template.Id}", new { name = "Nope" }, Ct));
+    }
+
+    [Fact]
+    public async Task EditApplicationTemplate_is_forbidden_for_a_caller_holding_only_ManageView()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var template = TestData.ApplicationTemplate("Before");
+        await Seed(view, role, team, template);
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/application-templates/{template.Id}", new { name = "Nope" }, Ct));
+
+        await using var db = NewContext();
+        Assert.Equal("Before", (await db.ApplicationTemplates.SingleAsync(x => x.Id == template.Id, Ct)).Name);
     }
 
     [Fact]
@@ -174,6 +196,24 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         await AssertProblem(
             HttpStatusCode.Forbidden,
             await Client(actor).DeleteAsync($"api/application-templates/{template.Id}", Ct));
+    }
+
+    [Fact]
+    public async Task DeleteApplicationTemplate_is_forbidden_for_a_caller_holding_only_ManageView()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var template = TestData.ApplicationTemplate();
+        await Seed(view, role, team, template);
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden,
+            await Client(actor).DeleteAsync($"api/application-templates/{template.Id}", Ct));
+
+        await using var db = NewContext();
+        Assert.True(await db.ApplicationTemplates.AnyAsync(x => x.Id == template.Id, Ct));
     }
 
     // ---- Reads ----------------------------------------------------------------------------------

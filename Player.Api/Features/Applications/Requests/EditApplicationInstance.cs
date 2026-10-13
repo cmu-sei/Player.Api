@@ -18,19 +18,16 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
-using Player.Api.Features.Teams;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions;
-using Player.Api.ViewModels;
-using TeamPermission = Player.Api.Data.Data.Models.TeamPermission;
 
 namespace Player.Api.Features.Applications;
 
 public class EditApplicationInstance
 {
     [DataContract(Name = "EditApplicationInstanceCommand")]
-    public class Command : CreateApplicationInstance.Command
+    public class Command : ApplicationInstanceFields
     {
         [JsonIgnore]
         public Guid Id { get; set; }
@@ -58,22 +55,16 @@ public class EditApplicationInstance
     public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, ApplicationInstance>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
-            await authorizationService.Authorize<TeamEntity>(request.TeamId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
+            await authorizationService.Authorize<ApplicationInstanceEntity>(request.Id, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
 
         public override async Task<ApplicationInstance> HandleRequest(Command request, CancellationToken cancellationToken)
         {
             var instanceToUpdate = await db.ApplicationInstances
+                .Include(x => x.Team)
                 .SingleOrDefaultAsync(v => v.Id == request.Id, cancellationToken);
 
             if (instanceToUpdate == null)
                 throw new EntityNotFoundException<ApplicationInstance>();
-
-            var team = await db.Teams
-                .Where(e => e.Id == request.TeamId)
-                .SingleOrDefaultAsync(cancellationToken);
-
-            if (team == null)
-                throw new EntityNotFoundException<Team>();
 
             var application = await db.Applications
                 .Where(e => e.Id == request.ApplicationId)
@@ -82,7 +73,7 @@ public class EditApplicationInstance
             if (application == null)
                 throw new EntityNotFoundException<Application>();
 
-            if (team.ViewId != application.ViewId)
+            if (instanceToUpdate.Team.ViewId != application.ViewId)
                 throw new ConflictException("The Team and Application must belong to the same View.");
 
             mapper.Map(request, instanceToUpdate);

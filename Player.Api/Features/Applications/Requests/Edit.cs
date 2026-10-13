@@ -25,7 +25,7 @@ namespace Player.Api.Features.Applications;
 public class Edit
 {
     [DataContract(Name = "EditApplicationCommand")]
-    public record Command : Create.Command
+    public record Command : ApplicationFields
     {
         [JsonIgnore]
         public Guid Id { get; set; }
@@ -53,7 +53,7 @@ public class Edit
     public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, Application>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
-            await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ManageApplications], [ViewPermission.ManageView], [], cancellationToken);
+            await authorizationService.Authorize<ApplicationEntity>(request.Id, [SystemPermission.ManageApplications], [ViewPermission.ManageView], [], cancellationToken);
 
         public override async Task<Application> HandleRequest(Command request, CancellationToken cancellationToken)
         {

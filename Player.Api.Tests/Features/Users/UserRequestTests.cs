@@ -143,6 +143,30 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal("Teammate", got.Name);
     }
 
+    /// <summary>
+    /// <c>ViewTeam</c> on a team of one view does not reach a user who is only on a team of another.
+    /// </summary>
+    [Fact]
+    public async Task Get_is_forbidden_for_a_caller_holding_ViewTeam_only_in_another_view()
+    {
+        var view = TestData.View();
+        var otherView = TestData.View("Other");
+        var role = TestData.TeamRole();
+        var mine = TestData.Team(view.Id, "Mine", role.Id);
+        var theirs = TestData.Team(otherView.Id, "Theirs", role.Id);
+        var subject = TestData.User(name: "Stranger");
+        var viewMembership = TestData.ViewMembership(otherView.Id, subject.Id);
+        await Seed(
+            view, otherView, role, mine, theirs, subject, viewMembership,
+            TestData.TeamMembership(theirs.Id, subject.Id, viewMembership.Id));
+
+        var actor = await Actor().OnTeam(mine, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/users/{subject.Id}", Ct));
+    }
+
     /// <summary>A caller with no rows reads a user who is on a team the caller is not on.</summary>
     [Fact]
     public async Task Get_is_allowed_for_a_caller_sharing_no_team_with_a_user_who_is_on_a_team()
@@ -672,23 +696,66 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.False(await db.Notifications.AnyAsync(Ct));
     }
 
-    /// <summary>A user notification from a caller without ManageViews is answered with a 500.</summary>
+    /// <summary>
+    /// Authorized against the route's view, so a view administrator who is not a system admin can send.
+    /// </summary>
     [Fact]
-    public async Task SendNotification_is_a_server_error_for_a_caller_without_ManageViews()
+    public async Task SendNotification_is_allowed_for_a_view_member_holding_ManageView()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var user = TestData.User();
+        await Seed(view, role, team, user, TestData.ViewMembership(view.Id, user.Id));
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await ReadAsync<string>(await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Allowed" }, Ct));
+
+        await using var db = NewContext();
+        Assert.Equal("Allowed", (await db.Notifications.SingleAsync(x => x.ToId == user.Id, Ct)).Text);
+    }
+
+    [Fact]
+    public async Task SendNotification_is_forbidden_for_a_view_member_without_ManageView()
     {
         var view = TestData.View();
         var user = TestData.User();
         await Seed(view, user, TestData.ViewMembership(view.Id, user.Id));
 
-        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
-        var problem = await AssertProblem(
-            HttpStatusCode.InternalServerError,
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
             await Client(actor).PostAsJsonAsync(
                 $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Nope" }, Ct));
+    }
 
-        Assert.Equal("A server error occurred.", problem.Title);
-        Assert.Equal("Handler for type UserEntity is not implemented.", problem.Detail);
+    /// <summary>
+    /// Managing the route's view does not reach a user outside it: the recipient is not found there, and
+    /// nothing is stored or broadcast.
+    /// </summary>
+    [Fact]
+    public async Task SendNotification_is_not_found_for_a_user_outside_the_view()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        var user = TestData.User();
+        await Seed(view, role, team, user);
+
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        var problem = await AssertProblem(
+            HttpStatusCode.NotFound,
+            await Client(actor).PostAsJsonAsync(
+                $"api/views/{view.Id}/users/{user.Id}/notifications", new { text = "Nope" }, Ct));
+        Assert.Equal("User not found in this View.", problem.Title);
+
+        await using var db = NewContext();
+        Assert.False(await db.Notifications.AnyAsync(x => x.ToId == user.Id, Ct));
+        Assert.Empty(UserBroadcasts(view.Id, user.Id));
     }
 
     // ---- Who may call ---------------------------------------------------------------------------

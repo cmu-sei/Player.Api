@@ -36,41 +36,77 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.True(clone.DateCreated > TestData.DefaultDateCreated);
     }
 
-    /// <summary>Cloning a view that does not exist is answered with a 500.</summary>
     [Fact]
-    public async Task Cloning_a_view_that_does_not_exist_is_a_server_error()
+    public async Task Cloning_a_view_that_does_not_exist_reports_not_found()
     {
-        var problem = await AssertProblem(
-            HttpStatusCode.InternalServerError,
+        await AssertProblem(
+            HttpStatusCode.NotFound,
             await RootClient.PostAsJsonAsync($"api/views/{Guid.NewGuid()}/clone", new { }, Ct));
-
-        Assert.Equal("A server error occurred.", problem.Title);
-        Assert.Equal("Object reference not set to an instance of an object.", problem.Detail);
     }
 
-    /// <summary>CreateViews alone clones a view the caller cannot read, name and description included.</summary>
-    [Fact]
-    public async Task Cloning_is_allowed_for_a_caller_who_cannot_read_the_source_view()
+    /// <summary>
+    /// A clone copies every team, application and file, so <c>CreateViews</c> alone is not enough: the
+    /// caller must also be able to observe the source view.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cloning_is_forbidden_for_a_content_developer_who_cannot_read_the_source_view(bool isTemplate)
     {
         var view = TestData.View("Someone elses");
-        view.Description = "Not for you";
+        view.IsTemplate = isTemplate;
         await Seed(view, TestData.Team(view.Id, "Alpha"));
 
-        var actor = await Actor().WithSystemPermissions(SystemPermission.CreateViews).SeedAsync();
+        var actor = await Actor().WithRole(TestData.Roles.ContentDeveloper).SeedAsync();
 
-        // The same caller's Get is refused, arranged here next to the clone it is allowed.
         await AssertProblem(
             HttpStatusCode.Forbidden,
-            await Client(actor).GetAsync($"api/views/{view.Id}", Ct));
+            await Client(actor).PostAsJsonAsync($"api/views/{view.Id}/clone", new { }, Ct));
+
+        await using var db = NewContext();
+        Assert.Equal(1, await db.Views.CountAsync(Ct));
+    }
+
+    /// <summary>
+    /// Membership alone is not enough either: a plain member sees only their own team.
+    /// </summary>
+    [Fact]
+    public async Task Cloning_is_forbidden_for_a_plain_member_of_the_source_view()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        await Seed(view, role, team);
+
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.CreateViews)
+            .OnTeam(team)
+            .SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).PostAsJsonAsync($"api/views/{view.Id}/clone", new { }, Ct));
+    }
+
+    [Theory]
+    [InlineData(ViewPermission.ViewView)]
+    [InlineData(ViewPermission.ManageView)]
+    public async Task Cloning_is_allowed_for_a_caller_who_can_observe_the_source_view(ViewPermission permission)
+    {
+        var view = TestData.View("Source");
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, "Team", role.Id);
+        await Seed(view, role, team);
+
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.CreateViews)
+            .OnTeam(team, viewPermissions: [permission])
+            .SeedAsync();
 
         var clone = await ReadAsync<View>(await Client(actor).PostAsJsonAsync(
             $"api/views/{view.Id}/clone", new { }, Ct));
 
-        Assert.Equal("Clone of Someone elses", clone.Name);
-        Assert.Equal("Not for you", clone.Description);
-
-        await using var db = NewContext();
-        Assert.Equal("Alpha", (await db.Teams.SingleAsync(x => x.ViewId == clone.Id, Ct)).Name);
+        Assert.Equal("Clone of Source", clone.Name);
     }
 
     // ---- Applications ---------------------------------------------------------------------------

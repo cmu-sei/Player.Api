@@ -67,6 +67,10 @@ public class Edit
             if (viewToUpdate == null)
                 throw new EntityNotFoundException<View>();
 
+            if (request.DefaultTeamId.HasValue &&
+                !await db.Teams.AnyAsync(t => t.Id == request.DefaultTeamId && t.ViewId == viewToUpdate.Id, cancellationToken))
+                throw new ConflictException("The default Team must belong to this View.");
+
             mapper.Map(request, viewToUpdate);
 
             db.Views.Update(viewToUpdate);

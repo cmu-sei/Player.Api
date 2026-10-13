@@ -79,30 +79,30 @@ public class SystemPermissionsHandlerTests
     }
 
     /// <summary>
-    /// An empty or null requirement means "authenticated is enough". This is load-bearing:
-    /// <c>AuthorizationService</c> reaches the team requirement only when the system requirement did
-    /// not succeed, so if this granted nothing the team check would run for every request, and if it
-    /// granted too much the team check would never run at all.
+    /// An empty or null requirement grants nothing. This is load-bearing: <c>AuthorizationService</c>
+    /// treats a passing system requirement as a bypass of the view and team requirement, so a call that
+    /// names only team permissions — <c>Authorize&lt;TeamEntity&gt;(id, [], [], [ViewTeam])</c> — must
+    /// fall through to the team check rather than succeed for every caller.
     /// </summary>
     [Fact]
-    public async Task Succeeds_when_no_permissions_are_required()
+    public async Task Does_not_succeed_when_no_permissions_are_required()
     {
         var user = ClaimsPrincipalBuilder.Anonymous();
         var requirement = new SystemPermissionRequirement([]);
 
         var context = await AuthorizationHarness.HandleAsync(_handler, requirement, user);
 
-        Assert.True(context.HasSucceeded);
+        Assert.False(context.HasSucceeded);
     }
 
     [Fact]
-    public async Task Succeeds_when_the_required_permissions_are_null()
+    public async Task Does_not_succeed_when_the_required_permissions_are_null()
     {
         var user = ClaimsPrincipalBuilder.Anonymous();
         var requirement = new SystemPermissionRequirement(null);
 
         var context = await AuthorizationHarness.HandleAsync(_handler, requirement, user);
 
-        Assert.True(context.HasSucceeded);
+        Assert.False(context.HasSucceeded);
     }
 }

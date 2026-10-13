@@ -5,7 +5,6 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Runtime.Serialization;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -21,32 +20,16 @@ using Player.Api.Features.Views;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions;
-using Player.Api.Infrastructure.JsonConverters;
 
 namespace Player.Api.Features.Applications;
 
 public class Create
 {
     [DataContract(Name = "CreateApplicationCommand")]
-    public record Command : IRequest<Application>
+    public record Command : ApplicationFields
     {
-        public string Name { get; set; }
-
-        [Url]
-        public string Url { get; set; }
-
-        public string Icon { get; set; }
-
-        [JsonConverter(typeof(StringToBooleanConverter))]
-        public bool? Embeddable { get; set; }
-
-        [JsonConverter(typeof(StringToBooleanConverter))]
-        public bool? LoadInBackground { get; set; }
-
         [Required]
         public Guid ViewId { get; set; }
-
-        public Guid? ApplicationTemplateId { get; set; }
     }
 
     public class Endpoint : IEndpoint

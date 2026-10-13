@@ -58,7 +58,7 @@ public class SendNotification
     public class Handler(INotificationService notificationService, IHubContext<UserHub> userHub, IPlayerAuthorizationService authorizationService) : BaseHandler<Command, string>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
-            await authorizationService.Authorize<UserEntity>(request.UserId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
+            await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
 
         public override async Task<string> HandleRequest(Command request, CancellationToken cancellationToken)
         {
