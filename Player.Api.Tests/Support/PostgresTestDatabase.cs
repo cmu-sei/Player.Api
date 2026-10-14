@@ -3,6 +3,8 @@
 
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using Player.Api.Data.Data;
 using Testcontainers.PostgreSql;
@@ -63,24 +65,44 @@ public sealed class PostgresTestDatabase : ITestDatabase
 
     public async Task<ITestDatabaseSession> BeginSessionAsync()
     {
-        var databaseName = $"player_test_{Interlocked.Increment(ref _databaseCount)}";
+        var databaseName = NextDatabaseName();
 
-        await using (var maintenance = new NpgsqlConnection(ConnectionStringFor(MaintenanceDatabase)))
-        {
-            await maintenance.OpenAsync();
-            await using var command = maintenance.CreateCommand();
-            command.CommandText = $"""CREATE DATABASE "{databaseName}" TEMPLATE "{TemplateDatabase}";""";
-            await command.ExecuteNonQueryAsync();
-        }
+        await ExecuteMaintenanceAsync($"""CREATE DATABASE "{databaseName}" TEMPLATE "{TemplateDatabase}";""");
 
         var (services, mediator) = PlayerContextFactory.CreateServices();
 
         return new Session(this, databaseName, services, mediator);
     }
 
+    public async Task<IUpgradeTestDatabaseSession> BeginSessionAtMigrationAsync(string migrationId)
+    {
+        var databaseName = NextDatabaseName();
+
+        // No template: the template is already at the latest migration.
+        await ExecuteMaintenanceAsync($"""CREATE DATABASE "{databaseName}";""");
+
+        var (services, mediator) = PlayerContextFactory.CreateServices();
+        var session = new Session(this, databaseName, services, mediator);
+
+        await session.MigrateAsync(migrationId);
+
+        return session;
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _container.DisposeAsync();
+    }
+
+    private string NextDatabaseName() => $"player_test_{Interlocked.Increment(ref _databaseCount)}";
+
+    private async Task ExecuteMaintenanceAsync(string sql)
+    {
+        await using var maintenance = new NpgsqlConnection(ConnectionStringFor(MaintenanceDatabase));
+        await maintenance.OpenAsync();
+        await using var command = maintenance.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
     }
 
     private string ConnectionStringFor(string databaseName) =>
@@ -105,20 +127,16 @@ public sealed class PostgresTestDatabase : ITestDatabase
             NpgsqlConnection.ClearPool(pooled);
         }
 
-        await using var maintenance = new NpgsqlConnection(ConnectionStringFor(MaintenanceDatabase));
-        await maintenance.OpenAsync();
-        await using var command = maintenance.CreateCommand();
         // FORCE (PostgreSQL 13+) terminates any lingering sessions rather than failing the drop,
         // which keeps teardown from turning into a flaky test failure.
-        command.CommandText = $"""DROP DATABASE IF EXISTS "{databaseName}" WITH (FORCE);""";
-        await command.ExecuteNonQueryAsync();
+        await ExecuteMaintenanceAsync($"""DROP DATABASE IF EXISTS "{databaseName}" WITH (FORCE);""");
     }
 
     private sealed class Session(
         PostgresTestDatabase database,
         string databaseName,
         IServiceProvider services,
-        IMediator mediator) : ITestDatabaseSession
+        IMediator mediator) : IUpgradeTestDatabaseSession
     {
         public IMediator Mediator { get; } = mediator;
 
@@ -126,6 +144,12 @@ public sealed class PostgresTestDatabase : ITestDatabase
 
         public PlayerContext CreateContext(IServiceProvider provider) =>
             database.CreateContextFor(databaseName, provider);
+
+        public async Task MigrateAsync(string targetMigration = null, CancellationToken cancellationToken = default)
+        {
+            await using var context = CreateContext();
+            await context.GetService<IMigrator>().MigrateAsync(targetMigration, cancellationToken);
+        }
 
         public async ValueTask DisposeAsync() => await database.DropDatabaseAsync(databaseName);
     }

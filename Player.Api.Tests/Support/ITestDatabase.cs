@@ -21,6 +21,16 @@ public interface ITestDatabase : IAsyncDisposable
     /// Hands out an isolated database for a single test.
     /// </summary>
     Task<ITestDatabaseSession> BeginSessionAsync();
+
+    /// <summary>
+    /// Hands out an isolated database migrated only as far as <paramref name="migrationId"/>, for a
+    /// test of what a later migration does to the data an existing deployment already holds.
+    /// </summary>
+    /// <remarks>
+    /// The database is built from empty rather than copied from the template, so it costs a full run
+    /// of the migrations it stops at. Reserve it for upgrade tests.
+    /// </remarks>
+    Task<IUpgradeTestDatabaseSession> BeginSessionAtMigrationAsync(string migrationId);
 }
 
 /// <summary>
@@ -60,4 +70,23 @@ public interface ITestDatabaseSession : IAsyncDisposable
     /// mediator is a substitute a test can assert against.
     /// </remarks>
     PlayerContext CreateContext(IServiceProvider services);
+}
+
+/// <summary>
+/// A session whose database stops at an earlier migration, so a test can seed the schema of that
+/// time and then apply the migrations under test.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Seed and read it with raw SQL through <c>CreateContext().Database</c>. The context's model is
+/// today's, and the entity sets do not match the schema until the database is migrated to the latest.
+/// </para>
+/// </remarks>
+public interface IUpgradeTestDatabaseSession : ITestDatabaseSession
+{
+    /// <summary>
+    /// Applies the migrations up to <paramref name="targetMigration"/>, or every remaining migration
+    /// when it is <c>null</c>.
+    /// </summary>
+    Task MigrateAsync(string targetMigration = null, CancellationToken cancellationToken = default);
 }
