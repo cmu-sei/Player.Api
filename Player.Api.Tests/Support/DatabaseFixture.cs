@@ -14,26 +14,45 @@ namespace Player.Api.Tests.Support;
 /// PostgreSQL exercises production's actual database, including the
 /// <c>if (Database.IsNpgsql())</c> branch of <c>PlayerContext.OnModelCreating</c> and the real
 /// migration history. A usable Docker daemon is therefore required by every test that takes a database.
-/// The mechanics are the shared <see cref="PostgresTestDatabase{TContext}"/>.
+/// The mechanics are the shared <see cref="PostgresTestDatabase{TContext}"/>. The migration tests'
+/// databases, which stop at an earlier migration, come from <see cref="UpgradeTestDatabase"/>.
 /// </remarks>
 public sealed class DatabaseFixture : IAsyncLifetime, ITestDatabaseSessionSource<PlayerContext>
 {
+    /// <summary>
+    /// Production computes this as {AssemblyName}.Migrations.{provider} in
+    /// DatabaseExtensions.UseConfiguredDatabase. Without it EF looks for migrations in PlayerContext's
+    /// own assembly and finds none.
+    /// </summary>
+    private const string MigrationsAssembly = "Player.Api.Migrations.PostgreSQL";
+
     private readonly PostgresTestDatabase<PlayerContext> _database = new(new()
     {
         Name = "player",
         TestAssembly = "Player.Api.Tests",
-        // Production computes this as {AssemblyName}.Migrations.{provider} in
-        // DatabaseExtensions.UseConfiguredDatabase. Without it EF looks for migrations in PlayerContext's
-        // own assembly and finds none.
-        MigrationsAssembly = "Player.Api.Migrations.PostgreSQL",
+        MigrationsAssembly = MigrationsAssembly,
         CreateContext = PlayerContextFactory.CreateContext,
         CreateServices = PlayerContextFactory.CreateServices
     });
+
+    private readonly UpgradeTestDatabase _upgrades = new(MigrationsAssembly);
 
     /// <summary>Nothing to do here: the container starts on the first request for a session.</summary>
     public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
     public Task<ITestDatabaseSession<PlayerContext>> BeginSessionAsync() => _database.BeginSessionAsync();
 
-    public ValueTask DisposeAsync() => _database.DisposeAsync();
+    /// <summary>
+    /// A database migrated only as far as <paramref name="migrationId"/>, for a test of what a later
+    /// migration does to the data an existing deployment already holds. Built from empty once per
+    /// migration on a server of its own (<see cref="UpgradeTestDatabase"/>); reserve it for upgrade tests.
+    /// </summary>
+    public Task<UpgradeTestSession> BeginSessionAtMigrationAsync(string migrationId) =>
+        _upgrades.BeginSessionAtMigrationAsync(migrationId);
+
+    public async ValueTask DisposeAsync()
+    {
+        await _database.DisposeAsync();
+        await _upgrades.DisposeAsync();
+    }
 }

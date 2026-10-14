@@ -166,6 +166,8 @@ Migrations are applied once, to a template database, by the shared `PostgresTest
 
 The host is the opposite, because starting one costs about a second. Everything the application registers as a singleton is therefore shared by every test in the run, and the tests run in parallel. That is what `TestConfiguration`'s claims-caching entry, `TestDatabaseScope` and the shape of the collaborators standing in for the ones that leave the process exist to deal with, and it is the one place where a test can interfere with another. See the last of the common mistakes below.
 
+The upgrade tests in `Migrations/` need a database the template cannot give them: one that stops at an earlier migration, so a test can seed the data an existing deployment holds and then apply the migration under test. `DatabaseFixture.BeginSessionAtMigrationAsync(migrationId)` hands those out from `UpgradeTestDatabase`, a second PostgreSQL container of the same pinned image, started on the first request. Each migration asked for is applied once, upwards from an empty database, to a template of its own, and each test gets a copy of it that is dropped when the session is disposed. Before it is migrated to the latest, such a database is seeded and read with raw SQL through `CreateContext().Database`, because the context's model describes today's schema.
+
 The migrations emit `CREATE EXTENSION "uuid-ossp"`, which requires superuser. The default `postgres` user in the official image is a superuser, so the container must not be reconfigured to a restricted role.
 
 ## Hub connections
@@ -197,6 +199,7 @@ Player.Api.Tests/
   Infrastructure/    authorization, endpoints, exceptions, filters, extensions, JSON converters, mapping, cancellation
   Hubs/              the three SignalR hubs: their methods with HubHarness, their [Authorize] over real connections (HubConnectionTests)
   Events/            entity event handlers
+  Migrations/        upgrade tests: a database stopped at an earlier migration, seeded as a deployment might be, then migrated forward
   Support/           the harness, described below: Player's own files, the self-tests and the extras
     Shared/          the standard's shared files, copied by sync.sh and never edited here
 ```
@@ -216,7 +219,8 @@ The harness itself lives in `Support/`. The shared files of the standard are in 
 
 Player's own files, built from the standard's templates or added for Player:
 
-- `DatabaseFixture` - Wraps `PostgresTestDatabase` with Player's database name, test assembly and migrations assembly.
+- `DatabaseFixture` - Wraps `PostgresTestDatabase` with Player's database name, test assembly and migrations assembly, and hands out the upgrade tests' databases (`BeginSessionAtMigrationAsync`).
+- `UpgradeTestDatabase` and `UpgradeTestSession` - Databases stopped at a chosen migration, on a PostgreSQL server of their own, and `MigrateAsync` to take one forward (see Isolation).
 - `DatabaseTestBase`, `ApiTestBase` and `ServiceTestBase` - The three base classes described above.
 - `PlayerAppFactory` - Hosts the application over `TestServer`, once for the run. `OutboundHttp` is the stub its outbound HTTP is answered from, `Hub<T>()` and `Webhooks` are the recorders its broadcasts and queued events reach, and `FileUploadBasePath` is where its uploads land.
 - `TestConfiguration` - The configuration keys layered over the application's own `appsettings.json`.
