@@ -129,18 +129,26 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     public async Task GetAllViewNotificationsAsync_returns_everything_addressed_to_or_within_the_view()
     {
         var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var otherView = TestData.View();
+        var otherTeam = TestData.Team(otherView.Id);
         var user = TestData.User();
         await Seed(
             view,
+            team,
+            otherView,
+            otherTeam,
             user,
             TestData.Notification(view.Id, priority: NotificationPriority.System, text: "Joined"),
             TestData.Notification(user.Id, NotificationType.User, viewId: view.Id, text: "To a member"),
+            TestData.Notification(team.Id, NotificationType.Team, text: "To a team"),
+            TestData.Notification(otherTeam.Id, NotificationType.Team, text: "To another view's team"),
             TestData.Notification(Guid.NewGuid(), text: "Elsewhere"));
 
         var notifications = await Service(ClaimsPrincipalBuilder.Anonymous())
             .GetAllViewNotificationsAsync(view.Id, Ct);
 
-        Assert.Equal(["Joined", "To a member"], notifications.Select(x => x.Text).Order());
+        Assert.Equal(["Joined", "To a member", "To a team"], notifications.Select(x => x.Text).Order());
     }
 
     [Fact]
@@ -823,17 +831,26 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
     public async Task DeleteViewNotificationsAsync_removes_every_notification_of_the_view()
     {
         var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var otherView = TestData.View();
+        var otherTeam = TestData.Team(otherView.Id);
         var user = TestData.User();
         var other = TestData.Notification(Guid.NewGuid());
+        var otherTeamNotification = TestData.Notification(otherTeam.Id, NotificationType.Team);
         await Seed(
             view,
+            team,
+            otherView,
+            otherTeam,
             user,
             TestData.Notification(view.Id),
             TestData.Notification(user.Id, NotificationType.User, viewId: view.Id),
+            TestData.Notification(team.Id, NotificationType.Team),
+            otherTeamNotification,
             other);
 
         Assert.True(await Service().DeleteViewNotificationsAsync(view.Id, Ct));
-        Assert.Equal(other.Key, Assert.Single(await Stored()).Key);
+        Assert.Equal(new[] { other.Key, otherTeamNotification.Key }.Order(), (await Stored()).Select(x => x.Key).Order());
     }
 
     /// <summary>
