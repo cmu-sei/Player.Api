@@ -2,7 +2,7 @@
 
 ## Docker
 
-This application has been updated to the official Microsoft docker sdk image: `mcr.microsoft.com/dotnet/core/sdk`.
+The [Dockerfile](Dockerfile) builds on the official Microsoft .NET 10 images: `mcr.microsoft.com/dotnet/sdk:10.0` for the build, and `mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled` for the published image, which runs `./Player.Api` and listens on port 8080. Images are published as `cmusei/player-api`, tagged with the release version (or the branch name for builds of `main`). The `debug` target, on `mcr.microsoft.com/dotnet/aspnet:10.0`, is published with `-debug` appended to each tag.
 
 ### sample `docker-compose.yml`
 
@@ -11,9 +11,9 @@ version: "3.6"
 
 services:
   player-api:
-    image: cmusei/player-api:development
-    # Overrides the default entrypoint to update certificates.
-    entrypoint: bash -c "update-ca-certificates && dotnet Player.Api.dll"
+    image: cmusei/player-api:<version> # Replace <version>
+    environment:
+      - SSL_CERT_DIR=/usr/local/share/ca-certificates # Trusts the mounted CA certificates
     volumes:
       - sei-ca:/usr/local/share/ca-certificates # Mounts NFS for ca Certificates
     configs:
@@ -25,6 +25,10 @@ volumes:
       type: "nfs"
       o: "addr=<NFS IP>,nolock,soft,rw" # Replace <NFS IP>
       device: ":/mnt/data/certificates/sei-ca"
+
+configs:
+  player-api-settings:
+    file: ./player-api-settings.json
 ```
 
 ### sample `docker-stack.yml` (swarm) includes traefik reverse proxy labels
@@ -34,15 +38,15 @@ version: "3.6"
 
 services:
   player-api:
-    image: cmusei/player-api:development
-    # Overrides the default entrypoint to update certificates.
-    entrypoint: bash -c "update-ca-certificates && dotnet Player.Api.dll"
+    image: cmusei/player-api:<version> # Replace <version>
+    environment:
+      - SSL_CERT_DIR=/usr/local/share/ca-certificates # Trusts the mounted CA certificates
     deploy:
       replicas: 1
       labels:
         - "traefik.enable=true"
         - "traefik.backend=player-api"
-        - "traefik.port=80"
+        - "traefik.port=8080"
         - "traefik.docker.network=traefik-net"
         - "traefik.frontend.rule=Host:<Hostname>" # Replace <Hostname>
         - "traefik.frontend.entrypoints=http,https"
@@ -73,11 +77,11 @@ configs:
 
 ### SSL Considerations
 
-The official microsoft docker image is based on Debian. SSL CA trusts and their entry scripts need to be updated to use `update-ca-certificates` please see [update-trusts.sh](entry.d/update-trusts.sh).
+The published image is Ubuntu Chiseled: it has no shell and no `update-ca-certificates`, and the application runs as a non-root user. To trust additional certificate authorities, mount their certificates into the container and set `SSL_CERT_DIR` to that directory, as the samples above do. The player-api chart in [cmu-sei/helm-charts](https://github.com/cmu-sei/helm-charts) does the same for its `certificateMap` value.
 
 ## Testing
 
-`Player.Api.Tests` holds the automated test suite. `dotnet test` runs it, starting its own PostgreSQL container through Testcontainers — see [docs/Testing.md](docs/Testing.md) for what the suite covers and how the harness is put together.
+`Player.Api.Tests` holds the automated test suite. `dotnet test`, from the repository root, runs it. Docker must be running: the suite starts its own PostgreSQL container through Testcontainers, so no local database is needed. See [docs/Testing.md](docs/Testing.md) for what the suite covers and how the harness is put together.
 
 ## Reporting bugs and requesting features
 
