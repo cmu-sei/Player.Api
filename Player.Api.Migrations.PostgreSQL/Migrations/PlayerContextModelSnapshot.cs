@@ -355,6 +355,13 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                         },
                         new
                         {
+                            Id = new Guid("ea028d07-9dc1-4fd6-9296-43e90cb4484e"),
+                            Description = "Allows uploading ISOs for any View or Team across all Views",
+                            Immutable = false,
+                            Name = "UploadIsos"
+                        },
+                        new
+                        {
                             Id = new Guid("0189a1b9-d975-4f14-b93c-db652f7dc064"),
                             Description = "Allows deleting any ISO across all Views",
                             Immutable = false,
@@ -373,6 +380,27 @@ namespace Player.Api.Migrations.PostgreSQL.Migrations
                             Description = "Allows interacting with and controlling all Vms",
                             Immutable = false,
                             Name = "ControlVms"
+                        },
+                        new
+                        {
+                            Id = new Guid("a39846e0-0edd-41f5-838f-7ef3c101f7c0"),
+                            Description = "Allows downloading files directly from all Vms",
+                            Immutable = false,
+                            Name = "DownloadVmFiles"
+                        },
+                        new
+                        {
+                            Id = new Guid("9f4d31aa-59ed-40a4-91fb-bccd74ab1ca6"),
+                            Description = "Allows uploading files directly to all Vms",
+                            Immutable = false,
+                            Name = "UploadVmFiles"
+                        },
+                        new
+                        {
+                            Id = new Guid("28990394-5ad7-4371-ab21-4a4c2384e420"),
+                            Description = "Allows reverting all Vms to a snapshot",
+                            Immutable = false,
+                            Name = "RevertVms"
                         },
                         new
                         {
