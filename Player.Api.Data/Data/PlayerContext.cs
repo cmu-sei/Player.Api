@@ -189,6 +189,13 @@ namespace Player.Api.Data.Data
                 },
                 new PermissionEntity
                 {
+                    Id = new("ea028d07-9dc1-4fd6-9296-43e90cb4484e"),
+                    Name = "UploadIsos",
+                    Description = "Allows uploading ISOs for any View or Team across all Views",
+                    Immutable = false
+                },
+                new PermissionEntity
+                {
                     Id = new("0189a1b9-d975-4f14-b93c-db652f7dc064"),
                     Name = "DeleteIsos",
                     Description = "Allows deleting any ISO across all Views",
@@ -206,6 +213,27 @@ namespace Player.Api.Data.Data
                     Id = new("92340801-3fbf-4f53-a075-02f576563b53"),
                     Name = "ControlVms",
                     Description = "Allows interacting with and controlling all Vms",
+                    Immutable = false
+                },
+                new PermissionEntity
+                {
+                    Id = new("a39846e0-0edd-41f5-838f-7ef3c101f7c0"),
+                    Name = "DownloadVmFiles",
+                    Description = "Allows downloading files directly from all Vms",
+                    Immutable = false
+                },
+                new PermissionEntity
+                {
+                    Id = new("9f4d31aa-59ed-40a4-91fb-bccd74ab1ca6"),
+                    Name = "UploadVmFiles",
+                    Description = "Allows uploading files directly to all Vms",
+                    Immutable = false
+                },
+                new PermissionEntity
+                {
+                    Id = new("28990394-5ad7-4371-ab21-4a4c2384e420"),
+                    Name = "RevertVms",
+                    Description = "Allows reverting all Vms to a snapshot",
                     Immutable = false
                 },
                 new PermissionEntity
