@@ -158,17 +158,11 @@ public class VmAndMapPermissionsUpgradeTests(DatabaseFixture fixture)
         await using var session = await fixture.BeginSessionAtMigrationAsync(BeforeVmAndMapPermissions);
         await session.MigrateAsync(cancellationToken: Ct);
 
-        await using var db = session.CreateContext();
-        var permissionNames = await db.TeamPermissions.ToDictionaryAsync(x => x.Id, x => x.Name, Ct);
-        var seeded = db.GetService<IDesignTimeModel>().Model
-            .FindEntityType(typeof(TeamRolePermissionEntity))!.GetSeedData()
-            .Where(x => (Guid)x[nameof(TeamRolePermissionEntity.RoleId)] == id)
-            .Select(x => $"{permissionNames[(Guid)x[nameof(TeamRolePermissionEntity.PermissionId)]]} {x[nameof(TeamRolePermissionEntity.Id)]}")
-            .ToList();
+        var seeded = await SeededTeamRoleGrantsWithIds(session, id);
         var migrated = await TeamRoleGrantsWithIds(session, id);
 
         Assert.Subset(migrated.ToHashSet(), seeded.ToHashSet());
-        Assert.Equal(extras, migrated.Except(seeded).Select(x => x.Split(' ')[0]).Order(StringComparer.Ordinal));
+        Assert.Equal(extras, PermissionNamesOf(migrated.Except(seeded)));
     }
 
     // ---- Raw SQL helpers ------------------------------------------------------------------------
@@ -251,6 +245,25 @@ public class VmAndMapPermissionsUpgradeTests(DatabaseFixture fixture)
             FROM team_role_permissions trp JOIN team_permissions p ON p.id = trp.permission_id
             WHERE trp.role_id = {roleId}
             """);
+
+    /// <summary>
+    /// The grants the model's seed data gives a built-in team role, in the shape of
+    /// <see cref="TeamRoleGrantsWithIds"/>: the permission's name and the grant's seeded id.
+    /// </summary>
+    private static async Task<List<string>> SeededTeamRoleGrantsWithIds(UpgradeTestSession session, Guid roleId)
+    {
+        await using var db = session.CreateContext();
+        var permissionNames = await db.TeamPermissions.ToDictionaryAsync(x => x.Id, x => x.Name, Ct);
+
+        return [.. db.GetService<IDesignTimeModel>().Model
+            .FindEntityType(typeof(TeamRolePermissionEntity))!.GetSeedData()
+            .Where(x => (Guid)x[nameof(TeamRolePermissionEntity.RoleId)] == roleId)
+            .Select(x => $"{permissionNames[(Guid)x[nameof(TeamRolePermissionEntity.PermissionId)]]} {x[nameof(TeamRolePermissionEntity.Id)]}")];
+    }
+
+    /// <summary>The permission names of grants in the shape of <see cref="TeamRoleGrantsWithIds"/>, in ordinal order.</summary>
+    private static IEnumerable<string> PermissionNamesOf(IEnumerable<string> grantsWithIds) =>
+        grantsWithIds.Select(x => x.Split(' ')[0]).Order(StringComparer.Ordinal);
 
     private static Task<List<string>> TeamAssignments(UpgradeTestSession session, Guid teamId) =>
         Query(session, $"""

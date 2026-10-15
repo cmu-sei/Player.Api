@@ -717,6 +717,54 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal("Other", (await db.Notifications.SingleAsync(Ct)).Text);
     }
 
+    /// <summary>
+    /// A team notification carries only its team, not the view, so it belongs to the view its team is in:
+    /// the listing shows the notifications of the view's own teams and none of another view's teams.
+    /// </summary>
+    [Fact]
+    public async Task GetNotifications_lists_the_view_teams_notifications_but_not_another_views_teams()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var otherView = TestData.View("Other");
+        var otherTeam = TestData.Team(otherView.Id);
+        await Seed(
+            view,
+            team,
+            otherView,
+            otherTeam,
+            TestData.Notification(view.Id, text: "To the view"),
+            TestData.Notification(team.Id, NotificationType.Team, text: "To its team"),
+            TestData.Notification(otherTeam.Id, NotificationType.Team, text: "To another view's team"));
+
+        var notifications = await ReadAsync<Notification[]>(
+            await RootClient.GetAsync($"api/views/{view.Id}/notifications", Ct));
+
+        Assert.Equal(["To its team", "To the view"], notifications.Select(x => x.Text).Order());
+    }
+
+    [Fact]
+    public async Task DeleteAllNotifications_removes_the_view_teams_notifications_and_leaves_another_views_teams()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var otherView = TestData.View("Other");
+        var otherTeam = TestData.Team(otherView.Id);
+        await Seed(
+            view,
+            team,
+            otherView,
+            otherTeam,
+            TestData.Notification(view.Id, text: "To the view"),
+            TestData.Notification(team.Id, NotificationType.Team, text: "To its team"),
+            TestData.Notification(otherTeam.Id, NotificationType.Team, text: "To another view's team"));
+
+        await ReadAsync<string>(await RootClient.DeleteAsync($"api/views/{view.Id}/notifications", Ct));
+
+        await using var db = NewContext();
+        Assert.Equal("To another view's team", (await db.Notifications.SingleAsync(Ct)).Text);
+    }
+
     [Fact]
     public async Task GetNotifications_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
     {

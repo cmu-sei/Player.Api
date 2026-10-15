@@ -46,63 +46,68 @@ public class GrantPreservationTests(DatabaseFixture fixture)
         ["EditView"] = ["ControlViewVms"],
     };
 
+    /// <summary>The kinds of holder a grant can have, as <see cref="GrantsQuery"/> names them.</summary>
+    private const string TeamRole = "team role";
+    private const string SystemRole = "system role";
+    private const string TeamAssignment = "team assignment";
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     /// <summary>
-    /// Every migration from <see cref="Baseline"/> on, except the latest, which has nothing after it.
+    /// Every migration from <see cref="Baseline"/> on, except the latest, which has nothing after it, once
+    /// for each kind of holder.
     /// </summary>
-    public static TheoryData<string> StartingMigrations()
+    public static TheoryData<string, string> StartingMigrationsAndHolders()
     {
         var ids = typeof(Add_Vm_And_Map_Permissions).Assembly.GetTypes()
             .Select(t => t.GetCustomAttribute<MigrationAttribute>()?.Id)
             .Where(id => id is not null)
             .Order(StringComparer.Ordinal)
             .ToList();
+        var starts = ids.Where(id => string.CompareOrdinal(id, Baseline) >= 0).SkipLast(1);
 
-        return [.. ids.Where(id => string.CompareOrdinal(id, Baseline) >= 0).SkipLast(1)];
+        return [.. starts.SelectMany(id => new[] { TeamRole, SystemRole, TeamAssignment }.Select(holder => (id, holder)))];
     }
 
     [Theory]
-    [MemberData(nameof(StartingMigrations))]
-    public async Task Later_migrations_keep_every_grant(string startingMigration)
+    [MemberData(nameof(StartingMigrationsAndHolders))]
+    public async Task Later_migrations_keep_every_grant(string startingMigration, string holder)
     {
         await using var session = await fixture.BeginSessionAtMigrationAsync(startingMigration);
         await Execute(session, SeedCustomRolesAndTeams);
-        var before = await Grants(session);
+        var before = await Grants(session, holder);
 
         await session.MigrateAsync(cancellationToken: Ct);
 
-        var after = (await Grants(session)).ToHashSet();
+        var after = await Grants(session, holder);
         var permissions = (await Query(session, PermissionNames)).ToHashSet();
 
-        var failures = new List<string>();
-
-        foreach (var grant in before)
-        {
-            var required = Resolve(grant.Permission, permissions);
-
-            if (required is null)
-            {
-                failures.Add(
-                    $"{grant} held {grant.Permission}, which no longer exists. If a migration " +
-                    $"retired it on purpose, add it to {nameof(Retired)} with what replaces it.");
-                continue;
-            }
-
-            failures.AddRange(required
-                .Where(permission => !after.Contains(grant with { Permission = permission }))
-                .Select(permission => grant.Permission == permission
-                    ? $"{grant} lost {permission}."
-                    : $"{grant} held {grant.Permission} but did not get {permission} in its place."));
-        }
-
         // A seed that silently inserts nothing would make every migration pass.
-        Assert.Contains(before, x => x.Holder.StartsWith("team role ", StringComparison.Ordinal));
-        Assert.Contains(before, x => x.Holder.StartsWith("system role ", StringComparison.Ordinal));
-        Assert.Contains(before, x => x.Holder.StartsWith("team assignment ", StringComparison.Ordinal));
-        if (failures.Count > 0)
-            Assert.Fail($"{failures.Count} grants were lost:\n" + string.Join("\n", failures));
+        Assert.NotEmpty(before);
+        Assert.Empty(Unreplaced(before, permissions));
+        Assert.Empty(Lost(before, after, permissions));
     }
+
+    /// <summary>
+    /// The grants whose permission no longer exists and is not in <see cref="Retired"/>. If a migration
+    /// retired one on purpose, add it to <see cref="Retired"/> with what replaces it.
+    /// </summary>
+    private static List<Grant> Unreplaced(List<Grant> before, HashSet<string> permissions) =>
+        [.. before.Where(grant => Resolve(grant.Permission, permissions) is null)];
+
+    /// <summary>
+    /// The grants a holder should hold after the migrations and does not: the permission it held, or,
+    /// for a retired one, each permission that replaces it (<see cref="Grant.InPlaceOf"/> names the old one).
+    /// </summary>
+    private static List<Grant> Lost(List<Grant> before, List<Grant> after, HashSet<string> permissions) =>
+        [.. before
+            .SelectMany(grant => (Resolve(grant.Permission, permissions) ?? [])
+                .Select(permission => grant with
+                {
+                    Permission = permission,
+                    InPlaceOf = permission == grant.Permission ? null : grant.Permission
+                }))
+            .Where(required => !after.Contains(required))];
 
     /// <summary>
     /// The permissions a holder of <paramref name="permission"/> must hold after the migrations, or
@@ -167,16 +172,16 @@ public class GrantPreservationTests(DatabaseFixture fixture)
             ON t.name IN ('Team with ' || p.name, 'Team with all');
         """;
 
-    private const string GrantsQuery = """
-        SELECT 'team role ' || r.id || chr(9) || r.name || chr(9) || p.name AS "Value"
+    private const string GrantsQuery = $"""
+        SELECT '{TeamRole} ' || r.id || chr(9) || r.name || chr(9) || p.name AS "Value"
         FROM team_role_permissions x
         JOIN team_roles r ON r.id = x.role_id JOIN team_permissions p ON p.id = x.permission_id
         UNION ALL
-        SELECT 'system role ' || r.id || chr(9) || r.name || chr(9) || p.name
+        SELECT '{SystemRole} ' || r.id || chr(9) || r.name || chr(9) || p.name
         FROM role_permissions x
         JOIN roles r ON r.id = x.role_id JOIN permissions p ON p.id = x.permission_id
         UNION ALL
-        SELECT 'team assignment ' || t.id || chr(9) || t.name || chr(9) || p.name
+        SELECT '{TeamAssignment} ' || t.id || chr(9) || t.name || chr(9) || p.name
         FROM team_permission_assignments x
         JOIN teams t ON t.id = x.team_id JOIN team_permissions p ON p.id = x.permission_id
         """;
@@ -186,26 +191,31 @@ public class GrantPreservationTests(DatabaseFixture fixture)
         """;
 
     /// <summary>
-    /// A grant, keyed by the kind and id of its holder. <see cref="Name"/> is for the failure message
-    /// only and takes no part in equality, so a migration that renames a role does not count as a loss.
+    /// A grant, keyed by the kind and id of its holder. <see cref="Name"/> and <see cref="InPlaceOf"/> are
+    /// for the failure message only and take no part in equality, so a migration that renames a role does
+    /// not count as a loss.
     /// </summary>
     private sealed record Grant(string Holder, string Permission)
     {
         public string Name { get; init; }
 
+        /// <summary>The retired permission the holder held, where <see cref="Permission"/> replaces it.</summary>
+        public string InPlaceOf { get; init; }
+
         public bool Equals(Grant other) => other is not null && Holder == other.Holder && Permission == other.Permission;
 
         public override int GetHashCode() => HashCode.Combine(Holder, Permission);
 
-        public override string ToString() => $"{Holder} ({Name})";
+        public override string ToString() =>
+            InPlaceOf is null ? $"{Holder} ({Name}): {Permission}" : $"{Holder} ({Name}): {Permission} in place of {InPlaceOf}";
     }
 
-    private static async Task<List<Grant>> Grants(UpgradeTestSession session) =>
-        [.. (await Query(session, GrantsQuery)).Select(row =>
-        {
-            var parts = row.Split('\t');
-            return new Grant(parts[0], parts[2]) { Name = parts[1] };
-        })];
+    /// <summary>Every grant held by a holder of the given kind.</summary>
+    private static async Task<List<Grant>> Grants(UpgradeTestSession session, string holder) =>
+        [.. (await Query(session, GrantsQuery))
+            .Select(row => row.Split('\t'))
+            .Select(parts => new Grant(parts[0], parts[2]) { Name = parts[1] })
+            .Where(grant => grant.Holder.StartsWith(holder + " ", StringComparison.Ordinal))];
 
     private static async Task Execute(UpgradeTestSession session, string sql)
     {

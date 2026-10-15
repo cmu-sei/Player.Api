@@ -61,6 +61,37 @@ public class CancellationTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
         Assert.False(await db.Roles.AnyAsync(x => x.Name == "Auditor", Ct));
     }
 
+    /// <summary>
+    /// Deleting every notification of a view with a cancelled token is abandoned, and the view's
+    /// notifications stay.
+    /// </summary>
+    [Fact]
+    public async Task A_cancelled_sweep_of_a_views_notifications_is_abandoned()
+    {
+        var view = TestData.View();
+        await Seed(view, TestData.Notification(view.Id, text: "Still here"));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => RootHost.Resolve<INotificationService>().DeleteViewNotificationsAsync(view.Id, Cancelled));
+
+        await using var db = NewContext();
+        Assert.Equal("Still here", (await db.Notifications.SingleAsync(Ct)).Text);
+    }
+
+    /// <summary>
+    /// The token reaches the query that finds the view's notifications, not only the save: a cancelled
+    /// sweep of a view with nothing to delete is abandoned too, rather than answered with false.
+    /// </summary>
+    [Fact]
+    public async Task A_cancelled_sweep_of_a_view_with_no_notifications_is_abandoned()
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => RootHost.Resolve<INotificationService>().DeleteViewNotificationsAsync(view.Id, Cancelled));
+    }
+
     // ---- Not honoured -------------------------------------------------------------------------------
 
     /// <summary>A permission edit sent with a cancelled token is committed.</summary>

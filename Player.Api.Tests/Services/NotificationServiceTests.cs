@@ -170,6 +170,28 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         Assert.Equal(["Joined", "To a member", "To a team"], notifications.Select(x => x.Text).Order());
     }
 
+    /// <summary>
+    /// A match on the view id as the recipient counts only for a notification addressed to a view, so a
+    /// team or user notification whose recipient id happens to equal the view's id is not listed.
+    /// </summary>
+    [Theory]
+    [InlineData(NotificationType.Team)]
+    [InlineData(NotificationType.User)]
+    public async Task GetAllViewNotificationsAsync_leaves_out_a_notification_to_another_type_whose_recipient_id_is_the_view_id(
+        NotificationType toType)
+    {
+        var view = TestData.View();
+        await Seed(
+            view,
+            TestData.Notification(view.Id, text: "To the view"),
+            TestData.Notification(view.Id, toType, text: "Lookalike"));
+
+        var notifications = await Service(ClaimsPrincipalBuilder.Anonymous())
+            .GetAllViewNotificationsAsync(view.Id, Ct);
+
+        Assert.Equal("To the view", Assert.Single(notifications).Text);
+    }
+
     [Fact]
     public async Task GetByTeamAsync_returns_the_teams_non_system_notifications()
     {
@@ -952,6 +974,25 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
         Assert.Single(await Stored());
     }
 
+    /// <summary>
+    /// A match on the view id as the recipient counts only for a notification addressed to a view, so a
+    /// team or user notification whose recipient id happens to equal the view's id is not found.
+    /// </summary>
+    [Theory]
+    [InlineData(NotificationType.Team)]
+    [InlineData(NotificationType.User)]
+    public async Task DeleteAsync_does_not_find_a_notification_to_another_type_whose_recipient_id_is_the_view_id(
+        NotificationType toType)
+    {
+        var view = TestData.View();
+        var lookalike = TestData.Notification(view.Id, toType);
+        await Seed(view, lookalike);
+
+        await Assert.ThrowsAsync<EntityNotFoundException<Notification>>(
+            () => Service().DeleteAsync(view.Id, lookalike.Key, Ct));
+        Assert.Equal(lookalike.Key, Assert.Single(await Stored()).Key);
+    }
+
     [Fact]
     public async Task DeleteViewNotificationsAsync_removes_every_notification_of_the_view()
     {
@@ -976,6 +1017,24 @@ public class NotificationServiceTests(DatabaseFixture fixture) : ServiceTestBase
 
         Assert.True(await Service().DeleteViewNotificationsAsync(view.Id, Ct));
         Assert.Equal(new[] { other.Key, otherTeamNotification.Key }.Order(), (await Stored()).Select(x => x.Key).Order());
+    }
+
+    /// <summary>
+    /// A match on the view id as the recipient counts only for a notification addressed to a view, so a
+    /// team or user notification whose recipient id happens to equal the view's id is not swept.
+    /// </summary>
+    [Theory]
+    [InlineData(NotificationType.Team)]
+    [InlineData(NotificationType.User)]
+    public async Task DeleteViewNotificationsAsync_leaves_a_notification_to_another_type_whose_recipient_id_is_the_view_id(
+        NotificationType toType)
+    {
+        var view = TestData.View();
+        var lookalike = TestData.Notification(view.Id, toType);
+        await Seed(view, TestData.Notification(view.Id), lookalike);
+
+        Assert.True(await Service().DeleteViewNotificationsAsync(view.Id, Ct));
+        Assert.Equal(lookalike.Key, Assert.Single(await Stored()).Key);
     }
 
     /// <summary>
