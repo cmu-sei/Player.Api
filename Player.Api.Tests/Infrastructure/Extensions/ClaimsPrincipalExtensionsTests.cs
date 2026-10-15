@@ -56,10 +56,7 @@ public class ClaimsPrincipalExtensionsTests
         Assert.Equal(Guid.Empty, ((ClaimsPrincipal)null).GetId());
     }
 
-    /// <summary>
-    /// Characterizes current behaviour. A principal carrying neither claim throws rather than reading as
-    /// empty: the fallback parse is handed the same null the first one failed on.
-    /// </summary>
+    /// <summary>A principal with neither a sub nor a name identifier claim throws.</summary>
     [Fact]
     public void GetId_throws_for_a_principal_with_neither_claim()
     {

@@ -50,8 +50,8 @@ public class TeamHubTests
     }
 
     /// <summary>
-    /// <c>WasSuccess</c> is the whole gate. The reply's <c>ToId</c> used to be, but the service sets it to the
-    /// requested id whether or not the caller was authorized, so it never rejected anything.
+    /// <c>WasSuccess</c> is the whole gate: the hub joins the requested group without reading the reply's
+    /// <c>ToId</c>.
     /// </summary>
     [Fact]
     public async Task A_granted_join_addressed_to_another_team_still_joins_the_requested_group()

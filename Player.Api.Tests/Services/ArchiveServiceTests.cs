@@ -20,13 +20,7 @@ public class ArchiveServiceTests
 {
     private readonly ArchiveService _service = new();
 
-    /// <summary>
-    /// Characterizes current behavior: <c>ArchiveService.cs:71</c> declares a text entry's tar size as
-    /// <c>str.Length</c>, a char count, then writes UTF-8. Any non-ASCII character makes the two disagree and
-    /// tar refuses the entry. Reached in production by application-template export, which serializes without
-    /// escaping; view export escapes to ASCII first and is safe.
-    /// </summary>
-    /// <remarks>Turns red when the tar entry size is calculated from the UTF-8 byte count.</remarks>
+    /// <summary>A tgz text entry with a non-ASCII character is refused by the tar writer.</summary>
     [Fact]
     public async Task Tgz_rejects_a_text_entry_containing_a_non_ascii_character()
     {
@@ -45,7 +39,7 @@ public class ArchiveServiceTests
         Assert.Equal("Übung", await RoundTripText(ArchiveType.zip, "Übung"));
     }
 
-    /// <summary>The tgz text path itself is sound — it is only the size that is wrong.</summary>
+    /// <summary>The tgz text path round-trips ASCII text, whose char count and byte count agree.</summary>
     [Fact]
     public async Task Tgz_round_trips_an_ascii_text_entry()
     {

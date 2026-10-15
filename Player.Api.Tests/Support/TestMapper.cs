@@ -14,7 +14,7 @@ namespace Player.Api.Tests.Support;
 /// <c>Player.Api</c> for <see cref="Profile"/> classes and applies the same global
 /// null-source-value convention. Using the real configuration rather than a substituted
 /// <see cref="IMapper"/> means a handler test fails when a profile is wrong — which is the
-/// mapping bug most likely to reach production, since nothing else exercises the profiles.
+/// mapping fault most likely to reach production, since nothing else exercises the profiles.
 /// </remarks>
 public static class TestMapper
 {

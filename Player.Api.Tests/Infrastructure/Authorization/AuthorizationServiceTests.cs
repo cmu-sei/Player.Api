@@ -74,8 +74,7 @@ public class AuthorizationServiceTests(DatabaseFixture fixture) : DatabaseTestBa
     public void GetAuthorizedViewIds_returns_one_entry_per_team_claim()
     {
         // Not distinct: two teams in one view yield that view twice. Pinned as-is because callers
-        // treat it as a membership filter, where duplicates are harmless — but a caller that counts
-        // views would be wrong.
+        // treat it as a membership filter, where duplicates are harmless.
         var user = new ClaimsPrincipalBuilder()
             .WithTeam(ViewId, TeamId)
             .WithTeam(ViewId, OtherTeamId)
@@ -256,12 +255,7 @@ public class AuthorizationServiceTests(DatabaseFixture fixture) : DatabaseTestBa
         Assert.False(granted);
     }
 
-    /// <summary>
-    /// Covers the null-array path at the level an endpoint reaches it: the system-permission-only
-    /// <c>Authorize</c> overload passes <see langword="null"/> for both permission arrays, so any user
-    /// holding a team claim arrives at <c>HasRequiredPermissions</c> with those nulls. The
-    /// handler-level counterparts are in <c>TeamPermissionsHandlerTests</c>.
-    /// </summary>
+    /// <summary>A team member without the system permission is refused by the system-only overload.</summary>
     [Fact]
     public async Task Authorize_refuses_for_a_team_member_without_the_system_permission()
     {

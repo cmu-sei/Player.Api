@@ -56,8 +56,8 @@ public class UserHubTests
     }
 
     /// <summary>
-    /// <c>WasSuccess</c> is the whole gate. The reply's <c>ToId</c> used to be, but the service sets it to the
-    /// requested user whether or not the caller was authorized, so it never rejected anything.
+    /// <c>WasSuccess</c> is the whole gate: the hub joins the requested group without reading the reply's
+    /// <c>ToId</c>.
     /// </summary>
     [Fact]
     public async Task A_granted_join_addressed_to_another_user_still_joins_the_requested_group()
@@ -114,6 +114,7 @@ public class UserHubTests
             () => Hub().Post(_viewId.ToString(), _userId.ToString(), "Your VM is ready."));
 
         HubHarness.NothingSent(_harness.Group(Group), "Reply");
+        _harness.NothingAddressed();
     }
 
     [Fact]

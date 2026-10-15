@@ -99,10 +99,7 @@ public class MalformedRouteParameterTests(DatabaseFixture fixture, PlayerAppFact
         Assert.Contains("last-tuesday", string.Join(' ', problem.Extensions["errors"]?.ToString()));
     }
 
-    /// <summary>
-    /// Authentication runs before binding, so a malformed id from a caller with no identity is a 401 — an
-    /// anonymous client cannot use a deliberately broken id to learn which routes exist.
-    /// </summary>
+    /// <summary>A malformed id from a caller with no identity is a 401, because authentication runs before binding; the anonymous client is the case under test.</summary>
     [Fact]
     public async Task An_unauthenticated_request_to_a_malformed_route_is_unauthorized()
     {

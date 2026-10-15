@@ -143,11 +143,7 @@ public class ViewExportFileErrorTests(DatabaseFixture fixture, PlayerAppFactory 
 
     // ---- Import ---------------------------------------------------------------------------------
 
-    /// <summary>
-    /// Characterizes current behavior: views.json names a file whose bytes were never packed, so the importer
-    /// rejects the whole view over it — a partial export is a total loss on import.
-    /// </summary>
-    /// <remarks>Turns red when export omits the missing file from the manifest or reports the partial archive.</remarks>
+    /// <summary>An archive exported with a missing file imports as a failure for that view.</summary>
     [Fact]
     public async Task An_export_with_a_missing_file_produces_an_archive_that_imports_as_a_failure()
     {

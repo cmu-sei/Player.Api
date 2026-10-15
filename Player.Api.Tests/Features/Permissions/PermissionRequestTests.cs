@@ -44,14 +44,7 @@ public class PermissionRequestTests(DatabaseFixture fixture, PlayerAppFactory fa
         Assert.Equal("A custom one", stored.Description);
     }
 
-    /// <summary>
-    /// Names are uniquely indexed because authorization resolves a permission by name, but the handler
-    /// saves without looking, so a client's duplicate comes back as a server error rather than a 409.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the handler checks the name first, or throws something that maps to a client
-    /// error. The detail is asserted because it is what says the failure reached the save.
-    /// </remarks>
+    /// <summary>A duplicate permission name on create is answered with a 500 and nothing is stored.</summary>
     [Fact]
     public async Task Create_reports_a_duplicate_name_as_a_server_error()
     {
@@ -98,16 +91,7 @@ public class PermissionRequestTests(DatabaseFixture fixture, PlayerAppFactory fa
             (await db.Permissions.SingleAsync(x => x.Id == permissionId, Ct)).Description);
     }
 
-    /// <summary>
-    /// A rename onto a name another permission holds is the same server error as the duplicate
-    /// <c>Create</c> above, for the same reason: neither handler in this feature reads the name before
-    /// saving it. Wrong — the caller's mistake, reported as a server fault.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when <c>Edit</c> checks the name first. The stored name is asserted because the rollback
-    /// is what keeps authorization working: permission names are the claim keys, so a rename that half
-    /// landed would revoke the permission from every role granting it.
-    /// </remarks>
+    /// <summary>A rename onto another permission's name is answered with a 500 and the stored name is kept.</summary>
     [Fact]
     public async Task Edit_reports_a_rename_onto_a_taken_name_as_a_server_error()
     {
@@ -204,18 +188,11 @@ public class PermissionRequestTests(DatabaseFixture fixture, PlayerAppFactory fa
             await RootClient.GetAsync($"api/permissions/{Guid.NewGuid()}", Ct));
     }
 
-    /// <summary>
-    /// Permission rows are not public: a caller holding nothing is refused rather than shown the
-    /// vocabulary the system authorizes by.
-    /// </summary>
-    /// <remarks>
-    /// The actor is on no team either, because <c>Authorize</c> also admits <c>ViewView</c> in any
-    /// view — a membership carrying it would have answered the request rather than refusing it.
-    /// </remarks>
+    /// <summary>The near miss is ViewUsers, which opens roles but not permissions.</summary>
     [Fact]
-    public async Task Get_is_forbidden_without_ViewRoles()
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ViewUsers()
     {
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
 
         await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync(
             $"api/permissions/{TestData.Permissions.CreateViews}", Ct));
@@ -279,15 +256,7 @@ public class PermissionRequestTests(DatabaseFixture fixture, PlayerAppFactory fa
             x => x.RoleId == roleId && x.PermissionId == permissionId, Ct));
     }
 
-    /// <summary>
-    /// Granting a permission the role already holds is a server error, where revoking one the role does
-    /// not hold is a success — the same request repeated succeeds once and then 500s.
-    /// </summary>
-    /// <remarks>
-    /// <c>(RoleId, PermissionId)</c> is uniquely indexed and the handler adds without looking, so the
-    /// insert fails in the database. The seeded <c>Content Developer</c> row already grants
-    /// <c>CreateViews</c>, which is the existing grant this repeats.
-    /// </remarks>
+    /// <summary>Granting a permission the role already holds is answered with a 500; one grant stays.</summary>
     [Fact]
     public async Task AddToRole_reports_a_grant_the_role_already_holds_as_a_server_error()
     {
@@ -381,6 +350,245 @@ public class PermissionRequestTests(DatabaseFixture fixture, PlayerAppFactory fa
 
         await AssertNotFound("Permission", await RootClient.DeleteAsync(
             $"api/roles/{roleId}/permissions/{Guid.NewGuid()}", Ct));
+    }
+
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Create_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        var created = await ReadAsync<Permission>(await Client(actor).PostAsJsonAsync(
+            "api/permissions", new { name = "Created By A Role Manager" }, Ct));
+
+        Assert.True(await ReadBack(db => db.Permissions.AnyAsync(x => x.Id == created.Id, Ct)));
+    }
+
+    [Fact]
+    public async Task Edit_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var permissionId = TestData.Permissions.ViewNetworks;
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsJsonAsync(
+            $"api/permissions/{permissionId}",
+            new { name = "ViewNetworks", description = "Reworded by a role manager" },
+            Ct));
+
+        Assert.Equal(
+            "Reworded by a role manager",
+            await ReadBack(db => db.Permissions.Where(x => x.Id == permissionId).Select(x => x.Description).SingleAsync(Ct)));
+    }
+
+    [Fact]
+    public async Task Delete_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var permissionId = TestData.Permissions.ViewNetworks;
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await Client(actor).DeleteAsync($"api/permissions/{permissionId}", Ct));
+
+        Assert.False(await ReadBack(db => db.Permissions.AnyAsync(x => x.Id == permissionId, Ct)));
+    }
+
+    /// <summary>
+    /// The near miss is the row, not the caller: a caller holding exactly ManageRoles is refused an
+    /// immutable permission by the flag's own message, and the name stays.
+    /// </summary>
+    [Fact]
+    public async Task Edit_refuses_an_immutable_permission_to_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        var problem = await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).PutAsJsonAsync(
+                $"api/permissions/{TestData.Permissions.CreateViews}",
+                new { name = "Renamed" },
+                Ct));
+
+        Assert.Equal("Cannot update an Immutable Permission", problem.Title);
+        Assert.Equal(
+            "CreateViews",
+            await ReadBack(db => db.Permissions.Where(x => x.Id == TestData.Permissions.CreateViews).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    /// <summary>
+    /// The near miss is the row, not the caller: a caller holding exactly ManageRoles is refused an
+    /// immutable permission by the flag's own message, and the row stays.
+    /// </summary>
+    [Fact]
+    public async Task Delete_refuses_an_immutable_permission_to_a_caller_holding_only_ManageRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        var problem = await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).DeleteAsync($"api/permissions/{TestData.Permissions.CreateViews}", Ct));
+
+        Assert.Equal("Cannot delete an Immutable Permission", problem.Title);
+        Assert.True(await ReadBack(db => db.Permissions.AnyAsync(x => x.Id == TestData.Permissions.CreateViews, Ct)));
+    }
+
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        var got = await ReadAsync<Permission>(await Client(actor).GetAsync(
+            $"api/permissions/{TestData.Permissions.CreateViews}", Ct));
+
+        Assert.Equal(TestData.Permissions.CreateViews, got.Id);
+    }
+
+    /// <summary>ViewView in any view opens the permission rows too, without a system permission.</summary>
+    [Fact]
+    public async Task Get_is_allowed_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var got = await ReadAsync<Permission>(await Client(actor).GetAsync(
+            $"api/permissions/{TestData.Permissions.CreateViews}", Ct));
+
+        Assert.Equal(TestData.Permissions.CreateViews, got.Id);
+    }
+
+    [Fact]
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_ViewRoles()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        var permissions = await ReadAsync<Permission[]>(await Client(actor).GetAsync("api/permissions", Ct));
+
+        Assert.Contains(permissions, x => x.Id == TestData.Permissions.CreateViews);
+    }
+
+    [Fact]
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_ViewView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var permissions = await ReadAsync<Permission[]>(await Client(actor).GetAsync("api/permissions", Ct));
+
+        Assert.Contains(permissions, x => x.Id == TestData.Permissions.CreateViews);
+    }
+
+    /// <summary>The near miss is ViewUsers, which opens roles but not permissions.</summary>
+    [Fact]
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ViewUsers()
+    {
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/permissions", Ct));
+    }
+
+    [Fact]
+    public async Task AddToRole_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var roleId = TestData.Roles.ContentDeveloper;
+        var permissionId = TestData.Permissions.ViewNetworks;
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PostAsync(
+            $"api/roles/{roleId}/permissions/{permissionId}", null, Ct));
+
+        Assert.True(await ReadBack(db => db.RolePermissions.AnyAsync(
+            x => x.RoleId == roleId && x.PermissionId == permissionId, Ct)));
+    }
+
+    [Fact]
+    public async Task RemoveFromRole_is_allowed_for_a_caller_holding_only_ManageRoles()
+    {
+        var roleId = TestData.Roles.ContentDeveloper;
+        var permissionId = TestData.Permissions.ViewNetworks;
+        await Seed(new RolePermissionEntity(roleId, permissionId) { Id = Guid.NewGuid() });
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageRoles).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).DeleteAsync(
+            $"api/roles/{roleId}/permissions/{permissionId}", Ct));
+
+        Assert.False(await ReadBack(db => db.RolePermissions.AnyAsync(
+            x => x.RoleId == roleId && x.PermissionId == permissionId, Ct)));
+    }
+
+    /// <summary>The near miss is ViewRoles, which reads grants but does not change them; the grant stays.</summary>
+    [Fact]
+    public async Task RemoveFromRole_is_forbidden_for_a_caller_holding_only_ViewRoles()
+    {
+        var roleId = TestData.Roles.ContentDeveloper;
+        var permissionId = TestData.Permissions.ViewNetworks;
+        await Seed(new RolePermissionEntity(roleId, permissionId) { Id = Guid.NewGuid() });
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync(
+            $"api/roles/{roleId}/permissions/{permissionId}", Ct));
+
+        Assert.True(await ReadBack(db => db.RolePermissions.AnyAsync(
+            x => x.RoleId == roleId && x.PermissionId == permissionId, Ct)));
+    }
+
+    /// <summary>The near miss is ViewRoles, which reads permissions but does not change them; the row is kept as it was.</summary>
+    [Fact]
+    public async Task Edit_is_forbidden_for_a_caller_holding_only_ViewRoles()
+    {
+        var permissionId = TestData.Permissions.ViewNetworks;
+        var seeded = await Db.Permissions.Where(x => x.Id == permissionId).Select(x => x.Description).SingleAsync(Ct);
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).PutAsJsonAsync(
+            $"api/permissions/{permissionId}",
+            new { name = "ViewNetworks", description = "Not reworded" },
+            Ct));
+
+        Assert.Equal(
+            seeded,
+            await ReadBack(db => db.Permissions.Where(x => x.Id == permissionId).Select(x => x.Description).SingleAsync(Ct)));
+    }
+
+    /// <summary>The near miss is ViewRoles, which reads permissions but does not delete them; the row stays.</summary>
+    [Fact]
+    public async Task Delete_is_forbidden_for_a_caller_holding_only_ViewRoles()
+    {
+        var permissionId = TestData.Permissions.ViewNetworks;
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewRoles).SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).DeleteAsync($"api/permissions/{permissionId}", Ct));
+
+        Assert.True(await ReadBack(db => db.Permissions.AnyAsync(x => x.Id == permissionId, Ct)));
+    }
+
+    // ---- One near miss per tier -------------------------------------------------------------------
+
+    /// <summary>The view tier: ManageView in a view, where reading a permission takes ViewView in any view.</summary>
+    [Fact]
+    public async Task Get_is_forbidden_for_a_caller_holding_only_ManageView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync(
+            $"api/permissions/{TestData.Permissions.CreateViews}", Ct));
+    }
+
+    /// <summary>The view tier: ManageView in a view, where listing permissions takes ViewView in any view.</summary>
+    [Fact]
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ManageView()
+    {
+        var view = TestData.View();
+        await Seed(view);
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertProblem(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/permissions", Ct));
     }
 
     // ---- Helpers --------------------------------------------------------------------------------

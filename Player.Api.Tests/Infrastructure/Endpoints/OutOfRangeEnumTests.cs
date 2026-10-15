@@ -11,32 +11,13 @@ using Player.Api.Tests.Support;
 namespace Player.Api.Tests.Infrastructure.Endpoints;
 
 /// <summary>
-/// What the API does with an enum value outside the set the enum defines.
+/// What the API does with an enum value outside the set the enum defines, spelled as a name and as a
+/// number.
 /// </summary>
-/// <remarks>
-/// <para>
-/// A name it does not recognize is refused, and a number it does not recognize is not: <c>System.Text.Json</c>
-/// reads a numeric enum without checking it against the defined values, and neither the commands nor the
-/// entities check afterwards. So the number is stored, returned, and — for webhook event types — used as a
-/// matching key that can never match.
-/// </para>
-/// <para>
-/// Both halves are here on purpose. The refusals are what make the acceptances a bug rather than a
-/// convention: the same undefined value is a 400 spelled one way and a 201 spelled the other.
-/// </para>
-/// </remarks>
 public class OutOfRangeEnumTests(DatabaseFixture fixture, PlayerAppFactory factory)
     : ApiTestBase(fixture, factory)
 {
-    /// <summary>
-    /// A view is created with a status no <c>ViewStatus</c> member has, and the row keeps it.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the command validates the value. Both spellings are covered because
-    /// <c>JsonStringEnumConverter</c> reads a quoted number as a number, so a client cannot avoid this by
-    /// sending strings. The response is asserted too: it echoes <c>999</c>, where a defined status would be
-    /// a name, so the value leaks straight back out to every client that reads the view.
-    /// </remarks>
+    /// <summary>A view status outside the enum is stored and returned as a number.</summary>
     [Theory]
     [InlineData("999", 999)]
     [InlineData("\"999\"", 999)]
@@ -66,16 +47,7 @@ public class OutOfRangeEnumTests(DatabaseFixture fixture, PlayerAppFactory facto
                 "api/views", Json("{\"name\":\"Odd\",\"status\":\"Nonsense\"}"), Ct));
     }
 
-    /// <summary>
-    /// A subscription is created for an event type that does not exist, and the row is written. This is the
-    /// costly one: <c>BackgroundWebhookService.cs:104</c> matches subscriptions with
-    /// <c>et.EventType == evt.Type</c>, so the subscription is registered and can never fire.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the event types are validated. A client that mistypes one is told the subscription was
-    /// created, which is the answer that makes this worth more than its status code — nothing later reports
-    /// that the row is unreachable.
-    /// </remarks>
+    /// <summary>A webhook event type outside the enum is stored.</summary>
     [Fact]
     public async Task A_webhook_event_type_outside_the_enum_is_stored_as_a_key_that_cannot_match()
     {
@@ -113,17 +85,7 @@ public class OutOfRangeEnumTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Equal(999, (int)(await db.Notifications.SingleAsync(Ct)).Priority);
     }
 
-    /// <summary>
-    /// The query-string half, and the one place an undefined value is not merely stored: the export route
-    /// binds it, then <c>ArchiveService.cs:61</c> asks it for a file extension and
-    /// <c>ArchiveTypeHelpers.GetExtension</c> throws a bare <c>ArgumentException</c> for the default case —
-    /// as does <c>GetContentType</c> on the next line, whichever is reached first.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the value is validated at the edge, or when the helper throws something
-    /// <c>ExceptionMiddleware</c> maps. The detail is the framework's message for an argument exception with
-    /// no message of its own, which is why the 500 says nothing about archives.
-    /// </remarks>
+    /// <summary>An archive type outside the enum on export is answered with a 500.</summary>
     [Fact]
     public async Task An_archive_type_outside_the_enum_is_a_server_error()
     {

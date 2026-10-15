@@ -4,6 +4,7 @@
 using Crucible.Common.EntityEvents.Events;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Player.Api.Data.Data.Models;
 
 namespace Player.Api.Tests.Support;
@@ -15,10 +16,11 @@ namespace Player.Api.Tests.Support;
 public class DatabaseHarnessTests(DatabaseFixture fixture) : DatabaseTestBase(fixture)
 {
     /// <summary>
-    /// The unique index on view name is what makes this a real isolation check: if the two
+    /// A value of <c>roles.name</c>, which has a unique index in the real migrations: if the two
     /// <c>Duplicates_*</c> tests shared a database, whichever ran second would fail.
+    /// <see cref="A_second_row_with_the_isolation_key_is_refused"/> proves the index is there.
     /// </summary>
-    private const string SharedName = "Isolation Probe";
+    private const string SharedKey = "Isolation Probe";
 
     [Fact]
     public async Task Saved_entities_survive_a_new_context()
@@ -39,19 +41,39 @@ public class DatabaseHarnessTests(DatabaseFixture fixture) : DatabaseTestBase(fi
     [Fact]
     public async Task Duplicates_across_tests_are_isolated_first()
     {
-        Db.Views.Add(TestData.View(SharedName));
-        await Db.SaveChangesAsync(Ct);
+        await Seed(TestData.Role(SharedKey));
 
-        Assert.Equal(1, await Db.Views.CountAsync(x => x.Name == SharedName, Ct));
+        Assert.Equal(1, await Db.Roles.CountAsync(x => x.Name == SharedKey, Ct));
     }
 
     [Fact]
     public async Task Duplicates_across_tests_are_isolated_second()
     {
-        Db.Views.Add(TestData.View(SharedName));
-        await Db.SaveChangesAsync(Ct);
+        await Seed(TestData.Role(SharedKey));
 
-        Assert.Equal(1, await Db.Views.CountAsync(x => x.Name == SharedName, Ct));
+        Assert.Equal(1, await Db.Roles.CountAsync(x => x.Name == SharedKey, Ct));
+    }
+
+    /// <summary>
+    /// The probes above are an isolation check only because the database refuses a second row with the
+    /// same key; this proves the unique index on the probe column is in force.
+    /// </summary>
+    [Fact]
+    public async Task A_second_row_with_the_isolation_key_is_refused()
+    {
+        await Seed(TestData.Role(SharedKey));
+        await using var context = NewContext();
+        context.Roles.Add(TestData.Role(SharedKey));
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync(Ct));
+
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
+    }
+
+    [Fact]
+    public async Task The_seeded_administrator_role_is_present()
+    {
+        Assert.True(await Db.Roles.AnyAsync(x => x.Id == TestData.Roles.Administrator, Ct));
     }
 
     [Fact]

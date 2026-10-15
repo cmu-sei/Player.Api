@@ -176,11 +176,7 @@ public class XApiServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         Assert.Equal(["Before", "Before"], names.Select(x => JsonNode.Parse(x)["actor"]["name"].GetValue<string>()));
     }
 
-    /// <summary>
-    /// Characterizes current behavior: the <c>iss</c> claim is read with <c>First</c>, so a token without one
-    /// throws before any statement is built and the failure is swallowed by the catch.
-    /// </summary>
-    /// <remarks>Turns red when the lookup tolerates a missing claim and queues the statements.</remarks>
+    /// <summary>A token with no iss claim queues no xAPI statements.</summary>
     [Fact]
     public async Task Nothing_is_queued_when_the_token_carries_no_iss_claim()
     {
@@ -438,10 +434,7 @@ public class XApiServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         Assert.Equal($"{ApiUrl}/views/{view.Id}/apps/unknown", statement["object"]["id"].GetValue<string>());
     }
 
-    /// <summary>
-    /// Pins that <c>applicationUrl</c> is accepted and ignored — the statement is identical whatever is
-    /// passed. Either the URL belongs in the statement or the parameter should go.
-    /// </summary>
+    /// <summary>The statement for an application switch is the same whatever application url is passed.</summary>
     [Fact]
     public async Task EmitApplicationSwitched_ignores_the_application_url()
     {

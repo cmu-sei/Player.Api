@@ -158,28 +158,22 @@ public class VmAndMapPermissionsUpgradeTests(DatabaseFixture fixture)
         await using var session = await fixture.BeginSessionAtMigrationAsync(BeforeVmAndMapPermissions);
         await session.MigrateAsync(cancellationToken: Ct);
 
-        await using var db = session.CreateContext();
-        var permissionNames = await db.TeamPermissions.ToDictionaryAsync(x => x.Id, x => x.Name, Ct);
-        var seeded = db.GetService<IDesignTimeModel>().Model
-            .FindEntityType(typeof(TeamRolePermissionEntity))!.GetSeedData()
-            .Where(x => (Guid)x[nameof(TeamRolePermissionEntity.RoleId)] == id)
-            .Select(x => $"{permissionNames[(Guid)x[nameof(TeamRolePermissionEntity.PermissionId)]]} {x[nameof(TeamRolePermissionEntity.Id)]}")
-            .ToList();
+        var seeded = await SeededTeamRoleGrantsWithIds(session, id);
         var migrated = await TeamRoleGrantsWithIds(session, id);
 
         Assert.Subset(migrated.ToHashSet(), seeded.ToHashSet());
-        Assert.Equal(extras, migrated.Except(seeded).Select(x => x.Split(' ')[0]).Order(StringComparer.Ordinal));
+        Assert.Equal(extras, PermissionNamesOf(migrated.Except(seeded)));
     }
 
     // ---- Raw SQL helpers ------------------------------------------------------------------------
 
-    private static async Task Execute(ITestDatabaseSession session, FormattableString sql)
+    private static async Task Execute(UpgradeTestSession session, FormattableString sql)
     {
         await using var db = session.CreateContext();
         await db.Database.ExecuteSqlAsync(sql, Ct);
     }
 
-    private static async Task<List<string>> Query(ITestDatabaseSession session, FormattableString sql)
+    private static async Task<List<string>> Query(UpgradeTestSession session, FormattableString sql)
     {
         await using var db = session.CreateContext();
         var rows = await db.Database.SqlQuery<string>(sql).ToListAsync(Ct);
@@ -188,7 +182,7 @@ public class VmAndMapPermissionsUpgradeTests(DatabaseFixture fixture)
         return [.. rows.Order(StringComparer.Ordinal)];
     }
 
-    private static async Task<Guid> CreateTeamRole(ITestDatabaseSession session, string name, string[] permissions)
+    private static async Task<Guid> CreateTeamRole(UpgradeTestSession session, string name, string[] permissions)
     {
         var roleId = Guid.NewGuid();
 
@@ -203,7 +197,7 @@ public class VmAndMapPermissionsUpgradeTests(DatabaseFixture fixture)
         return roleId;
     }
 
-    private static async Task<Guid> CreateTeam(ITestDatabaseSession session, string name, params string[] permissions)
+    private static async Task<Guid> CreateTeam(UpgradeTestSession session, string name, params string[] permissions)
     {
         var viewId = Guid.NewGuid();
         var teamId = Guid.NewGuid();
@@ -223,7 +217,7 @@ public class VmAndMapPermissionsUpgradeTests(DatabaseFixture fixture)
         return teamId;
     }
 
-    private static async Task<Guid> CreateSystemRole(ITestDatabaseSession session, string name, params string[] permissions)
+    private static async Task<Guid> CreateSystemRole(UpgradeTestSession session, string name, params string[] permissions)
     {
         var roleId = Guid.NewGuid();
 
@@ -238,28 +232,47 @@ public class VmAndMapPermissionsUpgradeTests(DatabaseFixture fixture)
         return roleId;
     }
 
-    private static Task<List<string>> TeamRoleGrants(ITestDatabaseSession session, Guid roleId) =>
+    private static Task<List<string>> TeamRoleGrants(UpgradeTestSession session, Guid roleId) =>
         Query(session, $"""
             SELECT p.name AS "Value"
             FROM team_role_permissions trp JOIN team_permissions p ON p.id = trp.permission_id
             WHERE trp.role_id = {roleId}
             """);
 
-    private static Task<List<string>> TeamRoleGrantsWithIds(ITestDatabaseSession session, Guid roleId) =>
+    private static Task<List<string>> TeamRoleGrantsWithIds(UpgradeTestSession session, Guid roleId) =>
         Query(session, $"""
             SELECT p.name || ' ' || trp.id AS "Value"
             FROM team_role_permissions trp JOIN team_permissions p ON p.id = trp.permission_id
             WHERE trp.role_id = {roleId}
             """);
 
-    private static Task<List<string>> TeamAssignments(ITestDatabaseSession session, Guid teamId) =>
+    /// <summary>
+    /// The grants the model's seed data gives a built-in team role, in the shape of
+    /// <see cref="TeamRoleGrantsWithIds"/>: the permission's name and the grant's seeded id.
+    /// </summary>
+    private static async Task<List<string>> SeededTeamRoleGrantsWithIds(UpgradeTestSession session, Guid roleId)
+    {
+        await using var db = session.CreateContext();
+        var permissionNames = await db.TeamPermissions.ToDictionaryAsync(x => x.Id, x => x.Name, Ct);
+
+        return [.. db.GetService<IDesignTimeModel>().Model
+            .FindEntityType(typeof(TeamRolePermissionEntity))!.GetSeedData()
+            .Where(x => (Guid)x[nameof(TeamRolePermissionEntity.RoleId)] == roleId)
+            .Select(x => $"{permissionNames[(Guid)x[nameof(TeamRolePermissionEntity.PermissionId)]]} {x[nameof(TeamRolePermissionEntity.Id)]}")];
+    }
+
+    /// <summary>The permission names of grants in the shape of <see cref="TeamRoleGrantsWithIds"/>, in ordinal order.</summary>
+    private static IEnumerable<string> PermissionNamesOf(IEnumerable<string> grantsWithIds) =>
+        grantsWithIds.Select(x => x.Split(' ')[0]).Order(StringComparer.Ordinal);
+
+    private static Task<List<string>> TeamAssignments(UpgradeTestSession session, Guid teamId) =>
         Query(session, $"""
             SELECT p.name AS "Value"
             FROM team_permission_assignments tpa JOIN team_permissions p ON p.id = tpa.permission_id
             WHERE tpa.team_id = {teamId}
             """);
 
-    private static Task<List<string>> SystemRoleGrants(ITestDatabaseSession session, Guid roleId) =>
+    private static Task<List<string>> SystemRoleGrants(UpgradeTestSession session, Guid roleId) =>
         Query(session, $"""
             SELECT p.name AS "Value"
             FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id

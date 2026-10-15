@@ -22,6 +22,9 @@ namespace Player.Api.Tests.Features.Views;
 public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
     : ApiTestBase(fixture, factory)
 {
+    /// <summary>A description the clone can only carry by copying it from the source.</summary>
+    private const string SourceDescription = "Not for you";
+
     // ---- The cloned view ------------------------------------------------------------------------
 
     [Fact]
@@ -88,14 +91,19 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
             await Client(actor).PostAsJsonAsync($"api/views/{view.Id}/clone", new { }, Ct));
     }
 
+    /// <summary>
+    /// The clone a caller who can observe the source receives carries the source's description, and its
+    /// teams are copied.
+    /// </summary>
     [Theory]
     [InlineData(ViewPermission.ViewView)]
     [InlineData(ViewPermission.ManageView)]
     public async Task Cloning_is_allowed_for_a_caller_who_can_observe_the_source_view(ViewPermission permission)
     {
         var view = TestData.View("Source");
+        view.Description = SourceDescription;
         var role = TestData.TeamRole();
-        var team = TestData.Team(view.Id, "Team", role.Id);
+        var team = TestData.Team(view.Id, "Alpha", role.Id);
         await Seed(view, role, team);
 
         var actor = await Actor()
@@ -107,6 +115,70 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
             $"api/views/{view.Id}/clone", new { }, Ct));
 
         Assert.Equal("Clone of Source", clone.Name);
+        Assert.Equal(SourceDescription, clone.Description);
+        Assert.Equal("Alpha", (await ReadBack(db => db.Teams.SingleAsync(x => x.ViewId == clone.Id, Ct))).Name);
+    }
+
+    /// <summary>
+    /// The system tier of the read check: <c>ViewViews</c> alongside <c>CreateViews</c>, with no
+    /// membership in the source view.
+    /// </summary>
+    [Fact]
+    public async Task Cloning_is_allowed_for_a_caller_holding_only_CreateViews_and_ViewViews()
+    {
+        var view = TestData.View("Source");
+        await Seed(view, TestData.Team(view.Id, "Alpha"));
+
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.CreateViews, SystemPermission.ViewViews)
+            .SeedAsync();
+
+        var clone = await ReadAsync<View>(await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/clone", new { }, Ct));
+
+        Assert.Equal("Clone of Source", clone.Name);
+        Assert.Equal(view.Id, (await ReadBack(db => db.Views.SingleAsync(x => x.Id == clone.Id, Ct))).ParentViewId);
+    }
+
+    /// <summary>The same system tier through <c>ManageViews</c>, which observes every view too.</summary>
+    [Fact]
+    public async Task Cloning_is_allowed_for_a_caller_holding_only_CreateViews_and_ManageViews()
+    {
+        var view = TestData.View("Source");
+        await Seed(view, TestData.Team(view.Id, "Alpha"));
+
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.CreateViews, SystemPermission.ManageViews)
+            .SeedAsync();
+
+        var clone = await ReadAsync<View>(await Client(actor).PostAsJsonAsync(
+            $"api/views/{view.Id}/clone", new { }, Ct));
+
+        Assert.Equal("Clone of Source", clone.Name);
+        Assert.Equal(view.Id, (await ReadBack(db => db.Views.SingleAsync(x => x.Id == clone.Id, Ct))).ParentViewId);
+    }
+
+    /// <summary>
+    /// The near miss of the view tier: <c>ViewView</c> on another view does not observe the source, and no
+    /// clone is stored.
+    /// </summary>
+    [Fact]
+    public async Task Cloning_is_forbidden_for_a_caller_holding_CreateViews_and_ViewView_only_in_another_view()
+    {
+        var view = TestData.View("Source");
+        var otherView = TestData.View("Other");
+        await Seed(view, otherView, TestData.Team(view.Id, "Alpha"));
+
+        var actor = await Actor()
+            .WithSystemPermissions(SystemPermission.CreateViews)
+            .OnNewTeam(otherView.Id, viewPermissions: [ViewPermission.ViewView])
+            .SeedAsync();
+
+        await AssertProblem(
+            HttpStatusCode.Forbidden,
+            await Client(actor).PostAsJsonAsync($"api/views/{view.Id}/clone", new { }, Ct));
+
+        Assert.False(await ReadBack(db => db.Views.AnyAsync(x => x.ParentViewId == view.Id, Ct)));
     }
 
     // ---- Applications ---------------------------------------------------------------------------
@@ -207,15 +279,7 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
             clonedTeam.Applications.Select(x => x.ApplicationId).Order());
     }
 
-    /// <summary>
-    /// This is wrong: nothing stops two applications in a view sharing a name, and when they do every
-    /// instance is repointed at the first copy while the second is left unused.
-    /// </summary>
-    /// <remarks>
-    /// <c>Clone.cs:106</c> resolves the original application by id and <c>:107</c> throws that
-    /// away to search the copies by <c>GetName()</c>. Turns red — as intended — when Clone keys off the
-    /// original application's id, which gives one instance per application.
-    /// </remarks>
+    /// <summary>When two applications share a name, the clone points every instance at one of the copies.</summary>
     [Fact]
     public async Task Cloning_points_every_instance_at_one_application_when_two_share_a_name()
     {
@@ -330,15 +394,7 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal(alpha.Id, Assert.Single((await db.Files.SingleAsync(x => x.Id == file.Id, Ct)).TeamIds));
     }
 
-    /// <summary>
-    /// This is wrong: two teams may share a name, and then both of a file's ids remap onto the first
-    /// copy, so the second cloned team loses access to a file it should see.
-    /// </summary>
-    /// <remarks>
-    /// <c>Clone.cs:154-155</c> remaps through the team's name rather than the
-    /// <c>clonedTeams</c> dictionary the handler already built. Turns red — as intended — when the remap
-    /// goes through the original team id, which gives one id per team.
-    /// </remarks>
+    /// <summary>When two teams share a name, both of a cloned file's team ids name one cloned team.</summary>
     [Fact]
     public async Task Cloning_collapses_file_team_ids_when_two_teams_share_a_name()
     {
@@ -362,17 +418,7 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Single(clonedTeamIds, x => clonedFile.TeamIds.Contains(x));
     }
 
-    /// <summary>
-    /// This is wrong twice over: deleting a team leaves its id in <c>File.TeamIds</c>, and the remap then
-    /// dereferences the team it cannot find after the copy has already been committed.
-    /// </summary>
-    /// <remarks>
-    /// <c>Teams/Requests/Delete.cs</c> never scrubs <c>File.TeamIds</c>, <c>Clone.cs:154</c>
-    /// reads <c>.Name</c> off a <c>FirstOrDefault</c> that found nothing, and the save at <c>:133</c>
-    /// shares no transaction with the one at <c>:193</c> — so the 500 leaves a view behind whose file
-    /// still names a team in the source view, and the source can never be cloned again. Turns red when
-    /// the remap is guarded, when the deletion scrubs the id, or when the two saves become atomic.
-    /// </remarks>
+    /// <summary>A clone whose file names a deleted team is a 500 and leaves the new view stored.</summary>
     [Fact]
     public async Task Cloning_fails_and_leaves_a_half_cloned_view_when_a_file_names_a_deleted_team()
     {

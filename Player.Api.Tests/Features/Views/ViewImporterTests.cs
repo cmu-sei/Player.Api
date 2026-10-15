@@ -309,15 +309,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
         Assert.Single(await db.Views.ToListAsync(Ct));
     }
 
-    /// <summary>
-    /// Characterizes current behavior: each file is written as it is validated, so a later file the archive does not
-    /// contain rejects the view after the earlier bytes are already on disk, leaving them with no row that
-    /// owns them and no way to delete them through the API.
-    /// </summary>
-    /// <remarks>
-    /// Intra-view only — a view that passes validation is saved and legitimately owns its bytes. Turns
-    /// red when the importer defers its writes to the save, or removes what it wrote for a rejected view.
-    /// </remarks>
+    /// <summary>A view rejected for a file missing from the archive keeps the files written before it.</summary>
     [Fact]
     public async Task A_rejected_view_leaves_behind_the_files_it_already_wrote()
     {
@@ -337,12 +329,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
         Assert.True(File.Exists(Path.Combine(_basePath, view.Id.ToString(), "one.txt")));
     }
 
-    /// <summary>
-    /// The write happens whatever the view was rejected for. Validation accumulates failures and
-    /// only decides at the end, so a manifest condemned by its applications still writes every file it
-    /// carries — nothing here is about files at all.
-    /// </summary>
-    /// <remarks>Turns red once the importer defers its writes past the accept decision.</remarks>
+    /// <summary>A view rejected for its applications still has its files written to disk.</summary>
     [Fact]
     public async Task A_view_rejected_for_a_reason_other_than_its_files_still_writes_them()
     {
@@ -391,15 +378,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
         Assert.Equal("Accepted", (await db.Views.SingleAsync(Ct)).Name);
     }
 
-    /// <summary>
-    /// Characterizes current behavior: <c>ParentViewId</c> is mapped straight through and never validated, so a
-    /// child view imported without its parent violates a foreign key. Every other view in the archive
-    /// goes with it, because the importer saves the whole batch once.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the importer validates the parent: expect an <c>ImportViewFailure</c> naming it,
-    /// and "Sibling" imported. The PostgreSQL test database enforces the missing-parent foreign key.
-    /// </remarks>
+    /// <summary>A view whose parent is missing fails the whole import with a DbUpdateException.</summary>
     [Fact]
     public async Task A_view_whose_parent_is_missing_fails_the_whole_import()
     {
@@ -414,16 +393,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
         Assert.Empty(await db.Views.ToListAsync(Ct));
     }
 
-    /// <summary>
-    /// Characterizes an unfiled bug: role validation only looks at teams that carry a role id or a role
-    /// name, so a team with neither is never checked; its required role foreign key is then
-    /// <see cref="Guid.Empty"/> and the batch's single save violates it, taking the other views with it.
-    /// </summary>
-    /// <remarks>
-    /// Reachable from hand-written seed data, where it fails startup with a raw constraint violation
-    /// rather than the named seed failure. Turns red when the importer rejects a team with no role:
-    /// expect an <c>ImportViewFailure</c> naming it, and "Sibling" imported.
-    /// </remarks>
+    /// <summary>A team with neither role id nor role name fails the whole import with a DbUpdateException.</summary>
     [Fact]
     public async Task A_team_with_no_role_fails_the_whole_import()
     {
@@ -438,13 +408,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
         Assert.Empty(await db.Views.ToListAsync(Ct));
     }
 
-    /// <summary>
-    /// Characterizes current behavior: application validation walks the array without a null check, so a manifest
-    /// that omits it fails LINQ's own argument guard rather than being reported.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the importer normalizes the array: expect the view to import with no applications.
-    /// </remarks>
+    /// <summary>A manifest with no Applications array throws an ArgumentNullException.</summary>
     [Fact]
     public async Task A_manifest_missing_its_Applications_array_throws()
     {
@@ -457,13 +421,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
         Assert.Equal("source", ex.ParamName);
     }
 
-    /// <summary>
-    /// The other validator exposes the contrasting behavior. A missing <c>Files</c> array is safe by
-    /// contrast, because file validation walks the mapped entity, whose collection is never null.
-    /// </summary>
-    /// <remarks>
-    /// Turns red when the importer normalizes the array: expect the view to import with no teams.
-    /// </remarks>
+    /// <summary>A manifest with no Teams array throws an ArgumentNullException.</summary>
     [Fact]
     public async Task A_manifest_missing_its_Teams_array_throws()
     {

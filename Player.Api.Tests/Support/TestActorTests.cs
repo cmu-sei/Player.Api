@@ -184,6 +184,43 @@ public class TestActorTests(DatabaseFixture fixture) : DatabaseTestBase(fixture)
         Assert.Equal(granted.Order(), TeamClaim(await ClaimsOf(actor), team.Id).PermissionValues.Order());
     }
 
+    /// <summary>
+    /// The near-miss step: the minted team's own role grants nothing, so the actor's one team claim holds
+    /// exactly the permissions passed, on that team, in the named view.
+    /// </summary>
+    [Fact]
+    public async Task OnNewTeam_grants_exactly_what_it_names()
+    {
+        var view = await SeedView();
+
+        var actor = await Actor()
+            .OnNewTeam(
+                view.Id,
+                viewPermissions: [ViewPermission.ViewView],
+                teamPermissions: [TeamPermission.ViewTeam])
+            .SeedAsync();
+
+        var principal = await ClaimsOf(actor);
+        var claim = Assert.Single(TeamClaims(principal));
+        Assert.Equal(actor.Membership.TeamId, claim.TeamId);
+        Assert.Equal(view.Id, claim.ViewId);
+        Assert.Equal(["ViewTeam", "ViewView"], claim.PermissionValues.Order());
+        Assert.Empty(Permissions(principal));
+    }
+
+    /// <summary>With no permissions the minted team gives the actor a view membership and nothing else.</summary>
+    [Fact]
+    public async Task OnNewTeam_with_no_permissions_grants_nothing()
+    {
+        var view = await SeedView();
+
+        var actor = await Actor().OnNewTeam(view.Id).SeedAsync();
+
+        var claim = TeamClaim(await ClaimsOf(actor), actor.Membership.TeamId);
+        Assert.Equal(view.Id, claim.ViewId);
+        Assert.Empty(claim.PermissionValues);
+    }
+
     // ---- Memberships ------------------------------------------------------------------------------
 
     /// <summary>
@@ -315,6 +352,12 @@ public class TestActorTests(DatabaseFixture fixture) : DatabaseTestBase(fixture)
     }
 
     [Fact]
+    public void OnNewTeam_without_a_view_throws()
+    {
+        Assert.Throws<InvalidOperationException>(() => Actor().OnNewTeam(Guid.Empty));
+    }
+
+    [Fact]
     public async Task Two_primary_teams_in_one_view_throw()
     {
         var view = await SeedView();
@@ -375,7 +418,7 @@ public class TestActorTests(DatabaseFixture fixture) : DatabaseTestBase(fixture)
 
     /// <summary>
     /// A team whose role grants nothing, so the actor's permissions on it are only what the membership
-    /// carries. <see cref="TestData.Team"/> defaults to <c>View Member</c>, which grants four.
+    /// carries. <see cref="TestData.Team"/> defaults to <c>View Member</c>, which grants five.
     /// </summary>
     private async Task<TeamEntity> SeedPermissionFreeTeam(ViewEntity view, string name = "Test Team")
     {

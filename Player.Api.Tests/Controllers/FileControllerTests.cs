@@ -123,18 +123,21 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Contains("at least one team", await response.Content.ReadAsStringAsync(Ct));
     }
 
-    /// <summary>Uploading needs <c>ManageViews</c> or <c>ManageView</c> on the view.</summary>
+    /// <summary>The near miss is ViewView in the view where uploading takes ManageViews or ManageView.</summary>
     [Fact]
-    public async Task Upload_is_forbidden_for_a_caller_who_cannot_manage_the_view()
+    public async Task Upload_is_forbidden_for_a_caller_holding_only_ViewView()
     {
         var (view, team) = await ViewWithTeam();
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
 
         using var form = Upload(view.Id, team.Id, "denied.txt");
 
-        await AssertStatus(
+        var error = await AssertJsonError(
             HttpStatusCode.Forbidden,
             await Client(actor).PostAsync("api/files", form, Ct));
+
+        // The permission check's own message: the two checks before it refuse with other titles.
+        Assert.Equal("Insufficient Permissions", error.Title);
     }
 
     // ---- Read -----------------------------------------------------------------------------------
@@ -156,10 +159,11 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Contains(files, x => x.viewId == second.Id);
     }
 
+    /// <summary>The near miss is ManageViews where the collection route takes ViewViews.</summary>
     [Fact]
-    public async Task GetAll_is_forbidden_without_view_views()
+    public async Task GetAll_is_forbidden_for_a_caller_holding_only_ManageViews()
     {
-        var actor = await Actor().SeedAsync();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
 
         await AssertStatus(HttpStatusCode.Forbidden, await Client(actor).GetAsync("api/files", Ct));
     }
@@ -307,12 +311,10 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
     [Fact]
     public async Task A_handled_exception_is_answered_as_json_rather_than_problem_json()
     {
-        var response = await RootClient.GetAsync($"api/files/{Guid.NewGuid()}", Ct);
-
-        await AssertStatus(HttpStatusCode.NotFound, response);
-        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        await AssertJsonError(HttpStatusCode.NotFound, await RootClient.GetAsync($"api/files/{Guid.NewGuid()}", Ct));
     }
 
+    /// <summary>A request with no identity is answered with a 401; the anonymous client is the case under test.</summary>
     [Fact]
     public async Task An_unauthenticated_request_is_unauthorized()
     {
@@ -384,13 +386,14 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
             await RootClient.GetAsync($"api/files/download/{Guid.NewGuid()}", Ct));
     }
 
-    /// <summary>A caller with no access to any of the file's teams cannot download it.</summary>
+    /// <summary>The near miss is ViewTeam on a sibling team where the file belongs to one team only.</summary>
     [Fact]
-    public async Task Download_is_forbidden_for_a_caller_with_no_access_to_the_file()
+    public async Task Download_is_forbidden_for_a_caller_holding_ViewTeam_only_on_another_team()
     {
-        var (view, team) = await ViewWithTeam();
+        var (view, team, other) = await ViewWithTwoTeams();
         var uploaded = await Uploaded(RootClient, view.Id, team.Id, "private.txt");
-        var actor = await Actor().SeedAsync();
+        // Gate: Player.Api/Services/FileService.cs#FileService.EnsureAccessFile
+        var actor = await Actor().OnTeam(other, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
 
         await AssertStatus(
             HttpStatusCode.Forbidden,
@@ -448,13 +451,7 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Equal("new bytes", await download.Content.ReadAsStringAsync(Ct));
     }
 
-    /// <summary>
-    /// A form with no <c>TeamIds</c> part is a 500: the upload path guards a null list and refuses, while
-    /// <c>UpdateAsync</c> hands it straight to <c>TeamsInSameView</c>, whose <c>foreach</c> dereferences it
-    /// (<c>FileService.cs:214,382</c>). So a rename cannot be sent on its own, though its 404 sibling
-    /// above can, because the entity lookup comes first.
-    /// </summary>
-    /// <remarks>Turns red when the update path guards the list as the upload path does.</remarks>
+    /// <summary>A file update form with no TeamIds part is answered with a 500.</summary>
     [Fact]
     public async Task Update_without_teams_is_a_server_error()
     {
@@ -466,9 +463,11 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
             { new StringContent("renamed.txt"), "Name" }
         };
 
-        await AssertStatus(
+        var problem = await AssertJsonError(
             HttpStatusCode.InternalServerError,
             await RootClient.PutAsync($"api/files/{uploaded.id}", form, Ct));
+
+        Assert.Equal("Object reference not set to an instance of an object.", problem.Detail);
     }
 
     [Fact]
@@ -521,23 +520,474 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
             await RootClient.DeleteAsync($"api/files/{Guid.NewGuid()}", Ct));
     }
 
+    // ---- Who may call ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// The team's own role grants nothing, so ManageView on the view is the only grant in play. It is
+    /// checked in <c>UploadAsync</c> and again where the bytes are written, and the bytes reach disk.
+    /// </summary>
+    [Fact]
+    public async Task Upload_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var (view, team) = await ViewWithTeam();
+        var actor = await Actor().OnTeam(team, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        using var form = Upload(view.Id, team.Id, "managed.txt", "managed bytes");
+        var uploaded = await ReadAsync<FileModel[]>(await Client(actor).PostAsync("api/files", form, Ct));
+
+        var stored = await ReadBack(db => db.Files.SingleAsync(x => x.Id == uploaded.Single().id, Ct));
+        Assert.Equal("managed bytes", await File.ReadAllTextAsync(stored.Path, Ct));
+    }
+
+    [Fact]
+    public async Task GetAll_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "listed.txt");
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        var files = await ReadAsync<FileModel[]>(await Client(actor).GetAsync("api/files", Ct));
+
+        Assert.Equal(uploaded.id, Assert.Single(files).id);
+    }
+
+    [Fact]
+    public async Task GetById_is_allowed_for_a_caller_holding_ViewTeam_on_the_files_team()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "readable.txt");
+        var actor = await Actor().OnTeam(team, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        var file = await ReadAsync<FileModel>(await Client(actor).GetAsync($"api/files/{uploaded.id}", Ct));
+
+        Assert.Equal("readable.txt", file.Name);
+    }
+
+    /// <summary>The near miss is ViewTeam on a sibling team where the file belongs to one team only.</summary>
+    [Fact]
+    public async Task GetById_is_forbidden_for_a_caller_holding_ViewTeam_only_on_another_team()
+    {
+        var (view, team, other) = await ViewWithTwoTeams();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "private.txt");
+        // Gate: Player.Api/Services/FileService.cs#FileService.EnsureAccessFile
+        var actor = await Actor().OnTeam(other, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/files/{uploaded.id}", Ct));
+    }
+
+    [Fact]
+    public async Task GetById_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "listed.txt");
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        var file = await ReadAsync<FileModel>(await Client(actor).GetAsync($"api/files/{uploaded.id}", Ct));
+
+        Assert.Equal("listed.txt", file.Name);
+    }
+
+    /// <summary>The near miss is the system permission ManageViews where reading a file takes ViewViews.</summary>
+    [Fact]
+    public async Task GetById_is_forbidden_for_a_caller_holding_only_ManageViews()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "private.txt");
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        // Gate: Player.Api/Services/FileService.cs#FileService.EnsureAccessFile
+        await AssertStatus(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/files/{uploaded.id}", Ct));
+    }
+
+    /// <summary>
+    /// The near miss is ViewView in another view: the grant is checked on the view of the file's team,
+    /// which the authorization service looks up from the team.
+    /// </summary>
+    [Fact]
+    public async Task GetById_is_forbidden_for_a_caller_holding_ViewView_only_in_another_view()
+    {
+        var (view, team) = await ViewWithTeam();
+        var other = TestData.View("Other View");
+        await Seed(other);
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "private.txt");
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        // Gate: Player.Api/Services/FileService.cs#FileService.EnsureAccessFile
+        await AssertStatus(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/files/{uploaded.id}", Ct));
+    }
+
+    /// <summary>
+    /// Access is checked once per team the file is assigned to; with two teams the check runs twice and
+    /// refuses both times for a caller holding ViewTeam on a third team of the same view.
+    /// </summary>
+    [Fact]
+    public async Task GetById_of_a_file_on_two_teams_is_forbidden_for_a_caller_holding_ViewTeam_only_on_a_third_team()
+    {
+        var (view, first, second) = await ViewWithTwoTeams();
+        var uploaded = await UploadedToTeams(view.Id, "shared.txt", first.Id, second.Id);
+        var actor = await Actor().OnNewTeam(view.Id, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        // Gate: Player.Api/Services/FileService.cs#FileService.EnsureAccessFile
+        await AssertStatus(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/files/{uploaded.id}", Ct));
+    }
+
+    /// <summary>
+    /// Any one of the file's teams grants access, the last as well as the first: a refusal on the first
+    /// team does not end the check.
+    /// </summary>
+    [Fact]
+    public async Task GetById_of_a_file_on_two_teams_is_allowed_for_a_caller_holding_ViewTeam_on_the_second()
+    {
+        var (view, first, second) = await ViewWithTwoTeams();
+        var uploaded = await UploadedToTeams(view.Id, "shared.txt", first.Id, second.Id);
+        var actor = await Actor().OnTeam(second, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        var file = await ReadAsync<FileModel>(await Client(actor).GetAsync($"api/files/{uploaded.id}", Ct));
+
+        Assert.Equal("shared.txt", file.Name);
+    }
+
+    /// <summary>
+    /// A grant on the first of the file's teams survives the refusal on the second: the check never
+    /// takes back access it has given.
+    /// </summary>
+    [Fact]
+    public async Task GetById_of_a_file_on_two_teams_is_allowed_for_a_caller_holding_ViewTeam_on_the_first()
+    {
+        var (view, first, second) = await ViewWithTwoTeams();
+        var uploaded = await UploadedToTeams(view.Id, "shared.txt", first.Id, second.Id);
+        var actor = await Actor().OnTeam(first, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        var file = await ReadAsync<FileModel>(await Client(actor).GetAsync($"api/files/{uploaded.id}", Ct));
+
+        Assert.Equal("shared.txt", file.Name);
+    }
+
+    [Fact]
+    public async Task Download_is_allowed_for_a_caller_holding_ViewView_on_the_view()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "downloadable.txt", "downloaded bytes");
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var response = await Client(actor).GetAsync($"api/files/download/{uploaded.id}", Ct);
+
+        await AssertStatus(HttpStatusCode.OK, response);
+        Assert.Equal("downloaded bytes", await response.Content.ReadAsStringAsync(Ct));
+    }
+
+    [Fact]
+    public async Task Update_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var (view, first, second) = await ViewWithTwoTeams();
+        var uploaded = await Uploaded(RootClient, view.Id, first.Id, "before.txt");
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent("after.txt"), "Name" },
+            { new StringContent(second.Id.ToString()), "TeamIds" }
+        };
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsync($"api/files/{uploaded.id}", form, Ct));
+
+        Assert.Equal("after.txt", await ReadBack(db => db.Files.Where(x => x.Id == uploaded.id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    /// <summary>A replacement passes the update's check and the write's own, and the new bytes reach disk.</summary>
+    [Fact]
+    public async Task Update_with_a_replacement_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "original.txt", "original bytes");
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent(team.Id.ToString()), "TeamIds" },
+            { new ByteArrayContent(Encoding.UTF8.GetBytes("replaced bytes")), "ToUpload", "replacement.txt" }
+        };
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsync($"api/files/{uploaded.id}", form, Ct));
+
+        var stored = await ReadBack(db => db.Files.SingleAsync(x => x.Id == uploaded.id, Ct));
+        Assert.Equal("replaced bytes", await File.ReadAllTextAsync(stored.Path, Ct));
+    }
+
+    [Fact]
+    public async Task Delete_is_allowed_for_a_caller_holding_ManageView()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "deleted.txt");
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.NoContent, await Client(actor).DeleteAsync($"api/files/{uploaded.id}", Ct));
+
+        Assert.False(await ReadBack(db => db.Files.AnyAsync(x => x.Id == uploaded.id, Ct)));
+    }
+
+    /// <summary>The near miss is ManageView in another view: the grant is checked on the file's own view; the file stays.</summary>
+    [Fact]
+    public async Task Delete_is_forbidden_for_a_caller_holding_ManageView_only_in_another_view()
+    {
+        var (view, team) = await ViewWithTeam();
+        var other = TestData.View("Other View");
+        await Seed(other);
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "kept.txt");
+        var actor = await Actor().OnNewTeam(other.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync($"api/files/{uploaded.id}", Ct));
+
+        Assert.True(await ReadBack(db => db.Files.AnyAsync(x => x.Id == uploaded.id, Ct)));
+    }
+
+    /// <summary>
+    /// Asking for the whole view is authorized against the view, and ViewView there admits the caller;
+    /// the caller's own team holds none of the files, so every name comes from that check.
+    /// </summary>
+    [Fact]
+    public async Task GetViewFiles_returns_every_file_in_the_view_when_asked_by_a_caller_holding_ViewView()
+    {
+        var (view, mine, theirs) = await ViewWithTwoTeams();
+        await Uploaded(RootClient, view.Id, mine.Id, "mine.txt");
+        await Uploaded(RootClient, view.Id, theirs.Id, "theirs.txt");
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        var files = await ReadAsync<FileModel[]>(await Client(actor)
+            .GetAsync($"api/views/{view.Id}/files?includeAllViewFiles=true", Ct));
+
+        Assert.Equal(["mine.txt", "theirs.txt"], files.Select(x => x.Name).Order());
+    }
+
+    [Fact]
+    public async Task GetTeamFiles_is_allowed_for_a_caller_holding_ViewTeam_on_the_team()
+    {
+        var (view, mine, theirs) = await ViewWithTwoTeams();
+        await Uploaded(RootClient, view.Id, mine.Id, "mine.txt");
+        await Uploaded(RootClient, view.Id, theirs.Id, "theirs.txt");
+        var actor = await Actor().OnTeam(mine, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        var files = await ReadAsync<FileModel[]>(
+            await Client(actor).GetAsync($"api/teams/{mine.Id}/files", Ct));
+
+        Assert.Equal("mine.txt", Assert.Single(files).Name);
+    }
+
+    /// <summary>The near miss is ViewTeam on a sibling team of the same view.</summary>
+    [Fact]
+    public async Task GetTeamFiles_is_forbidden_for_a_caller_holding_ViewTeam_only_on_another_team()
+    {
+        var (view, mine, theirs) = await ViewWithTwoTeams();
+        await Uploaded(RootClient, view.Id, mine.Id, "mine.txt");
+        var actor = await Actor().OnTeam(theirs, teamPermissions: [TeamPermission.ViewTeam]).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/teams/{mine.Id}/files", Ct));
+    }
+
+    /// <summary>The near miss is ViewView on the file's view where updating takes ManageView; the name stays.</summary>
+    [Fact]
+    public async Task Update_is_forbidden_for_a_caller_holding_only_ViewView()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "before.txt");
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ViewView]).SeedAsync();
+
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent("after.txt"), "Name" },
+            { new StringContent(team.Id.ToString()), "TeamIds" }
+        };
+
+        var error = await AssertJsonError(HttpStatusCode.Forbidden, await Client(actor).PutAsync($"api/files/{uploaded.id}", form, Ct));
+
+        // The permission check's own message: the same-view check before it refuses with another title.
+        Assert.Equal("Insufficient Permissions", error.Title);
+        Assert.Equal("before.txt", await ReadBack(db => db.Files.Where(x => x.Id == uploaded.id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    // ---- One allowed case per permission value ---------------------------------------------------
+
+    /// <summary>Each system permission the whole-view listing accepts admits it on its own, with no membership.</summary>
+    [Theory]
+    [InlineData(SystemPermission.ViewViews)]
+    [InlineData(SystemPermission.ManageViews)]
+    public async Task GetViewFiles_returns_every_file_in_the_view_when_asked_by_a_caller_holding_only_the_system_permission(SystemPermission permission)
+    {
+        var (view, mine, theirs) = await ViewWithTwoTeams();
+        await Uploaded(RootClient, view.Id, mine.Id, "mine.txt");
+        await Uploaded(RootClient, view.Id, theirs.Id, "theirs.txt");
+        var actor = await Actor().WithSystemPermissions(permission).SeedAsync();
+
+        var files = await ReadAsync<FileModel[]>(await Client(actor)
+            .GetAsync($"api/views/{view.Id}/files?includeAllViewFiles=true", Ct));
+
+        Assert.Equal(["mine.txt", "theirs.txt"], files.Select(x => x.Name).Order());
+    }
+
+    /// <summary>The view tier: ManageView on the view, held on a team of its own that holds none of the files.</summary>
+    [Fact]
+    public async Task GetViewFiles_returns_every_file_in_the_view_when_asked_by_a_caller_holding_ManageView()
+    {
+        var (view, mine, theirs) = await ViewWithTwoTeams();
+        await Uploaded(RootClient, view.Id, mine.Id, "mine.txt");
+        await Uploaded(RootClient, view.Id, theirs.Id, "theirs.txt");
+        var actor = await Actor().OnNewTeam(view.Id, viewPermissions: [ViewPermission.ManageView]).SeedAsync();
+
+        var files = await ReadAsync<FileModel[]>(await Client(actor)
+            .GetAsync($"api/views/{view.Id}/files?includeAllViewFiles=true", Ct));
+
+        Assert.Equal(["mine.txt", "theirs.txt"], files.Select(x => x.Name).Order());
+    }
+
+    [Fact]
+    public async Task GetTeamFiles_is_allowed_for_a_caller_holding_only_ViewViews()
+    {
+        var (view, mine, theirs) = await ViewWithTwoTeams();
+        await Uploaded(RootClient, view.Id, mine.Id, "mine.txt");
+        await Uploaded(RootClient, view.Id, theirs.Id, "theirs.txt");
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        var files = await ReadAsync<FileModel[]>(
+            await Client(actor).GetAsync($"api/teams/{mine.Id}/files", Ct));
+
+        Assert.Equal("mine.txt", Assert.Single(files).Name);
+    }
+
+    [Fact]
+    public async Task Update_is_allowed_for_a_caller_holding_only_ManageViews()
+    {
+        var (view, first, second) = await ViewWithTwoTeams();
+        var uploaded = await Uploaded(RootClient, view.Id, first.Id, "before.txt");
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent("after.txt"), "Name" },
+            { new StringContent(second.Id.ToString()), "TeamIds" }
+        };
+
+        await AssertStatus(HttpStatusCode.OK, await Client(actor).PutAsync($"api/files/{uploaded.id}", form, Ct));
+
+        Assert.Equal("after.txt", await ReadBack(db => db.Files.Where(x => x.Id == uploaded.id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    // ---- One near miss per tier -------------------------------------------------------------------
+
+    /// <summary>The system tier: ViewViews where uploading takes ManageViews; nothing is stored.</summary>
+    [Fact]
+    public async Task Upload_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var (view, team) = await ViewWithTeam();
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        using var form = Upload(view.Id, team.Id, "denied.txt");
+
+        var error = await AssertJsonError(
+            HttpStatusCode.Forbidden,
+            await Client(actor).PostAsync("api/files", form, Ct));
+
+        // The permission check's own message: the two checks before it refuse with other titles.
+        Assert.Equal("Insufficient Permissions", error.Title);
+        Assert.False(await ReadBack(db => db.Files.AnyAsync(x => x.View.Id == view.Id, Ct)));
+    }
+
+    /// <summary>The system tier: ViewUsers where the whole-view listing takes ViewViews or ManageViews.</summary>
+    [Fact]
+    public async Task GetViewFiles_forbids_the_whole_view_to_a_caller_holding_only_ViewUsers()
+    {
+        var (view, team) = await ViewWithTeam();
+        await Uploaded(RootClient, view.Id, team.Id, "listed.txt");
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewUsers).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/views/{view.Id}/files?includeAllViewFiles=true", Ct));
+    }
+
+    /// <summary>The system tier: ManageViews where listing a team's files takes ViewViews.</summary>
+    [Fact]
+    public async Task GetTeamFiles_is_forbidden_for_a_caller_holding_only_ManageViews()
+    {
+        var (view, team) = await ViewWithTeam();
+        await Uploaded(RootClient, view.Id, team.Id, "listed.txt");
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ManageViews).SeedAsync();
+
+        await AssertStatus(
+            HttpStatusCode.Forbidden,
+            await Client(actor).GetAsync($"api/teams/{team.Id}/files", Ct));
+    }
+
+    /// <summary>The system tier: ViewViews where updating a file takes ManageViews; the name stays.</summary>
+    [Fact]
+    public async Task Update_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "before.txt");
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent("after.txt"), "Name" },
+            { new StringContent(team.Id.ToString()), "TeamIds" }
+        };
+
+        var error = await AssertJsonError(HttpStatusCode.Forbidden, await Client(actor).PutAsync($"api/files/{uploaded.id}", form, Ct));
+
+        // The permission check's own message: the same-view check before it refuses with another title.
+        Assert.Equal("Insufficient Permissions", error.Title);
+        Assert.Equal("before.txt", await ReadBack(db => db.Files.Where(x => x.Id == uploaded.id).Select(x => x.Name).SingleAsync(Ct)));
+    }
+
+    /// <summary>The system tier: ViewViews where deleting a file takes ManageViews; the file stays.</summary>
+    [Fact]
+    public async Task Delete_is_forbidden_for_a_caller_holding_only_ViewViews()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "kept.txt");
+        var actor = await Actor().WithSystemPermissions(SystemPermission.ViewViews).SeedAsync();
+
+        await AssertStatus(HttpStatusCode.Forbidden, await Client(actor).DeleteAsync($"api/files/{uploaded.id}", Ct));
+
+        Assert.True(await ReadBack(db => db.Files.AnyAsync(x => x.Id == uploaded.id, Ct)));
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
 
+    /// <summary>
+    /// A view with one team whose own role grants nothing, so an actor on it holds only what its
+    /// membership names.
+    /// </summary>
     private async Task<(ViewEntity View, TeamEntity Team)> ViewWithTeam()
     {
         var view = TestData.View();
-        var team = TestData.Team(view.Id);
-        await Seed(view, team);
+        var role = TestData.TeamRole();
+        var team = TestData.Team(view.Id, roleId: role.Id);
+        await Seed(view, role, team);
 
         return (view, team);
     }
 
+    /// <summary>
+    /// A view with two teams whose own role grants nothing, so an actor on either holds only what its
+    /// membership names.
+    /// </summary>
     private async Task<(ViewEntity View, TeamEntity First, TeamEntity Second)> ViewWithTwoTeams()
     {
         var view = TestData.View();
-        var first = TestData.Team(view.Id, "First");
-        var second = TestData.Team(view.Id, "Second");
-        await Seed(view, first, second);
+        var role = TestData.TeamRole();
+        var first = TestData.Team(view.Id, "First", role.Id);
+        var second = TestData.Team(view.Id, "Second", role.Id);
+        await Seed(view, role, first, second);
 
         return (view, first, second);
     }
@@ -555,6 +1005,25 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
             { new StringContent(teamId.ToString()), "teamIds" },
             { new ByteArrayContent(Encoding.UTF8.GetBytes(content)), "ToUpload", fileName }
         };
+    }
+
+    /// <summary>Uploads one file assigned to every team in <paramref name="teamIds"/>, as <c>Root</c>.</summary>
+    private async Task<FileModel> UploadedToTeams(Guid viewId, string fileName, params Guid[] teamIds)
+    {
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent(viewId.ToString()), "viewId" },
+            { new ByteArrayContent(Encoding.UTF8.GetBytes("contents")), "ToUpload", fileName }
+        };
+
+        foreach (var teamId in teamIds)
+        {
+            form.Add(new StringContent(teamId.ToString()), "teamIds");
+        }
+
+        var uploaded = await ReadAsync<FileModel[]>(await RootClient.PostAsync("api/files", form, Ct));
+
+        return uploaded.Single();
     }
 
     /// <summary>Uploads one file and returns its model, for the tests that need a file to act on.</summary>

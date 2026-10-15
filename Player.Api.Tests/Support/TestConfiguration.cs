@@ -45,11 +45,6 @@ internal static class TestConfiguration
         // the next test that happens to use the same id. AuthCacheEvictionTests drives the cache
         // directly, where caching is the subject rather than a shared surface.
         ["ClaimsTransformation:EnableCaching"] = "false",
-        ["ClaimsTransformation:CacheExpirationSeconds"] = "60",
-        // Permissions come from the rows a test seeds, so that one mechanism decides what an actor
-        // may do. UserClaimsServiceTests covers reading roles from the token.
-        ["ClaimsTransformation:UseRolesFromIdP"] = "false",
-        ["ClaimsTransformation:RolesClaimPath"] = "realm_access.roles",
 
         // The shipped value is relative, so uploads would land in the Player.Api project directory.
         ["FileUpload:basePath"] = FileUploadBasePath

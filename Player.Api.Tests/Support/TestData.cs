@@ -99,7 +99,7 @@ public static class TestData
 
     /// <summary>
     /// A team role granting nothing, for the team that must grant its members no permissions —
-    /// <see cref="Team"/> defaults to the seeded <c>View Member</c> role, which grants four.
+    /// <see cref="Team"/> defaults to the seeded <c>View Member</c> role, which grants five.
     /// </summary>
     public static TeamRoleEntity TeamRole(string name = null, bool allPermissions = false) =>
         new()
@@ -119,6 +119,15 @@ public static class TestData
             Id = id ?? Guid.NewGuid(),
             Name = name,
             RoleId = roleId
+        };
+
+    public static UserIdentityAttributeEntity UserIdentityAttribute(Guid userId, string key, string value) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Key = key,
+            Value = value
         };
 
     public static ViewMembershipEntity ViewMembership(Guid viewId, Guid userId) =>

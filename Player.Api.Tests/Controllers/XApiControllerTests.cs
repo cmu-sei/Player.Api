@@ -116,10 +116,7 @@ public class XApiControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
             await RootClient.PostAsync("api/xapi/viewed/view/last-tuesday", null, Ct));
     }
 
-    /// <summary>
-    /// The controller carries its own <c>[Authorize]</c> rather than inheriting <c>BaseController</c>,
-    /// so this pins that it is not an anonymous route.
-    /// </summary>
+    /// <summary>The controller carries its own [Authorize], so a request with no identity is a 401; the anonymous client is the case under test.</summary>
     [Fact]
     public async Task An_unauthenticated_request_is_unauthorized()
     {

@@ -26,7 +26,10 @@ public sealed class TestActor
     /// </summary>
     public required string Name { get; init; }
 
-    /// <summary>One per <see cref="TestActorBuilder.OnTeam"/> call, in the order they were declared.</summary>
+    /// <summary>
+    /// One per <see cref="TestActorBuilder.OnTeam"/> and <see cref="TestActorBuilder.OnNewTeam"/> call, in
+    /// the order they were declared.
+    /// </summary>
     public required IReadOnlyList<TestActorMembership> Memberships { get; init; }
 
     /// <summary>The first declared membership — the common case of an actor on one team.</summary>
@@ -141,9 +144,10 @@ public sealed class TestActorBuilder(PlayerContext db, CancellationToken ct)
     /// </summary>
     /// <remarks>
     /// A membership role adds to what the team grants, so a test that wants exactly the permissions it
-    /// passes needs a team whose own role grants nothing — <c>TestData.Team(view.Id, roleId:
-    /// permissionFreeRole.Id)</c>. <c>TestData.Team</c> defaults to the seeded <c>View Member</c> role,
-    /// which grants four.
+    /// passes needs a team whose own role grants nothing: <see cref="OnNewTeam"/> mints one.
+    /// <c>TestData.Team</c> defaults to the seeded <c>View Member</c> role, which grants five
+    /// (<c>ViewTeam</c>, <c>ControlTeamVms</c>, <c>ViewTeamMaps</c>, <c>UploadTeamIsos</c>,
+    /// <c>UploadVmFiles</c>). Pass an existing team here only when the test is about what that team grants.
     /// </remarks>
     public TestActorBuilder OnTeam(
         TeamEntity team,
@@ -168,7 +172,37 @@ public sealed class TestActorBuilder(PlayerContext db, CancellationToken ct)
         }
 
         _memberships.Add(new PendingMembership(
-            team.ViewId, team.Id, primary, roleId, viewPermissions, teamPermissions));
+            team.ViewId, team.Id, primary, roleId, viewPermissions, teamPermissions, MintTeam: false));
+
+        return this;
+    }
+
+    /// <summary>
+    /// Puts the actor on a new team of <paramref name="viewId"/> whose own role grants nothing, so the
+    /// actor holds exactly <paramref name="viewPermissions"/> and <paramref name="teamPermissions"/> on
+    /// it: the near miss of a denied test. The team and its role are written in <see cref="SeedAsync"/>;
+    /// the minted team's id is the membership's <see cref="TestActorMembership.TeamId"/>.
+    /// </summary>
+    /// <remarks>
+    /// The view must already be saved. With no permissions the membership carries no role, and the actor
+    /// holds nothing on the team, only the view membership.
+    /// </remarks>
+    public TestActorBuilder OnNewTeam(
+        Guid viewId,
+        ViewPermission[] viewPermissions = null,
+        TeamPermission[] teamPermissions = null,
+        bool primary = false)
+    {
+        if (viewId == Guid.Empty)
+        {
+            throw new InvalidOperationException(
+                "OnNewTeam needs the id of a saved view. A membership is scoped to a view.");
+        }
+
+        // The id is minted here so the memberships keep their declared order; the rows are written in
+        // SeedAsync.
+        _memberships.Add(new PendingMembership(
+            viewId, Guid.NewGuid(), primary, null, viewPermissions, teamPermissions, MintTeam: true));
 
         return this;
     }
@@ -177,12 +211,22 @@ public sealed class TestActorBuilder(PlayerContext db, CancellationToken ct)
     /// Writes the actor and everything above to the database.
     /// </summary>
     /// <remarks>
-    /// The views and teams passed to <see cref="OnTeam"/> must already be saved — memberships are
-    /// foreign keys onto them.
+    /// The views and teams passed to <see cref="OnTeam"/>, and the views passed to
+    /// <see cref="OnNewTeam"/>, must already be saved — memberships are foreign keys onto them.
     /// </remarks>
     public async Task<TestActor> SeedAsync()
     {
         db.Users.Add(TestData.User(_id, _name, await ResolveRoleAsync()));
+
+        foreach (var pending in _memberships.Where(x => x.MintTeam))
+        {
+            // A role with no permission rows, so the team adds nothing to what the membership names.
+            var role = TestData.TeamRole();
+            var team = TestData.Team(pending.ViewId, "Near Miss", role.Id);
+            team.Id = pending.TeamId;
+            db.TeamRoles.Add(role);
+            db.Teams.Add(team);
+        }
 
         var seeded = new Dictionary<Guid, TestActorMembership>();
         List<(ViewMembershipEntity ViewMembership, TeamMembershipEntity Primary)> primaries = [];
@@ -336,5 +380,6 @@ public sealed class TestActorBuilder(PlayerContext db, CancellationToken ct)
         bool Primary,
         Guid? RoleId,
         ViewPermission[] ViewPermissions,
-        TeamPermission[] TeamPermissions);
+        TeamPermission[] TeamPermissions,
+        bool MintTeam);
 }

@@ -249,6 +249,86 @@ public class PresenceServiceTests(DatabaseFixture fixture) : ServiceTestBase(fix
             groups.Order());
     }
 
+    [Fact]
+    public async Task GetGroupsByViewId_returns_the_view_group_for_a_caller_holding_only_ManageView()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team, TestData.Team(view.Id, "Other"));
+        var member = await SeedMember(view, team);
+        var caller = Caller(member, view, team, viewPermissions: [ViewPermission.ManageView]);
+
+        Assert.Equal([$"Presence-{view.Id}"], await Service(caller).GetGroupsByViewId(view.Id));
+    }
+
+    /// <summary>
+    /// The near miss is ViewView in another view: whether every team is visible is read from this view's
+    /// primary claim alone, so the caller gets only its own team's group.
+    /// </summary>
+    [Fact]
+    public async Task GetGroupsByViewId_returns_only_the_own_team_group_for_a_caller_holding_ViewView_only_in_another_view()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var other = TestData.View("Other View");
+        var otherTeam = TestData.Team(other.Id, "Other Team");
+        await Seed(view, team, TestData.Team(view.Id, "Other"), other, otherTeam);
+        var member = await SeedMember(view, team);
+
+        var caller = new ClaimsPrincipalBuilder()
+            .WithUserId(member.UserId)
+            .WithTeam(view.Id, team.Id, isPrimary: true)
+            .WithTeam(other.Id, otherTeam.Id, isPrimary: true, viewPermissions: [ViewPermission.ViewView])
+            .Build();
+
+        Assert.Equal([$"Presence-{team.Id}"], await Service(caller).GetGroupsByViewId(view.Id));
+    }
+
+    [Fact]
+    public async Task GetGroupsByViewId_includes_a_team_scoped_onto_the_primary_team_for_a_caller_holding_only_ManageTeam()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var scoped = TestData.Team(view.Id, "Scoped");
+        await Seed(view, team, scoped);
+        var member = await SeedMember(view, team);
+
+        var caller = new ClaimsPrincipalBuilder()
+            .WithUserId(member.UserId)
+            .WithTeam(view.Id, team.Id, isPrimary: true, teamPermissions: [TeamPermission.ManageTeam])
+            .WithScopedTeam(view.Id, scoped.Id, sourceTeamIds: [team.Id], teamPermissions: [TeamPermission.ManageTeam])
+            .Build();
+
+        var groups = await Service(caller).GetGroupsByViewId(view.Id);
+
+        Assert.Equal(
+            new[] { $"Presence-{team.Id}", $"Presence-{scoped.Id}" }.Order(),
+            groups.Order());
+    }
+
+    /// <summary>
+    /// The near miss is ViewTeam held on the scoped team rather than directly on the primary one: a team
+    /// scoped onto the primary team is subscribed to only when the primary claim itself holds ViewTeam or
+    /// ManageTeam.
+    /// </summary>
+    [Fact]
+    public async Task GetGroupsByViewId_leaves_out_a_scoped_team_for_a_caller_holding_ViewTeam_only_on_that_team()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var scoped = TestData.Team(view.Id, "Scoped");
+        await Seed(view, team, scoped);
+        var member = await SeedMember(view, team);
+
+        var caller = new ClaimsPrincipalBuilder()
+            .WithUserId(member.UserId)
+            .WithTeam(view.Id, team.Id, isPrimary: true)
+            .WithScopedTeam(view.Id, scoped.Id, sourceTeamIds: [team.Id], teamPermissions: [TeamPermission.ViewTeam])
+            .Build();
+
+        Assert.Equal([$"Presence-{team.Id}"], await Service(caller).GetGroupsByViewId(view.Id));
+    }
+
     /// <summary>
     /// A claim on the view that is not the primary one grants nothing: presence is reported from the
     /// team the user is acting as.
