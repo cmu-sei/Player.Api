@@ -50,6 +50,15 @@ public class ViewImporter(IMapper mapper, PlayerContext db, IFileService fileSer
 
             var viewEntity = mapper.Map<ViewEntity>(view);
 
+            // A view with no creation date (seed data, usually) is created now; one that has a date keeps
+            // it, as UTC. Configuration binding parses seed dates as local time and a SQLite-backed export
+            // carries no kind, and PostgreSQL accepts neither.
+            viewEntity.DateCreated = viewEntity.DateCreated == default
+                ? DateTime.UtcNow
+                : viewEntity.DateCreated.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(viewEntity.DateCreated, DateTimeKind.Utc)
+                    : viewEntity.DateCreated.ToUniversalTime();
+
             foreach (var team in view.Teams)
             {
                 var sourceTeam = viewEntity.Teams.First(x => x.Id == team.Id);

@@ -353,6 +353,60 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
         Assert.True(File.Exists(Path.Combine(_basePath, view.Id.ToString(), "notes.txt")));
     }
 
+    // ---- Creation date --------------------------------------------------------------------------
+
+    /// <summary>Seed data has no creation date, so the importer stamps the time of the import.</summary>
+    [Fact]
+    public async Task A_view_with_no_creation_date_is_stamped_with_the_import_time()
+    {
+        var view = Export();
+        view.DateCreated = default;
+
+        var before = DateTime.UtcNow;
+        Assert.Empty(await Import([view]));
+        var after = DateTime.UtcNow;
+
+        await using var db = NewContext();
+        var dateCreated = (await db.Views.SingleAsync(Ct)).DateCreated;
+        Assert.InRange(dateCreated.ToUniversalTime(), before.AddSeconds(-1), after.AddSeconds(1));
+    }
+
+    /// <summary>An export carries its view's creation date, and the import keeps it.</summary>
+    [Fact]
+    public async Task A_view_with_a_creation_date_keeps_it()
+    {
+        var view = Export();
+
+        Assert.Empty(await Import([view]));
+
+        await using var db = NewContext();
+        Assert.Equal(
+            TestData.DefaultDateCreated,
+            (await db.Views.SingleAsync(Ct)).DateCreated.ToUniversalTime());
+    }
+
+    /// <summary>
+    /// Configuration binding parses a seed date as local time, and a SQLite-backed export carries no
+    /// kind at all; PostgreSQL accepts neither, so the importer converts both to UTC.
+    /// </summary>
+    [Theory]
+    [InlineData(DateTimeKind.Local)]
+    [InlineData(DateTimeKind.Unspecified)]
+    public async Task A_creation_date_that_is_not_utc_is_imported_as_utc(DateTimeKind kind)
+    {
+        var view = Export();
+        view.DateCreated = kind == DateTimeKind.Local
+            ? TestData.DefaultDateCreated.ToLocalTime()
+            : DateTime.SpecifyKind(TestData.DefaultDateCreated, DateTimeKind.Unspecified);
+
+        Assert.Empty(await Import([view]));
+
+        await using var db = NewContext();
+        Assert.Equal(
+            TestData.DefaultDateCreated,
+            (await db.Views.SingleAsync(Ct)).DateCreated.ToUniversalTime());
+    }
+
     // ---- The archive as a batch -----------------------------------------------------------------
 
     /// <summary>

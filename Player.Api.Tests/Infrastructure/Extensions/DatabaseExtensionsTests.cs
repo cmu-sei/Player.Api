@@ -288,6 +288,51 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
     }
 
     /// <summary>
+    /// Seed views come from configuration, which leaves a missing DateCreated at its default and parses a
+    /// present one as local time. The first is created now and the second is kept, as UTC.
+    /// </summary>
+    [Fact]
+    public async Task InitializeDatabase_gives_configured_views_a_utc_creation_date()
+    {
+        var undated = Guid.NewGuid();
+        var dated = Guid.NewGuid();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string>
+            {
+                ["SeedData:Views:0:Id"] = undated.ToString(),
+                ["SeedData:Views:0:Name"] = "Undated",
+                ["SeedData:Views:1:Id"] = dated.ToString(),
+                ["SeedData:Views:1:Name"] = "Dated",
+                ["SeedData:Views:1:DateCreated"] = "2026-01-01T00:00:00Z"
+            })
+            .Build();
+
+        var host = HostWithSeedData(seed =>
+        {
+            configuration.GetSection("SeedData").Bind(seed);
+            foreach (var view in seed.Views)
+            {
+                view.Teams = [];
+                view.Applications = [];
+                view.Files = [];
+            }
+        });
+
+        var before = DateTime.UtcNow;
+        host.InitializeDatabase();
+        var after = DateTime.UtcNow;
+
+        await using var db = NewContext();
+        Assert.InRange(
+            db.Views.Single(x => x.Id == undated).DateCreated.ToUniversalTime(),
+            before.AddSeconds(-1),
+            after.AddSeconds(1));
+        Assert.Equal(
+            TestData.DefaultDateCreated,
+            db.Views.Single(x => x.Id == dated).DateCreated.ToUniversalTime());
+    }
+
+    /// <summary>
     /// A view that is already present is reported as <c>ViewExists</c>, which is the one importer failure
     /// seeding treats as acceptable — otherwise every restart would throw.
     /// </summary>
