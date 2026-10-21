@@ -4,7 +4,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Player.Api.Data.Data.Models.Webhooks;
+using Player.Api.ViewModels.Webhooks;
 using Player.Api.Tests.Support;
 
 namespace Player.Api.Tests.Infrastructure.Endpoints;
@@ -47,6 +50,18 @@ public class MalformedRequestBodyTests(DatabaseFixture fixture, PlayerAppFactory
     [InlineData("PUT", $"api/users/{Bindable}", HandlerDereferenced)]
     [InlineData("POST", $"api/views/{Bindable}/teams", HandlerDereferenced)]
     [InlineData("POST", $"api/views/{Bindable}/notifications", HandlerDereferenced)]
+    [InlineData("POST", $"api/views/{Bindable}/applications", HandlerDereferenced)]
+    [InlineData("POST", $"api/teams/{Bindable}/application-instances", HandlerDereferenced)]
+    [InlineData("PUT", $"api/applications/{Bindable}", HandlerDereferenced)]
+    [InlineData("PUT", $"api/application-instances/{Bindable}", HandlerDereferenced)]
+    [InlineData("PUT", $"api/application-templates/{Bindable}", HandlerDereferenced)]
+    [InlineData("PUT", $"api/permissions/{Bindable}", HandlerDereferenced)]
+    [InlineData("PUT", $"api/team-memberships/{Bindable}", HandlerDereferenced)]
+    [InlineData("PUT", $"api/team-permissions/{Bindable}", HandlerDereferenced)]
+    [InlineData("PUT", $"api/team-roles/{Bindable}", HandlerDereferenced)]
+    [InlineData("POST", $"api/teams/{Bindable}/notifications", HandlerDereferenced)]
+    [InlineData("POST", $"api/views/{Bindable}/users/{Bindable}/notifications", HandlerDereferenced)]
+    [InlineData("POST", $"api/views/{Bindable}/clone", HandlerDereferenced)]
     public async Task A_write_with_no_body_is_a_server_error(string method, string route, string detail)
     {
         var problem = await AssertProblem(
@@ -66,6 +81,40 @@ public class MalformedRequestBodyTests(DatabaseFixture fixture, PlayerAppFactory
             HttpStatusCode.InternalServerError, await Send("POST", "api/views", "null"));
 
         Assert.Equal(MediatorRefused, problem.Detail);
+    }
+
+    /// <summary>A webhook edit with no form returns the stored subscription unchanged.</summary>
+    [Theory]
+    [InlineData("PUT", null)]
+    [InlineData("PATCH", null)]
+    [InlineData("PUT", "null")]
+    [InlineData("PATCH", "null")]
+    public async Task A_webhook_edit_with_no_body_returns_the_subscription_unchanged(string method, string body)
+    {
+        var webhook = TestData.Webhook("Unchanged", eventTypes: [EventType.ViewCreated]);
+        await Seed(webhook);
+
+        var response = await Send(method, $"api/webhooks/{webhook.Id}", body);
+
+        await AssertStatus(HttpStatusCode.OK, response);
+        var returned = await ReadAsync<WebhookSubscription>(response);
+        Assert.Equal(webhook.Id, returned.Id);
+        Assert.Equal("Unchanged", returned.Name);
+        Assert.Equal("https://example.test/hook", returned.CallbackUri);
+        Assert.Equal("test-client", returned.ClientId);
+        Assert.Equal([EventType.ViewCreated], returned.EventTypes);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
+        Assert.True(json.RootElement.GetProperty("clientSecretSet").GetBoolean());
+        Assert.Empty(json.RootElement.GetProperty("clientSecret").GetString());
+
+        await using var db = NewContext();
+        var stored = await db.Webhooks.Include(x => x.EventTypes).SingleAsync(Ct);
+        Assert.Equal(webhook.Id, stored.Id);
+        Assert.Equal("Unchanged", stored.Name);
+        Assert.Equal("https://example.test/hook", stored.CallbackUri);
+        Assert.Equal("test-client", stored.ClientId);
+        Assert.Equal("test-secret", stored.ClientSecret);
+        Assert.Equal(EventType.ViewCreated, Assert.Single(stored.EventTypes).EventType);
     }
 
     /// <summary>

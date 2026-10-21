@@ -653,6 +653,29 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
     // ---- SendNotification -----------------------------------------------------------------------
 
+    /// <summary>A notification key already in use is answered with a 500 and no broadcast.</summary>
+    [Fact]
+    public async Task SendNotification_reports_a_taken_key_as_a_server_error()
+    {
+        var view = TestData.View();
+        var user = TestData.User();
+        var notification = TestData.Notification(user.Id, NotificationType.User, "Original", viewId: view.Id);
+        await Seed(view, user, TestData.ViewMembership(view.Id, user.Id), notification);
+
+        var problem = await AssertProblem(HttpStatusCode.InternalServerError,
+            await RootClient.PostAsJsonAsync($"api/views/{view.Id}/users/{user.Id}/notifications",
+                new { key = notification.Key, text = "Replacement" }, Ct));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", problem.Detail);
+        await using var db = NewContext();
+        var stored = await db.Notifications.SingleAsync(Ct);
+        Assert.Equal(notification.Key, stored.Key);
+        Assert.Equal("Original", stored.Text);
+        Assert.Equal(user.Id, stored.ToId);
+        Assert.Equal(view.Id, stored.ViewId);
+        Assert.Empty(UserBroadcasts(view.Id, user.Id));
+    }
+
     [Fact]
     public async Task SendNotification_persists_it_and_broadcasts_to_the_user_group()
     {

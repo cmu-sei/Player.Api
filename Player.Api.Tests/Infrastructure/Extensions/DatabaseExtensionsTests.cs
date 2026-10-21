@@ -224,6 +224,34 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
         Assert.Equal("https://example.test/hook", db.Webhooks.Single().CallbackUri);
     }
 
+    /// <summary>A seed subscription id already stored under another name prevents initialization.</summary>
+    [Fact]
+    public async Task InitializeDatabase_throws_when_a_seed_subscription_id_is_already_stored_under_another_name()
+    {
+        var webhook = TestData.Webhook("Renamed Hook");
+        await Seed(webhook);
+        var host = HostWithSeedData(seed => seed.Subscriptions =
+        [
+            new WebhookSubscription
+            {
+                Id = webhook.Id,
+                Name = "Configured Hook",
+                CallbackUri = "https://example.test/replacement"
+            }
+        ]);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => host.InitializeDatabase());
+
+        Assert.Contains("WebhookSubscriptionEntity", exception.Message);
+        Assert.Contains("cannot be tracked because another instance with the same key value", exception.Message);
+        await using var db = NewContext();
+        var stored = await db.Webhooks.SingleAsync(Ct);
+        Assert.Equal(webhook.Id, stored.Id);
+        Assert.Equal("Renamed Hook", stored.Name);
+        Assert.Equal("https://example.test/hook", stored.CallbackUri);
+        Assert.Equal("test-secret", stored.ClientSecret);
+    }
+
     [Fact]
     public async Task InitializeDatabase_seeds_application_templates_by_id()
     {
