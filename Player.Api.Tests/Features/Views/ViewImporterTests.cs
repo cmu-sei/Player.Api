@@ -3,6 +3,7 @@
 
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Player.Api.Data.Data.Models;
 using Player.Api.Features.Applications;
 using Player.Api.Features.Teams;
@@ -127,6 +128,102 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
 
         await using var db = NewContext();
         Assert.Equal("Blue", (await db.Teams.SingleAsync(x => x.ViewId == view.Id, Ct)).Name);
+        Assert.Empty(await db.TeamPermissionScopes.ToListAsync(Ct));
+    }
+
+    /// <summary>An imported team id already stored in another view causes the whole save to fail.</summary>
+    [Fact]
+    public async Task A_team_id_already_stored_in_another_view_fails_the_whole_import()
+    {
+        var existing = TestData.View();
+        var storedTeam = TestData.Team(existing.Id, "Original");
+        await Seed(existing, storedTeam);
+        Db.ChangeTracker.Clear();
+        var team = Team("Replacement");
+        team.Id = storedTeam.Id;
+        var view = Export();
+        view.Teams = [team];
+
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(() => Import([view]));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", exception.Message);
+        await AssertNotImported(view);
+        await using var db = NewContext();
+        var stored = await db.Teams.SingleAsync(Ct);
+        Assert.Equal("Original", stored.Name);
+        Assert.Equal(existing.Id, stored.ViewId);
+    }
+
+    /// <summary>Two source teams with one id stop tracking before their repeated scope pair is saved.</summary>
+    // Same case as A_team_id_already_stored_in_another_view_fails_the_whole_import.
+    [Fact]
+    public async Task Repeated_team_ids_with_the_same_scope_throw_before_any_scope_is_stored()
+    {
+        var blue = Team("Blue");
+        var duplicate = Team("Duplicate");
+        duplicate.Id = blue.Id;
+        var red = Team("Red");
+        blue.ScopedTeamIds = [red.Id];
+        duplicate.ScopedTeamIds = [red.Id];
+        var view = Export();
+        view.Teams = [blue, duplicate, red];
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => Import([view]));
+
+        Assert.Contains("TeamEntity", exception.Message);
+        Assert.Contains("cannot be tracked because another instance with the same key value", exception.Message);
+        await AssertNotImported(view);
+        await using var db = NewContext();
+        Assert.Empty(await db.TeamPermissionScopes.ToListAsync(Ct));
+        Assert.Empty(await db.Teams.ToListAsync(Ct));
+    }
+
+    /// <summary>Two imported views sharing a team id stop tracking before either view is saved.</summary>
+    // Same case as A_team_id_already_stored_in_another_view_fails_the_whole_import.
+    [Fact]
+    public async Task Two_imported_views_sharing_a_team_id_throw_before_either_is_stored()
+    {
+        var blue = Team("Blue");
+        var duplicate = Team("Duplicate");
+        duplicate.Id = blue.Id;
+        var first = Export("First");
+        var second = Export("Second");
+        first.Teams = [blue];
+        second.Teams = [duplicate];
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => Import([first, second]));
+
+        Assert.Contains("TeamEntity", exception.Message);
+        Assert.Contains("cannot be tracked because another instance with the same key value", exception.Message);
+        await AssertNotImported(first);
+        await AssertNotImported(second);
+        await using var db = NewContext();
+        Assert.Empty(await db.Teams.ToListAsync(Ct));
+    }
+
+    /// <summary>Two teams without ids scoped onto one target fail the save and store nothing.</summary>
+    [Fact]
+    public async Task Two_teams_without_ids_scoped_onto_one_team_fail_the_whole_import()
+    {
+        var blue = Team("Blue");
+        var red = Team("Red");
+        var target = Team("Target");
+        blue.Id = Guid.Empty;
+        red.Id = Guid.Empty;
+        blue.ScopedTeamIds = [target.Id];
+        red.ScopedTeamIds = [target.Id];
+        var view = Export();
+        view.Teams = [blue, red, target];
+
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(() => Import([view]));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", exception.Message);
+        var postgres = Assert.IsType<PostgresException>(exception.InnerException);
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, postgres.SqlState);
+        Assert.Equal("IX_team_permission_scopes_team_id_target_team_id", postgres.ConstraintName);
+        await using var db = NewContext();
+        Assert.Empty(await db.Views.ToListAsync(Ct));
+        Assert.Empty(await db.Teams.ToListAsync(Ct));
         Assert.Empty(await db.TeamPermissionScopes.ToListAsync(Ct));
     }
 

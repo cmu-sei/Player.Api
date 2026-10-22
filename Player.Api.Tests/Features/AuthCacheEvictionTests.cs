@@ -2,6 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using Crucible.Common.EntityEvents.Events;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Player.Api.Data.Data.Models;
 using Player.Api.Features.Roles.EventHandlers;
@@ -330,6 +331,26 @@ public class AuthCacheEvictionTests(DatabaseFixture fixture) : ServiceTestBase(f
 
         Assert.False(IsCached(world.Member.Id));
         Assert.True(IsCached(world.OtherTeamMember.Id));
+    }
+
+    /// <summary>A cancelled scope-created handler leaves the committed scope's members cached.</summary>
+    [Fact]
+    public async Task A_cancelled_scope_created_handler_leaves_the_scoping_teams_members_cached()
+    {
+        var world = await SeedTeams();
+        var scope = TestData.TeamPermissionScope(world.Team.Id, world.OtherTeam.Id);
+        await Seed(scope);
+        var cancelled = new CancellationToken(canceled: true);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new TeamPermissionScopeCreatedAuthCacheHandler(_cache, Db).Handle(
+                new EntityCreated<TeamPermissionScopeEntity>(scope), cancelled));
+
+        Assert.True(IsCached(world.Member.Id));
+        Assert.True(IsCached(world.OtherTeamMember.Id));
+        var stored = await ReadBack(db => db.TeamPermissionScopes.SingleAsync(Ct));
+        Assert.Equal(world.Team.Id, stored.TeamId);
+        Assert.Equal(world.OtherTeam.Id, stored.TargetTeamId);
     }
 
     [Fact]

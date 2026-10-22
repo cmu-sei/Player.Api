@@ -76,6 +76,25 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal(id, created.Id);
     }
 
+    /// <summary>A caller-supplied view id already in use is answered with a 500.</summary>
+    [Fact]
+    public async Task Create_reports_a_taken_caller_supplied_id_as_a_server_error()
+    {
+        var view = TestData.View("Original");
+        await Seed(view);
+
+        var problem = await AssertProblem(HttpStatusCode.InternalServerError,
+            await RootClient.PostAsJsonAsync("api/views",
+                new { id = view.Id, name = "Replacement", createAdminTeam = false }, Ct));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", problem.Detail);
+        await using var db = NewContext();
+        var stored = await db.Views.SingleAsync(Ct);
+        Assert.Equal(view.Id, stored.Id);
+        Assert.Equal("Original", stored.Name);
+        Assert.Empty(await db.Teams.ToListAsync(Ct));
+    }
+
     /// <summary>
     /// An explicitly empty id means "assign one", not "use Guid.Empty" — no serializer lets the request
     /// model tell an absent id from a defaulted one, so the handler treats them alike.
@@ -564,6 +583,27 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     // ---- Notifications --------------------------------------------------------------------------
+
+    /// <summary>A notification key already in use is answered with a 500 and no broadcast.</summary>
+    [Fact]
+    public async Task SendNotification_reports_a_taken_key_as_a_server_error()
+    {
+        var view = TestData.View();
+        var notification = TestData.Notification(view.Id, text: "Original");
+        await Seed(view, notification);
+
+        var problem = await AssertProblem(HttpStatusCode.InternalServerError,
+            await RootClient.PostAsJsonAsync($"api/views/{view.Id}/notifications",
+                new { key = notification.Key, text = "Replacement" }, Ct));
+
+        Assert.StartsWith("An error occurred while saving the entity changes.", problem.Detail);
+        await using var db = NewContext();
+        var stored = await db.Notifications.SingleAsync(Ct);
+        Assert.Equal(notification.Key, stored.Key);
+        Assert.Equal("Original", stored.Text);
+        Assert.Equal(view.Id, stored.ToId);
+        Assert.Empty(ViewBroadcasts(view.Id));
+    }
 
     [Fact]
     public async Task SendNotification_persists_it_and_broadcasts_to_the_view_group()

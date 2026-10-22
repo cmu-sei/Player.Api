@@ -6,6 +6,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data.Models.Webhooks;
+using Player.Api.Hubs;
+using Player.Api.ViewModels;
 using Player.Api.Tests.Support;
 
 namespace Player.Api.Tests.Infrastructure.Endpoints;
@@ -32,6 +34,28 @@ public class OutOfRangeEnumTests(DatabaseFixture fixture, PlayerAppFactory facto
 
         await using var db = NewContext();
         Assert.Equal(expected, (int)(await db.Views.SingleAsync(x => x.Name == "Odd", Ct)).Status);
+    }
+
+    /// <summary>A view edit stores and returns a status outside the enum.</summary>
+    [Theory]
+    [InlineData("999", 999)]
+    [InlineData("\"999\"", 999)]
+    [InlineData("-1", -1)]
+    public async Task A_view_edit_stores_and_returns_a_status_outside_the_enum(string status, int expected)
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        var response = await RootClient.PutAsync(
+            $"api/views/{view.Id}", Json($"{{\"name\":\"Edited\",\"status\":{status}}}"), Ct);
+
+        await AssertStatus(HttpStatusCode.OK, response);
+        Assert.Contains($"\"status\":{expected}", await response.Content.ReadAsStringAsync(Ct));
+
+        await using var db = NewContext();
+        var stored = await db.Views.SingleAsync(x => x.Id == view.Id, Ct);
+        Assert.Equal(expected, (int)stored.Status);
+        Assert.Equal("Edited", stored.Name);
     }
 
     /// <summary>
@@ -64,10 +88,7 @@ public class OutOfRangeEnumTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.DoesNotContain(Enum.GetValues<EventType>(), x => (int)x == 999);
     }
 
-    /// <summary>
-    /// A notification is broadcast with a priority that does not exist, and stored with it. Cheaper than the
-    /// webhook case — nothing matches on priority — but the same missing check.
-    /// </summary>
+    /// <summary>A notification is broadcast and stored with a priority outside the enum.</summary>
     [Fact]
     public async Task A_notification_priority_outside_the_enum_is_broadcast_and_stored()
     {
@@ -83,6 +104,12 @@ public class OutOfRangeEnumTests(DatabaseFixture fixture, PlayerAppFactory facto
 
         await using var db = NewContext();
         Assert.Equal(999, (int)(await db.Notifications.SingleAsync(Ct)).Priority);
+        var broadcast = Assert.Single(Factory.Hub<ViewHub>().ToGroup(view.Id));
+        Assert.Equal("Reply", broadcast.Method);
+        var notification = Assert.IsType<Notification>(broadcast.Argument);
+        Assert.Equal(999, (int)notification.Priority);
+        Assert.Equal("hi", notification.Text);
+        Assert.Equal(view.Id, notification.ToId);
     }
 
     /// <summary>An archive type outside the enum on export is answered with a 500.</summary>
