@@ -18,8 +18,8 @@
   <ItemGroup>
     <PackageVersion Include="AutoMapper" Version="13.0.1" /> <!-- Deferred: see docs/DependencyDeferrals.md. -->
     <PackageVersion Include="MediatR" Version="12.4.1" /> <!-- Deferred: see docs/DependencyDeferrals.md. -->
-    <PackageVersion Include="Crucible.Common.EntityEvents" Version="0.2.0" />
-    <PackageVersion Include="Crucible.Common.ServiceDefaults" Version="0.0.2" />
+    <PackageVersion Include="Crucible.Common.EntityEvents" Version="0.2.1" />
+    <PackageVersion Include="Crucible.Common.ServiceDefaults" Version="0.0.3" />
     <PackageVersion Include="IdentityServer4.AccessTokenValidation" Version="3.0.1" />
     <PackageVersion Include="SharpZipLib" Version="1.4.2" />
     <PackageVersion Include="TinCan" Version="1.3.0" />
@@ -78,8 +78,6 @@
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageVersion Include="NuGet.Packaging" Version="6.12.5" />
     <PackageVersion Include="NuGet.Protocol" Version="6.12.5" />
-    <PackageVersion Include="OpenTelemetry.Api" Version="1.15.3" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
