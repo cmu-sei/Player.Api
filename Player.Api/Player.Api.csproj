@@ -36,6 +36,22 @@
     <PackageReference Include="Crucible.Common.ServiceDefaults"/>
     <PackageReference Include="TinCan"/>
   </ItemGroup>
+  <!-- Security pins. Referenced only to raise a package that otherwise arrives through another
+       dependency at a vulnerable version; the test project inherits them through its project
+       reference. Each can go once the dependency that brings it in carries a fixed version of its own. -->
+  <ItemGroup>
+    <!-- Through Crucible.Common.ServiceDefaults 0.0.2, which carries 1.15.0. The exporter pulls
+         OpenTelemetry and OpenTelemetry.Api up to the same patch with it. -->
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Api" />
+    <!-- Through Microsoft.VisualStudio.Web.CodeGeneration.Design, which carries 6.12.1. -->
+    <PackageReference Include="NuGet.Packaging" />
+    <PackageReference Include="NuGet.Protocol" />
+    <!-- Through Microsoft.Data.SqlClient, which carries 9.0.11 even under EF Core 10.0.13. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <!-- Through Swashbuckle.AspNetCore 10.1.0, which carries 2.3.0. -->
+    <PackageReference Include="Microsoft.OpenApi" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Player.Api.Data\Player.Api.Data.csproj" />
     <ProjectReference Include="..\Player.Api.Migrations.PostgreSQL\Player.Api.Migrations.PostgreSQL.csproj" />
