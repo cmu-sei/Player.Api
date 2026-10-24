@@ -22,9 +22,13 @@ Revisit when the project approves a licensed release or replaces MediatR. The HT
 
 ## Web code generation tooling
 
-`Microsoft.VisualStudio.Web.CodeGeneration.Design` is unused runtime scaffolding but currently affects the resolved dependency graph. It pulls vulnerable `Microsoft.Build` and `NuGet.*` packages. Earlier attempts to isolate it changed other transitive versions, so removal belongs in a dedicated dependency change with a full restore, build, test and audit comparison.
+`Microsoft.VisualStudio.Web.CodeGeneration.Design` is unused runtime scaffolding but currently affects the resolved dependency graph. Version 10.0.2 resolves a patched `Microsoft.Build`, but it still carries `NuGet.Packaging` and `NuGet.Protocol` 6.12.1, which the security pins in `Player.Api.csproj` raise to 6.12.5. Earlier attempts to isolate it changed other transitive versions, so removal belongs in a dedicated dependency change with a full restore, build, test and audit comparison.
 
-Revisit by removing the package rather than merely suppressing its advisories. Confirm that generated-code workflows are not used and that the resulting graph does not introduce older transitive packages.
+Revisit by removing the package rather than pinning around it. Confirm that generated-code workflows are not used and that the resulting graph does not introduce older transitive packages. Removing it also removes the compile-time Roslyn, MSBuild and NuGet assemblies it brings in, which the application leans on by accident:
+
+- `ServiceCollectionExtensions` maps `Microsoft.CodeAnalysis.Optional<Guid?>` in Swagger, a Roslyn type that no model uses.
+- `GetNotifications` and `PresenceService` import `Microsoft.Build.Framework`, and `ImportApplicationTemplates` imports `NuGet.Packaging`.
+- `Player.Api.Tests` loses the Newtonsoft.Json 13.x the package supplies and falls back to the vulnerable 11.0.2 that TinCan and IdentityServer4.AccessTokenValidation ask for, so it needs a pin of its own.
 
 ## Reviewing warnings
 

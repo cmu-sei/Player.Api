@@ -18,8 +18,8 @@
   <ItemGroup>
     <PackageVersion Include="AutoMapper" Version="13.0.1" /> <!-- Deferred: see docs/DependencyDeferrals.md. -->
     <PackageVersion Include="MediatR" Version="12.4.1" /> <!-- Deferred: see docs/DependencyDeferrals.md. -->
-    <PackageVersion Include="Crucible.Common.EntityEvents" Version="0.2.0" />
-    <PackageVersion Include="Crucible.Common.ServiceDefaults" Version="0.0.2" />
+    <PackageVersion Include="Crucible.Common.EntityEvents" Version="0.2.1" />
+    <PackageVersion Include="Crucible.Common.ServiceDefaults" Version="0.0.3" />
     <PackageVersion Include="IdentityServer4.AccessTokenValidation" Version="3.0.1" />
     <PackageVersion Include="SharpZipLib" Version="1.4.2" />
     <PackageVersion Include="TinCan" Version="1.3.0" />
@@ -27,12 +27,12 @@
 
   <!-- EF Core and the providers used by the application. -->
   <ItemGroup>
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.13" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
   </ItemGroup>
 
@@ -42,10 +42,10 @@
     <PackageVersion Include="AspNetCore.HealthChecks.Sqlite" Version="9.0.0" />
     <PackageVersion Include="AspNetCore.HealthChecks.SqlServer" Version="9.0.0" />
     <PackageVersion Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.13" />
     <!-- Deferred: see docs/DependencyDeferrals.md. -->
-    <PackageVersion Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.0-rc.1.25458.5" />
+    <PackageVersion Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.2" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.0" />
     <PackageVersion Include="Swashbuckle.AspNetCore.Annotations" Version="10.1.0" />
   </ItemGroup>
@@ -62,15 +62,23 @@
     <!-- Hosts the application in-process for the HTTP tests. Tied to the ASP.NET Core version, so it
          tracks Microsoft.AspNetCore.Authentication.JwtBearer above rather than the test-tool versions
          around it. -->
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
     <!-- The SignalR client for the hubs' real-connection tests. Tied to the ASP.NET Core version like
          Mvc.Testing above. -->
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.13" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
     <PackageVersion Include="NSubstitute" Version="6.0.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
+  </ItemGroup>
+
+  <!-- Security pins. See the matching group in Player.Api/Player.Api.csproj. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageVersion Include="NuGet.Packaging" Version="6.12.5" />
+    <PackageVersion Include="NuGet.Protocol" Version="6.12.5" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
 </Project>
