@@ -5,10 +5,13 @@ on:
     branches:
       - main
   push:
-    branches: 
+    branches:
       - main
   release:
     types: ["published"]
+
+permissions:
+  contents: read
 
 jobs:
   build-and-publish:
