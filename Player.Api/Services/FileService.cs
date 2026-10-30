@@ -241,6 +241,10 @@ namespace Player.Api.Services
             // Teams are being changed and/or file is being renamed
             else
             {
+                // a rename keeps to the allow-list an upload is held to: apps read a file's type from its name
+                if (form.Name != null && form.Name != entity.Name && !ValidateFileExtension(form.Name))
+                    throw new ForbiddenException("Invalid file extension");
+
                 entity.TeamIds = form.TeamIds;
                 entity.Name = form.Name;
             }
@@ -299,7 +303,7 @@ namespace Player.Api.Services
             var valid = false;
             foreach (var ext in _fileUploadOptions.allowedExtensions)
             {
-                if (name.EndsWith(ext))
+                if (name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
                 {
                     valid = true;
                     break;

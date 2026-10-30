@@ -103,6 +103,33 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
     }
 
     /// <summary>
+    /// An SVG can be uploaded, so a view can hold the diagrams a VM Map is drawn on.
+    /// </summary>
+    [Fact]
+    public async Task Upload_accepts_an_svg()
+    {
+        var (view, team) = await ViewWithTeam();
+
+        using var form = Upload(view.Id, team.Id, "network.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
+
+        await AssertStatus(HttpStatusCode.Created, await RootClient.PostAsync("api/files", form, Ct));
+    }
+
+    /// <summary>
+    /// The allow-list is matched without regard to case, so a diagram a tool saved as
+    /// <c>Network.SVG</c> uploads as <c>network.svg</c> does.
+    /// </summary>
+    [Fact]
+    public async Task Upload_matches_the_extension_in_any_case()
+    {
+        var (view, team) = await ViewWithTeam();
+
+        using var form = Upload(view.Id, team.Id, "Network.SVG", "<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
+
+        await AssertStatus(HttpStatusCode.Created, await RootClient.PostAsync("api/files", form, Ct));
+    }
+
+    /// <summary>
     /// A form with no <c>teamIds</c> part binds the list as null, which the service reads as "assigned
     /// to no team" and refuses.
     /// </summary>
@@ -378,6 +405,24 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
     }
 
+    /// <summary>
+    /// An SVG is a document that can carry script, so it is not served as an image: as
+    /// <c>image/svg+xml</c> opened from the API it would run in the API's origin. It downloads as an
+    /// octet-stream attachment, and the VM UI types it from its name when it draws a Map on it.
+    /// </summary>
+    [Fact]
+    public async Task Download_serves_an_svg_as_an_octet_stream_attachment()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "network.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>");
+
+        var response = await RootClient.GetAsync($"api/files/download/{uploaded.id}", Ct);
+
+        await AssertStatus(HttpStatusCode.OK, response);
+        Assert.Equal("application/octet-stream", response.Content.Headers.ContentType?.MediaType);
+        Assert.StartsWith("attachment", response.Content.Headers.GetValues("Content-Disposition").Single());
+    }
+
     [Fact]
     public async Task Download_is_not_found_for_an_unknown_id()
     {
@@ -423,6 +468,49 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
 
         await using var db = NewContext();
         Assert.Equal("after.txt", (await db.Files.SingleAsync(x => x.Id == uploaded.id, Ct)).Name);
+    }
+
+    /// <summary>
+    /// A rename is held to the allow-list an upload is: apps read a file's type from its name, so
+    /// renaming <c>notes.txt</c> to <c>notes.exe</c> would get past it. The name stays as it was.
+    /// </summary>
+    [Fact]
+    public async Task Update_refuses_a_rename_to_an_extension_that_is_not_allowed()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "notes.txt");
+
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent("notes.exe"), "Name" },
+            { new StringContent(team.Id.ToString()), "TeamIds" }
+        };
+
+        var response = await RootClient.PutAsync($"api/files/{uploaded.id}", form, Ct);
+
+        await AssertStatus(HttpStatusCode.Forbidden, response);
+        Assert.Contains("Invalid file extension", await response.Content.ReadAsStringAsync(Ct));
+        await using var db = NewContext();
+        Assert.Equal("notes.txt", (await db.Files.SingleAsync(x => x.Id == uploaded.id, Ct)).Name);
+    }
+
+    /// <summary>Changing only the teams, with the name sent back unchanged, is not a rename.</summary>
+    [Fact]
+    public async Task Update_with_the_same_name_reassigns_the_teams()
+    {
+        var (view, first, second) = await ViewWithTwoTeams();
+        var uploaded = await Uploaded(RootClient, view.Id, first.Id, "before.txt");
+
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent("before.txt"), "Name" },
+            { new StringContent(second.Id.ToString()), "TeamIds" }
+        };
+
+        var updated = await ReadAsync<FileModel>(
+            await RootClient.PutAsync($"api/files/{uploaded.id}", form, Ct));
+
+        Assert.Equal(second.Id, Assert.Single(updated.teamIds));
     }
 
     /// <summary>

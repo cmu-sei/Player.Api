@@ -166,18 +166,22 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
             () => Service().UploadAsync(Form(view.Id, [team.Id], ("payload.exe", "hello")), Ct));
     }
 
-    /// <summary>An allowed extension in upper or mixed case is refused on upload.</summary>
+    /// <summary>
+    /// An allowed extension in upper or mixed case is accepted on upload: tools save names like
+    /// <c>Network.SVG</c>, and the apps that read a file's type from its name ignore case too.
+    /// </summary>
     [Theory]
     [InlineData("NOTES.TXT")]
     [InlineData("notes.Txt")]
-    public async Task UploadAsync_refuses_an_allowed_extension_in_the_wrong_case(string name)
+    public async Task UploadAsync_accepts_an_allowed_extension_in_any_case(string name)
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
         await Seed(view, team);
 
-        await Assert.ThrowsAsync<ForbiddenException>(
-            () => Service().UploadAsync(Form(view.Id, [team.Id], (name, "hello")), Ct));
+        var uploaded = await Service().UploadAsync(Form(view.Id, [team.Id], (name, "hello")), Ct);
+
+        Assert.Equal(name, Assert.Single(uploaded).Name);
     }
 
     /// <summary>
@@ -230,9 +234,12 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
             () => Service().UploadAsync(Form(view.Id, [team.Id], ("readme", "hello")), Ct));
     }
 
-    /// <summary>A name ending in an allowed extension only under culture-sensitive comparison is accepted.</summary>
+    /// <summary>
+    /// A name that ends in an allowed extension only under culture-sensitive comparison is refused: the
+    /// comparison is ordinal, so a soft hyphen inside <c>.txt</c> is not ignored.
+    /// </summary>
     [Fact]
-    public async Task UploadAsync_accepts_an_extension_that_matches_only_under_the_current_culture()
+    public async Task UploadAsync_refuses_an_extension_that_matches_only_under_the_current_culture()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
@@ -241,10 +248,8 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         // notes.t<soft hyphen>xt
         const string name = "notes.t­xt";
 
-        var uploaded = await Service().UploadAsync(Form(view.Id, [team.Id], (name, "hello")), Ct);
-
-        Assert.Equal(name, Assert.Single(uploaded).Name);
-        Assert.EndsWith("..t­xt", Assert.Single(await Stored()).Path);
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => Service().UploadAsync(Form(view.Id, [team.Id], (name, "hello")), Ct));
     }
 
     /// <summary>
@@ -642,21 +647,22 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         Assert.True(File.Exists(file.Path));
     }
 
-    /// <summary>A rename with no replacement file stores a name whose extension the upload options do not allow.</summary>
+    /// <summary>
+    /// A rename with no replacement file is held to the upload options: apps read a file's type from its
+    /// name, so renaming would otherwise get any content past them.
+    /// </summary>
     [Fact]
-    public async Task UpdateAsync_accepts_a_disallowed_extension_when_only_renaming()
+    public async Task UpdateAsync_refuses_a_disallowed_extension_when_only_renaming()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
         await Seed(view, team);
         var file = await SeedFile(view, "notes.txt", teamIds: [team.Id]);
 
-        var updated = await Service().UpdateAsync(
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service().UpdateAsync(
             file.Id,
             new FileUpdateForm { Name = "payload.exe", TeamIds = [team.Id] },
-            Ct);
-
-        Assert.Equal("payload.exe", updated.Name);
+            Ct));
     }
 
     [Fact]
