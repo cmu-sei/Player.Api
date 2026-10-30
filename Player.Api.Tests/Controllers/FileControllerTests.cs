@@ -471,6 +471,49 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
     }
 
     /// <summary>
+    /// A rename is held to the allow-list an upload is: apps read a file's type from its name, so
+    /// renaming <c>notes.txt</c> to <c>notes.exe</c> would get past it. The name stays as it was.
+    /// </summary>
+    [Fact]
+    public async Task Update_refuses_a_rename_to_an_extension_that_is_not_allowed()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "notes.txt");
+
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent("notes.exe"), "Name" },
+            { new StringContent(team.Id.ToString()), "TeamIds" }
+        };
+
+        var response = await RootClient.PutAsync($"api/files/{uploaded.id}", form, Ct);
+
+        await AssertStatus(HttpStatusCode.Forbidden, response);
+        Assert.Contains("Invalid file extension", await response.Content.ReadAsStringAsync(Ct));
+        await using var db = NewContext();
+        Assert.Equal("notes.txt", (await db.Files.SingleAsync(x => x.Id == uploaded.id, Ct)).Name);
+    }
+
+    /// <summary>Changing only the teams, with the name sent back unchanged, is not a rename.</summary>
+    [Fact]
+    public async Task Update_with_the_same_name_reassigns_the_teams()
+    {
+        var (view, first, second) = await ViewWithTwoTeams();
+        var uploaded = await Uploaded(RootClient, view.Id, first.Id, "before.txt");
+
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent("before.txt"), "Name" },
+            { new StringContent(second.Id.ToString()), "TeamIds" }
+        };
+
+        var updated = await ReadAsync<FileModel>(
+            await RootClient.PutAsync($"api/files/{uploaded.id}", form, Ct));
+
+        Assert.Equal(second.Id, Assert.Single(updated.teamIds));
+    }
+
+    /// <summary>
     /// A form carrying a file replaces the bytes and takes the new file's name. The teams in the same
     /// form are validated against the view and then not applied — the two branches are exclusive.
     /// </summary>

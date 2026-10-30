@@ -647,21 +647,22 @@ public class FileServiceTests(DatabaseFixture fixture) : ServiceTestBase(fixture
         Assert.True(File.Exists(file.Path));
     }
 
-    /// <summary>A rename with no replacement file stores a name whose extension the upload options do not allow.</summary>
+    /// <summary>
+    /// A rename with no replacement file is held to the upload options: apps read a file's type from its
+    /// name, so renaming would otherwise get any content past them.
+    /// </summary>
     [Fact]
-    public async Task UpdateAsync_accepts_a_disallowed_extension_when_only_renaming()
+    public async Task UpdateAsync_refuses_a_disallowed_extension_when_only_renaming()
     {
         var view = TestData.View();
         var team = TestData.Team(view.Id);
         await Seed(view, team);
         var file = await SeedFile(view, "notes.txt", teamIds: [team.Id]);
 
-        var updated = await Service().UpdateAsync(
+        await Assert.ThrowsAsync<ForbiddenException>(() => Service().UpdateAsync(
             file.Id,
             new FileUpdateForm { Name = "payload.exe", TeamIds = [team.Id] },
-            Ct);
-
-        Assert.Equal("payload.exe", updated.Name);
+            Ct));
     }
 
     [Fact]
