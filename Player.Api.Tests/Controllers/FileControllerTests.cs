@@ -103,6 +103,19 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
     }
 
     /// <summary>
+    /// An SVG can be uploaded, so a view can hold the diagrams a VM Map is drawn on.
+    /// </summary>
+    [Fact]
+    public async Task Upload_accepts_an_svg()
+    {
+        var (view, team) = await ViewWithTeam();
+
+        using var form = Upload(view.Id, team.Id, "network.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
+
+        await AssertStatus(HttpStatusCode.Created, await RootClient.PostAsync("api/files", form, Ct));
+    }
+
+    /// <summary>
     /// A form with no <c>teamIds</c> part binds the list as null, which the service reads as "assigned
     /// to no team" and refuses.
     /// </summary>
@@ -376,6 +389,24 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
 
         await AssertStatus(HttpStatusCode.OK, response);
         Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    /// <summary>
+    /// An SVG is a document that can carry script, so it is not served as an image: as
+    /// <c>image/svg+xml</c> opened from the API it would run in the API's origin. It downloads as an
+    /// octet-stream attachment, and the VM UI types it from its name when it draws a Map on it.
+    /// </summary>
+    [Fact]
+    public async Task Download_serves_an_svg_as_an_octet_stream_attachment()
+    {
+        var (view, team) = await ViewWithTeam();
+        var uploaded = await Uploaded(RootClient, view.Id, team.Id, "network.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>");
+
+        var response = await RootClient.GetAsync($"api/files/download/{uploaded.id}", Ct);
+
+        await AssertStatus(HttpStatusCode.OK, response);
+        Assert.Equal("application/octet-stream", response.Content.Headers.ContentType?.MediaType);
+        Assert.StartsWith("attachment", response.Content.Headers.GetValues("Content-Disposition").Single());
     }
 
     [Fact]
