@@ -116,6 +116,20 @@ public class FileControllerTests(DatabaseFixture fixture, PlayerAppFactory facto
     }
 
     /// <summary>
+    /// The allow-list is matched without regard to case, so a diagram a tool saved as
+    /// <c>Network.SVG</c> uploads as <c>network.svg</c> does.
+    /// </summary>
+    [Fact]
+    public async Task Upload_matches_the_extension_in_any_case()
+    {
+        var (view, team) = await ViewWithTeam();
+
+        using var form = Upload(view.Id, team.Id, "Network.SVG", "<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
+
+        await AssertStatus(HttpStatusCode.Created, await RootClient.PostAsync("api/files", form, Ct));
+    }
+
+    /// <summary>
     /// A form with no <c>teamIds</c> part binds the list as null, which the service reads as "assigned
     /// to no team" and refuses.
     /// </summary>

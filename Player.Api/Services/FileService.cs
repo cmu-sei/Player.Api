@@ -299,7 +299,7 @@ namespace Player.Api.Services
             var valid = false;
             foreach (var ext in _fileUploadOptions.allowedExtensions)
             {
-                if (name.EndsWith(ext))
+                if (name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
                 {
                     valid = true;
                     break;
