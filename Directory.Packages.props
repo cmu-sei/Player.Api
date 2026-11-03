@@ -22,7 +22,7 @@
     <PackageVersion Include="Crucible.Common.ServiceDefaults" Version="0.0.3" />
     <PackageVersion Include="IdentityServer4.AccessTokenValidation" Version="3.0.1" />
     <PackageVersion Include="SharpZipLib" Version="1.4.2" />
-    <PackageVersion Include="TinCan" Version="1.3.0" />
+    <PackageVersion Include="TinCanStandard" Version="1.5.0" />
   </ItemGroup>
 
   <!-- EF Core and the providers used by the application. -->

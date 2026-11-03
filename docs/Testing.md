@@ -50,7 +50,7 @@ Coverage is a local diagnostic rather than a maintained project statistic. CI do
 - xUnit2000 - `Assert.Equal` with the expected value passed second.
 - xUnit2012 - `Assert.True` over a collection lookup, where `Assert.Contains` says what failed.
 
-Restore-time warnings stay warnings, through `WarningsNotAsErrors`. NU1901 to NU1904 are the NuGet audit, NU1701 reports TinCan's .NET Framework assets, and the test project's file adds NU1510. The known dependency deferrals and their review triggers are tracked in [DependencyDeferrals.md](DependencyDeferrals.md).
+Restore-time warnings stay warnings, through `WarningsNotAsErrors`. NU1901 to NU1904 are the NuGet audit, and the test project's file adds NU1510. The known dependency deferrals and their review triggers are tracked in [DependencyDeferrals.md](DependencyDeferrals.md).
 
 `.editorconfig` raises xUnit1004, so a test parked with `[Fact(Skip = "...")]` fails the build. Runtime conditional skips through `Assert.SkipWhen` remain available when a test has nothing meaningful to assert.
 

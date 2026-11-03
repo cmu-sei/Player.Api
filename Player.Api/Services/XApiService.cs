@@ -59,21 +59,21 @@ public class XApiService : IXApiService
 
         var account = new AgentAccount
         {
-            name = _user.Identities.First().Claims.First(c => c.Type == "sub")?.Value
+            Name = _user.Identities.First().Claims.First(c => c.Type == "sub")?.Value
         };
 
         var iss = _user.Identities.First().Claims.First(c => c.Type == "iss")?.Value;
         if (!string.IsNullOrWhiteSpace(_xApiOptions.IssuerUrl))
         {
-            account.homePage = new Uri(_xApiOptions.IssuerUrl);
+            account.HomePage = new Uri(_xApiOptions.IssuerUrl);
         }
         else if (iss.Contains("http"))
         {
-            account.homePage = new Uri(iss);
+            account.HomePage = new Uri(iss);
         }
         else
         {
-            account.homePage = new Uri("http://" + iss);
+            account.HomePage = new Uri("http://" + iss);
         }
 
         var userId = _user.GetId();
@@ -83,8 +83,8 @@ public class XApiService : IXApiService
 
         _agent = new Agent
         {
-            name = user?.Name ?? "Unknown User",
-            account = account
+            Name = user?.Name ?? "Unknown User",
+            Account = account
         };
     }
 
@@ -97,40 +97,40 @@ public class XApiService : IXApiService
     {
         var context = new Context
         {
-            registration = viewId,
-            platform = _xApiOptions.Platform,
-            language = "en-US"
+            Registration = viewId,
+            Platform = _xApiOptions.Platform,
+            Language = "en-US"
         };
 
         var contextActivities = new ContextActivities
         {
-            category = new List<Activity>
+            Category = new List<Activity>
             {
                 new Activity
                 {
-                    id = "https://crucible.sei.cmu.edu/xapi/profile/v1"
+                    Id = "https://crucible.sei.cmu.edu/xapi/profile/v1"
                 }
             }
         };
 
-        context.contextActivities = contextActivities;
+        context.ContextActivities = contextActivities;
 
         if (team != null)
         {
             var group = new Group
             {
-                name = team.Name ?? "Unnamed Team",
-                account = new AgentAccount
+                Name = team.Name ?? "Unnamed Team",
+                Account = new AgentAccount
                 {
-                    homePage = new Uri(_xApiOptions.UiUrl),
-                    name = team.Id.ToString()
+                    HomePage = new Uri(_xApiOptions.UiUrl),
+                    Name = team.Id.ToString()
                 },
-                member = new List<Agent> { _agent }
+                Member = new List<Agent> { _agent }
             };
-            context.team = group;
+            context.Team = group;
 
             // Retain the existing extension for consumers that use it.
-            context.extensions = new TinCan.Extensions(
+            context.Extensions = new TinCan.Extensions(
                 new Newtonsoft.Json.Linq.JObject
                 {
                     ["https://crucible.sei.cmu.edu/xapi/extensions/team"] = team.Id.ToString()
@@ -169,33 +169,33 @@ public class XApiService : IXApiService
                 .FirstOrDefaultAsync(vm => vm.ViewId == viewId && vm.UserId == userId, ct);
             var team = viewMembership?.PrimaryTeamMembership?.Team;
 
-            var verb = new Verb { id = new Uri("http://id.tincanapi.com/verb/viewed") };
-            verb.display = new LanguageMap();
-            verb.display.Add("en-US", "viewed");
+            var verb = new Verb { Id = new Uri("http://id.tincanapi.com/verb/viewed") };
+            verb.Display = new LanguageMap();
+            verb.Display.Add("en-US", "viewed");
 
-            var activity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
-            activity.definition = new ActivityDefinition
+            var activity = new Activity { Id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
+            activity.Definition = new ActivityDefinition
             {
-                type = new Uri("http://adlnet.gov/expapi/activities/simulation")
+                Type = new Uri("http://adlnet.gov/expapi/activities/simulation")
             };
-            activity.definition.name = new LanguageMap();
-            activity.definition.name.Add("en-US", view.Name ?? "Unnamed View");
-            activity.definition.description = new LanguageMap();
-            activity.definition.description.Add("en-US", view.Description ?? $"Exercise workspace for View {viewId}");
+            activity.Definition.Name = new LanguageMap();
+            activity.Definition.Name.Add("en-US", view.Name ?? "Unnamed View");
+            activity.Definition.Description = new LanguageMap();
+            activity.Definition.Description.Add("en-US", view.Description ?? $"Exercise workspace for View {viewId}");
 
             var statement = new Statement
             {
-                actor = _agent,
-                verb = verb,
-                target = activity,
-                context = BuildContext(viewId, team)
+                Actor = _agent,
+                Verb = verb,
+                Target = activity,
+                Context = BuildContext(viewId, team)
             };
 
             await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
             {
-                StatementJson = statement.ToJSON(true),
+                StatementJson = statement.ToJson(true),
                 Verb = "viewed",
-                ActivityId = activity.id,
+                ActivityId = activity.Id,
                 ViewId = viewId
             }, ct);
 
@@ -238,42 +238,42 @@ public class XApiService : IXApiService
                 ? appDisplayNames[applicationName.ToLower()]
                 : applicationName ?? "Unknown Application";
 
-            var verb = new Verb { id = new Uri("http://activitystrea.ms/schema/1.0/access") };
-            verb.display = new LanguageMap();
-            verb.display.Add("en-US", "accessed");
+            var verb = new Verb { Id = new Uri("http://activitystrea.ms/schema/1.0/access") };
+            verb.Display = new LanguageMap();
+            verb.Display.Add("en-US", "accessed");
 
             var encodedAppName = HttpUtility.UrlEncode(applicationName?.ToLower() ?? "unknown");
-            var activity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}/apps/{encodedAppName}" };
-            activity.definition = new ActivityDefinition
+            var activity = new Activity { Id = $"{_xApiOptions.ApiUrl}/views/{viewId}/apps/{encodedAppName}" };
+            activity.Definition = new ActivityDefinition
             {
-                type = new Uri("http://adlnet.gov/expapi/activities/module")
+                Type = new Uri("http://adlnet.gov/expapi/activities/module")
             };
-            activity.definition.name = new LanguageMap();
-            activity.definition.name.Add("en-US", displayName);
+            activity.Definition.Name = new LanguageMap();
+            activity.Definition.Name.Add("en-US", displayName);
 
             var contextObj = BuildContext(viewId, team);
 
             // Add parent context activity (the View)
-            var parentActivity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
-            parentActivity.definition = new ActivityDefinition
+            var parentActivity = new Activity { Id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
+            parentActivity.Definition = new ActivityDefinition
             {
-                type = new Uri("http://adlnet.gov/expapi/activities/simulation")
+                Type = new Uri("http://adlnet.gov/expapi/activities/simulation")
             };
-            contextObj.contextActivities.parent = new List<Activity> { parentActivity };
+            contextObj.ContextActivities.Parent = new List<Activity> { parentActivity };
 
             var statement = new Statement
             {
-                actor = _agent,
-                verb = verb,
-                target = activity,
-                context = contextObj
+                Actor = _agent,
+                Verb = verb,
+                Target = activity,
+                Context = contextObj
             };
 
             await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
             {
-                StatementJson = statement.ToJSON(true),
+                StatementJson = statement.ToJson(true),
                 Verb = "accessed",
-                ActivityId = activity.id,
+                ActivityId = activity.Id,
                 ViewId = viewId
             }, ct);
 
@@ -300,31 +300,31 @@ public class XApiService : IXApiService
                 return;
             }
 
-            var verb = new Verb { id = new Uri("http://adlnet.gov/expapi/verbs/attended") };
-            verb.display = new LanguageMap();
-            verb.display.Add("en-US", "attended");
+            var verb = new Verb { Id = new Uri("http://adlnet.gov/expapi/verbs/attended") };
+            verb.Display = new LanguageMap();
+            verb.Display.Add("en-US", "attended");
 
-            var activity = new Activity { id = $"{_xApiOptions.ApiUrl}/teams/{teamId}" };
-            activity.definition = new ActivityDefinition
+            var activity = new Activity { Id = $"{_xApiOptions.ApiUrl}/teams/{teamId}" };
+            activity.Definition = new ActivityDefinition
             {
-                type = new Uri("http://id.tincanapi.com/activitytype/team")
+                Type = new Uri("http://id.tincanapi.com/activitytype/team")
             };
-            activity.definition.name = new LanguageMap();
-            activity.definition.name.Add("en-US", team.Name ?? "Unnamed Team");
+            activity.Definition.Name = new LanguageMap();
+            activity.Definition.Name.Add("en-US", team.Name ?? "Unnamed Team");
 
             var statement = new Statement
             {
-                actor = _agent,
-                verb = verb,
-                target = activity,
-                context = BuildContext(viewId, team)
+                Actor = _agent,
+                Verb = verb,
+                Target = activity,
+                Context = BuildContext(viewId, team)
             };
 
             await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
             {
-                StatementJson = statement.ToJSON(true),
+                StatementJson = statement.ToJson(true),
                 Verb = "attended",
-                ActivityId = activity.id,
+                ActivityId = activity.Id,
                 ViewId = viewId
             }, ct);
 
@@ -352,33 +352,33 @@ public class XApiService : IXApiService
                 .FirstOrDefaultAsync(vm => vm.ViewId == viewId && vm.UserId == userId, ct);
             var team = viewMembership?.PrimaryTeamMembership?.Team;
 
-            var verb = new Verb { id = new Uri("http://adlnet.gov/expapi/verbs/terminated") };
-            verb.display = new LanguageMap();
-            verb.display.Add("en-US", "terminated");
+            var verb = new Verb { Id = new Uri("http://adlnet.gov/expapi/verbs/terminated") };
+            verb.Display = new LanguageMap();
+            verb.Display.Add("en-US", "terminated");
 
-            var activity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
-            activity.definition = new ActivityDefinition
+            var activity = new Activity { Id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
+            activity.Definition = new ActivityDefinition
             {
-                type = new Uri("http://adlnet.gov/expapi/activities/simulation")
+                Type = new Uri("http://adlnet.gov/expapi/activities/simulation")
             };
 
             var statement = new Statement
             {
-                actor = _agent,
-                verb = verb,
-                target = activity,
-                result = new Result
+                Actor = _agent,
+                Verb = verb,
+                Target = activity,
+                Result = new Result
                 {
-                    duration = duration
+                    Duration = duration
                 },
-                context = BuildContext(viewId, team)
+                Context = BuildContext(viewId, team)
             };
 
             await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
             {
-                StatementJson = statement.ToJSON(true),
+                StatementJson = statement.ToJson(true),
                 Verb = "terminated",
-                ActivityId = activity.id,
+                ActivityId = activity.Id,
                 ViewId = viewId
             }, ct);
 
@@ -405,41 +405,41 @@ public class XApiService : IXApiService
                 return;
             }
 
-            var verb = new Verb { id = new Uri("https://w3id.org/xapi/verbs/switched") };
-            verb.display = new LanguageMap();
-            verb.display.Add("en-US", "switched");
+            var verb = new Verb { Id = new Uri("https://w3id.org/xapi/verbs/switched") };
+            verb.Display = new LanguageMap();
+            verb.Display.Add("en-US", "switched");
 
-            var activity = new Activity { id = $"{_xApiOptions.ApiUrl}/teams/{teamId}" };
-            activity.definition = new ActivityDefinition
+            var activity = new Activity { Id = $"{_xApiOptions.ApiUrl}/teams/{teamId}" };
+            activity.Definition = new ActivityDefinition
             {
-                type = new Uri("http://id.tincanapi.com/activitytype/team")
+                Type = new Uri("http://id.tincanapi.com/activitytype/team")
             };
-            activity.definition.name = new LanguageMap();
-            activity.definition.name.Add("en-US", team.Name ?? "Unnamed Team");
+            activity.Definition.Name = new LanguageMap();
+            activity.Definition.Name.Add("en-US", team.Name ?? "Unnamed Team");
 
             var contextObj = BuildContext(viewId, team);
 
             // Add parent context activity (the View)
-            var parentActivity = new Activity { id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
-            parentActivity.definition = new ActivityDefinition
+            var parentActivity = new Activity { Id = $"{_xApiOptions.ApiUrl}/views/{viewId}" };
+            parentActivity.Definition = new ActivityDefinition
             {
-                type = new Uri("http://adlnet.gov/expapi/activities/simulation")
+                Type = new Uri("http://adlnet.gov/expapi/activities/simulation")
             };
-            contextObj.contextActivities.parent = new List<Activity> { parentActivity };
+            contextObj.ContextActivities.Parent = new List<Activity> { parentActivity };
 
             var statement = new Statement
             {
-                actor = _agent,
-                verb = verb,
-                target = activity,
-                context = contextObj
+                Actor = _agent,
+                Verb = verb,
+                Target = activity,
+                Context = contextObj
             };
 
             await _queueService.EnqueueAsync(new XApiQueuedStatementEntity
             {
-                StatementJson = statement.ToJSON(true),
+                StatementJson = statement.ToJson(true),
                 Verb = "switched",
-                ActivityId = activity.id,
+                ActivityId = activity.Id,
                 ViewId = viewId
             }, ct);
 

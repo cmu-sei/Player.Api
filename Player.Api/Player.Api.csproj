@@ -34,7 +34,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="SharpZipLib"/>
     <PackageReference Include="Crucible.Common.ServiceDefaults"/>
-    <PackageReference Include="TinCan"/>
+    <PackageReference Include="TinCanStandard"/>
   </ItemGroup>
   <!-- Security pins. Referenced only to raise a package that otherwise arrives through another
        dependency at a vulnerable version; the test project inherits them through its project
