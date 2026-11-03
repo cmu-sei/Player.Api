@@ -11,7 +11,8 @@ namespace Player.Api.Infrastructure.Mappings
     {
         public FileProfile()
         {
-            CreateMap<FileForm, FileEntity>();
+            // The rest serve the Views export and import and move to Mapperly with Views. FileService maps
+            // through FileMapper. The ReverseMap is kept because it also unflattens viewId onto View.Id.
             CreateMap<FileEntity, FileModel>().ReverseMap();
             CreateMap<FileEntity, FileDTO>();
             CreateMap<FileDTO, FileModel>();

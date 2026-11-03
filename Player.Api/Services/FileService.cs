@@ -1,7 +1,6 @@
 // Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-using AutoMapper;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Extensions;
@@ -9,6 +8,7 @@ using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Exceptions;
+using Player.Api.Infrastructure.Mappings;
 using Player.Api.ViewModels;
 using Player.Api.Options;
 using System;
@@ -42,16 +42,14 @@ namespace Player.Api.Services
         private readonly ClaimsPrincipal _user;
         private readonly FileUploadOptions _fileUploadOptions;
         private readonly PlayerContext _context;
-        private readonly IMapper _mapper;
         private readonly ITeamService _teamService;
 
-        public FileService(IPrincipal user, IPlayerAuthorizationService authService, FileUploadOptions fileOptions, PlayerContext context, IMapper mapper, ITeamService teamService)
+        public FileService(IPrincipal user, IPlayerAuthorizationService authService, FileUploadOptions fileOptions, PlayerContext context, ITeamService teamService)
         {
             _user = user as ClaimsPrincipal;
             _authorizationService = authService;
             _fileUploadOptions = fileOptions;
             _context = context;
-            _mapper = mapper;
             _teamService = teamService;
         }
 
@@ -81,14 +79,14 @@ namespace Player.Api.Services
 
                 var filePath = await uploadFile(fp, form.viewId, GetNameToStore(name));
 
-                var entity = _mapper.Map<FileEntity>(form);
+                var entity = form.ToEntity();
                 entity.Name = name;
                 entity.Path = filePath;
                 // ID is set here so we can return a list of the uploaded files without calling save changes more than once
                 entity.Id = Guid.NewGuid();
                 _context.Files.Add(entity);
 
-                models.Add(_mapper.Map<FileModel>(entity));
+                models.Add(entity.ToFileModel());
 
                 // Add file to list in view
                 viewEntity.Files.Add(entity);
@@ -107,7 +105,7 @@ namespace Player.Api.Services
                 .Include(f => f.View)
                 .ToListAsync();
 
-            return _mapper.Map<IEnumerable<FileModel>>(files);
+            return files.ToFileModels();
         }
 
         public async Task<IEnumerable<FileModel>> GetByViewAsync(Guid viewId, bool includeAllViewFiles, CancellationToken ct)
@@ -135,7 +133,7 @@ namespace Player.Api.Services
                     .Include(f => f.View)
                     .ToListAsync(ct);
 
-                return _mapper.Map<IEnumerable<FileModel>>(allViewFiles);
+                return allViewFiles.ToFileModels();
             }
 
             var teams = await _teamService.GetByViewIdForCurrentUserAsync(viewId, ct);
@@ -168,7 +166,7 @@ namespace Player.Api.Services
                 .Where(f => f.TeamIds.Contains(teamId))
                 .ToList();
 
-            return _mapper.Map<IEnumerable<FileModel>>(files);
+            return files.ToFileModels();
         }
 
         public async Task<FileModel> GetByIdAsync(Guid fileId, CancellationToken ct)
@@ -183,7 +181,7 @@ namespace Player.Api.Services
 
             await EnsureAccessFile(file);
 
-            return _mapper.Map<FileModel>(file);
+            return file.ToFileModel();
         }
 
         public async Task<Tuple<FileStream, string>> DownloadAsync(Guid fileId, CancellationToken ct)
@@ -251,7 +249,7 @@ namespace Player.Api.Services
 
             _context.Update(entity);
             await _context.SaveChangesAsync(ct);
-            return _mapper.Map<FileModel>(entity);
+            return entity.ToFileModel();
         }
 
         public async Task<bool> DeleteAsync(Guid fileId, CancellationToken ct)
