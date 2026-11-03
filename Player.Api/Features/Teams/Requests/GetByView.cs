@@ -6,8 +6,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -20,6 +18,7 @@ using Player.Api.Features.Views;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions;
+using Player.Api.Services;
 using Player.Api.ViewModels;
 
 namespace Player.Api.Features.Teams;
@@ -50,7 +49,7 @@ public class GetByView
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, Team[]>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IUserClaimsService claimsService) : BaseHandler<Query, Team[]>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken);
@@ -66,10 +65,10 @@ public class GetByView
 
             var teams = await db.Teams
                 .Where(e => e.ViewId == request.ViewId)
-                .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)
+                .ProjectToTeamDto()
                 .ToArrayAsync(cancellationToken);
 
-            return mapper.Map<Team[]>(teams);
+            return teams.ToTeams(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

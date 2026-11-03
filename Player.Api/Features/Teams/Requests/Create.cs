@@ -7,8 +7,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -23,6 +21,7 @@ using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions;
 using Player.Api.Options;
+using Player.Api.Services;
 
 namespace Player.Api.Features.Teams;
 
@@ -62,7 +61,7 @@ public class Create
                          IIdentityResolver identityResolver,
                          IPlayerAuthorizationService authorizationService,
                          PlayerContext db,
-                         IMapper mapper,
+                         IUserClaimsService claimsService,
                          RoleOptions roleOptions) : BaseHandler<Command, Team>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
@@ -76,7 +75,7 @@ public class Create
             if (viewEntity == null)
                 throw new EntityNotFoundException<View>();
 
-            var teamEntity = mapper.Map<TeamEntity>(request);
+            var teamEntity = request.ToEntity();
             teamEntity.ViewId = viewEntity.Id;
 
             if (request.Id.HasValue && request.Id.Value != Guid.Empty)
@@ -98,10 +97,10 @@ public class Create
             logger.LogWarning($"Team {teamEntity.Name} ({teamEntity.Id}) in View {teamEntity.ViewId} created by {identityResolver.GetId()}");
 
             var team = await db.Teams
-                .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)
+                .ProjectToTeamDto()
                 .SingleOrDefaultAsync(o => o.Id == teamEntity.Id, cancellationToken);
 
-            return mapper.Map<Team>(team);
+            return team.ToTeam(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

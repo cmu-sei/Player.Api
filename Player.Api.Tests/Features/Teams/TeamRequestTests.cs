@@ -14,7 +14,7 @@ namespace Player.Api.Tests.Features.Teams;
 
 /// <summary>
 /// Covers the <c>Teams</c> feature over HTTP: the real routes, the real middleware, the real claims
-/// transformer, the real handlers, the real AutoMapper profiles, a real database.
+/// transformer, the real handlers, the real mappers, a real database.
 /// </summary>
 public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     : ApiTestBase(fixture, factory)
@@ -161,6 +161,31 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
         Assert.Equal("Readable", got.Name);
         Assert.Equal("Observer", got.RoleName);
+    }
+
+    /// <summary>
+    /// The two collection members the projection builds through the join tables: the permission each
+    /// assignment points at, not the assignment, and the target of each scope.
+    /// </summary>
+    [Fact]
+    public async Task Get_returns_the_team_with_its_assigned_permissions_and_scoped_teams()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Scoping");
+        var target = TestData.Team(view.Id, "Target");
+        await Seed(
+            view,
+            team,
+            target,
+            new TeamPermissionAssignmentEntity(team.Id, TestData.TeamPermissions.UploadViewIsos) { Id = Guid.NewGuid() },
+            TestData.TeamPermissionScope(team.Id, target.Id));
+
+        var got = await ReadAsync<Team>(await RootClient.GetAsync($"api/teams/{team.Id}", Ct));
+
+        var permission = Assert.Single(got.Permissions);
+        Assert.Equal(TestData.TeamPermissions.UploadViewIsos, permission.Id);
+        Assert.Equal("UploadViewIsos", permission.Name);
+        Assert.Equal([target.Id], got.ScopedTeamIds);
     }
 
     /// <summary>

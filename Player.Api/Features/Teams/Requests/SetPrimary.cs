@@ -7,8 +7,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -54,7 +52,7 @@ public class SetPrimary
         }
     }
 
-    public class Handler(IUserClaimsService claimsService, IIdentityResolver identityResolver, PlayerContext db, IMapper mapper, IXApiService xApiService) : BaseHandler<Command, Team>
+    public class Handler(IUserClaimsService claimsService, IIdentityResolver identityResolver, PlayerContext db, IXApiService xApiService) : BaseHandler<Command, Team>
     {
         public override Task<bool> Authorize(Command request, CancellationToken cancellationToken)
         {
@@ -94,9 +92,9 @@ public class SetPrimary
             await xApiService.EmitTeamSwitchedAsync(teamEntity.ViewId, request.TeamId, cancellationToken);
 
             var team = await db.Teams
-                .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)
+                .ProjectToTeamDto()
                 .SingleOrDefaultAsync(o => o.Id == request.TeamId, cancellationToken);
-            return mapper.Map<Team>(team);
+            return team.ToTeam(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

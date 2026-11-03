@@ -20,7 +20,7 @@ using XApiOptions = Player.Api.Infrastructure.Options.XApiOptions;
 namespace Player.Api.Tests.Support;
 
 /// <summary>
-/// The application's services without the web host: real services, real AutoMapper profiles and the
+/// The application's services without the web host: real services, real mappers and the
 /// real authorization stack, over one test's database and acting as one test's user. Resolve something
 /// out of it and call the service directly.
 /// </summary>
@@ -108,12 +108,12 @@ public sealed class ApiTestHost : IDisposable
     /// The real profiles, so a handler test fails on a broken map.
     /// </summary>
     /// <remarks>
-    /// Built over the container rather than reusing the shared <see cref="TestMapper.Mapper"/> because
-    /// some maps delegate a member to a value resolver with constructor dependencies —
-    /// <c>Teams.MappingProfile</c> resolves <c>IsMember</c> and <c>IsPrimary</c> through the
-    /// authorization stack. Registering the resolvers is what <c>AddAutoMapper</c> does in production;
-    /// without it AutoMapper falls back to <see cref="Activator"/> and the map fails on the missing
-    /// parameterless constructor.
+    /// Built over the container rather than reusing the shared <see cref="TestMapper.Mapper"/> so that a
+    /// map can delegate a member to a value resolver with constructor dependencies. Registering the
+    /// resolvers is what <c>AddAutoMapper</c> does in production; without it AutoMapper falls back to
+    /// <see cref="Activator"/> and the map fails on the missing parameterless constructor. No profile
+    /// uses one now — the Teams resolvers became <c>TeamMapper.ToTeam</c> — and this goes when
+    /// AutoMapper does.
     /// </remarks>
     private static void AddMapper(IServiceCollection services)
     {

@@ -6,8 +6,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -21,6 +19,7 @@ using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions;
+using Player.Api.Services;
 using Player.Api.ViewModels;
 
 namespace Player.Api.Features.Teams;
@@ -55,7 +54,7 @@ public class Edit
         }
     }
 
-    public class Handler(ILogger<Edit> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, Team>
+    public class Handler(ILogger<Edit> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IUserClaimsService claimsService) : BaseHandler<Command, Team>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<TeamEntity>(request.Id, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
@@ -69,16 +68,16 @@ public class Edit
                 throw new EntityNotFoundException<Team>();
 
             var newRole = request.RoleId == teamToUpdate.RoleId ? "" : request.RoleId.ToString();
-            mapper.Map(request, teamToUpdate);
+            request.ApplyTo(teamToUpdate);
             await db.SaveChangesAsync(cancellationToken);
 
             logger.LogWarning($"Team {teamToUpdate.Name} ({teamToUpdate.Id}) in View {teamToUpdate.ViewId} updated by {identityResolver.GetId()} added Role: {newRole}");
 
             var team = await db.Teams
-                .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)
+                .ProjectToTeamDto()
                 .SingleOrDefaultAsync(o => o.Id == teamToUpdate.Id, cancellationToken);
 
-            return mapper.Map<Team>(team);
+            return team.ToTeam(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

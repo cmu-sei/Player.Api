@@ -2,73 +2,27 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using AutoMapper;
-using Microsoft.AspNetCore.Authorization;
 using Player.Api.Data.Data.Models;
-using Player.Api.Infrastructure.Authorization;
-using Player.Api.Services;
 using System.Linq;
-using System.Security.Claims;
 
 namespace Player.Api.Features.Teams;
 
+/// <summary>
+/// The Teams maps still on AutoMapper. The rest of the feature maps through <see cref="TeamMapper"/>.
+/// </summary>
+/// <remarks>
+/// These two are not used by the Teams feature. The Views export and import maps (ViewEntity to
+/// ViewExportDTO and ViewExport to ViewEntity) use them for the nested teams, so they move to
+/// Mapperly together with the Views feature.
+/// </remarks>
 public class MappingProfile : Profile
 {
     public MappingProfile()
     {
-        CreateMap<Team, TeamEntity>();
-        CreateMap<TeamForm, TeamEntity>();
-
-        CreateMap<Create.Command, TeamEntity>();
-        CreateMap<Edit.Command, TeamEntity>();
-
-        CreateMap<TeamEntity, TeamDTO>()
-            .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role.Name))
-            .ForMember(dest => dest.Permissions, opt => opt.MapFrom(src => src.Permissions.Select(x => x.Permission)))
-            .ForMember(dest => dest.ScopedTeamIds, opt => opt.MapFrom(src => src.Scopes.Select(x => x.TargetTeamId)));
-
         CreateMap<TeamEntity, TeamExport>()
             .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role.Name))
             .ForMember(dest => dest.Permissions, opt => opt.MapFrom(src => src.Permissions.Select(x => x.Permission)))
             .ForMember(dest => dest.ScopedTeamIds, opt => opt.MapFrom(src => src.Scopes.Select(x => x.TargetTeamId)));
-
-        CreateMap<TeamDTO, TeamEntity>();
         CreateMap<TeamExport, TeamEntity>();
-        CreateMap<TeamDTO, Team>()
-            .ForMember(dest => dest.IsMember, opt => opt.MapFrom<TeamMemberResolver>())
-            .ForMember(dest => dest.IsPrimary, opt => opt.MapFrom<PrimaryTeamResolver>());
-    }
-}
-
-public class TeamMemberResolver : IValueResolver<TeamDTO, Team, bool>
-{
-    private IAuthorizationService _authorizationService;
-    private ClaimsPrincipal _user;
-
-    public TeamMemberResolver(IAuthorizationService authorizationService, IUserClaimsService userClaimsService)
-    {
-        _authorizationService = authorizationService;
-        _user = userClaimsService.GetCurrentClaimsPrincipal();
-    }
-
-    public bool Resolve(TeamDTO source, Team destination, bool member, ResolutionContext context)
-    {
-        return _authorizationService.AuthorizeAsync(_user, null, new TeamMemberRequirement(source.Id)).Result.Succeeded;
-    }
-}
-
-public class PrimaryTeamResolver : IValueResolver<TeamDTO, Team, bool>
-{
-    private IAuthorizationService _authorizationService;
-    private ClaimsPrincipal _user;
-
-    public PrimaryTeamResolver(IAuthorizationService authorizationService, IUserClaimsService userClaimsService)
-    {
-        _authorizationService = authorizationService;
-        _user = userClaimsService.GetCurrentClaimsPrincipal();
-    }
-
-    public bool Resolve(TeamDTO source, Team destination, bool member, ResolutionContext context)
-    {
-        return _authorizationService.AuthorizeAsync(_user, null, new PrimaryTeamRequirement(source.Id)).Result.Succeeded;
     }
 }

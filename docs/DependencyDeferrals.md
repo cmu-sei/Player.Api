@@ -12,7 +12,7 @@ dotnet list Player.Api.sln package --vulnerable --include-transitive
 
 AutoMapper 13.0.1 has a high-severity advisory. The application is pinned because supported later releases require a commercial license.
 
-Revisit when the project approves a licensed release or replaces AutoMapper. Any migration must cover the mapping configuration tests and the custom resolver registrations in the test host.
+AutoMapper is being replaced by [Mapperly](https://mapperly.riok.app/), a source generator, one feature at a time; shared conventions are in `Player.Api/Infrastructure/Mappings/MapperDefaults.cs`. Remove the package once no profile remains, along with the mapping configuration tests and the resolver registrations in the test host.
 
 ## MediatR 12
 

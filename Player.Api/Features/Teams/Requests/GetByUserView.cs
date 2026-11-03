@@ -6,8 +6,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -21,6 +19,7 @@ using Player.Api.Features.Views;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions;
+using Player.Api.Services;
 using Player.Api.ViewModels;
 
 namespace Player.Api.Features.Teams;
@@ -72,7 +71,7 @@ public class GetByUserView
         }
     }
 
-    public class Handler(IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, Team[]>
+    public class Handler(IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IUserClaimsService claimsService) : BaseHandler<Query, Team[]>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             identityResolver.GetId() == request.UserId ||
@@ -101,13 +100,13 @@ public class GetByUserView
                 var visibility = await authorizationService.GetPrimaryVisibilityContext(request.ViewId, cancellationToken);
                 teamQuery = db.Teams
                     .Where(t => t.ViewId == request.ViewId && visibility.TeamIds.Contains(t.Id))
-                    .ProjectTo<TeamDTO>(mapper.ConfigurationProvider);
+                    .ProjectToTeamDto();
             }
             else if (await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken))
             {
                 teamQuery = db.Teams
                     .Where(t => t.ViewId == request.ViewId)
-                    .ProjectTo<TeamDTO>(mapper.ConfigurationProvider);
+                    .ProjectToTeamDto();
             }
             else
             {
@@ -120,12 +119,12 @@ public class GetByUserView
 
                 teamQuery = db.Teams
                     .Where(t => t.ViewId == request.ViewId && teamIds.Contains(t.Id))
-                    .ProjectTo<TeamDTO>(mapper.ConfigurationProvider);
+                    .ProjectToTeamDto();
             }
 
             var teams = await teamQuery.ToListAsync(cancellationToken);
 
-            return mapper.Map<Team[]>(teams);
+            return teams.ToTeams(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }
