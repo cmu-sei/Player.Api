@@ -7,8 +7,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -54,7 +52,7 @@ public class Edit
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper, RoleOptions roleOptions) : BaseHandler<Command, TeamRole>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, RoleOptions roleOptions) : BaseHandler<Command, TeamRole>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ManageRoles], [], [], cancellationToken);
@@ -79,11 +77,11 @@ public class Edit
                         $"or {nameof(roleOptions.DefaultViewCreatorRole)} ({roleOptions.DefaultViewCreatorRole})");
             }
 
-            mapper.Map(request, roleToUpdate);
+            request.ApplyTo(roleToUpdate);
             await db.SaveChangesAsync(cancellationToken);
 
             return await db.TeamRoles
-                .ProjectTo<TeamRole>(mapper.ConfigurationProvider)
+                .ProjectToTeamRole()
                 .SingleOrDefaultAsync(o => o.Id == request.Id, cancellationToken);
         }
     }

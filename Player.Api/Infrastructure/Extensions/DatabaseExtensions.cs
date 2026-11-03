@@ -20,7 +20,9 @@ using AutoMapper;
 using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Player.Api.Features.Permissions;
+using Player.Api.Features.Roles;
 using Player.Api.Features.TeamPermissions;
+using Player.Api.Features.TeamRoles;
 using Player.Api.Features.Views;
 using System.Threading;
 using System.Text.Json;
@@ -102,7 +104,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbRoles.Any(x => x.Name == role.Name))
                     {
-                        var newRole = mapper.Map<RoleEntity>(role);
+                        var newRole = role.ToEntity();
                         newRole.Permissions = [];
                         context.Roles.Add(newRole);
                         context.SaveChanges();
@@ -148,7 +150,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbTeamRoles.Any(x => x.Name == teamRole.Name))
                     {
-                        var newTeamRole = mapper.Map<TeamRoleEntity>(teamRole);
+                        var newTeamRole = teamRole.ToEntity();
                         newTeamRole.Permissions = [];
                         context.TeamRoles.Add(newTeamRole);
                         context.SaveChanges();

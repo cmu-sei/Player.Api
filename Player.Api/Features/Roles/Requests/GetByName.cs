@@ -4,8 +4,6 @@
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -46,7 +44,7 @@ public class GetByName
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, Role>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Query, Role>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ViewRoles, SystemPermission.ViewUsers], [], [], cancellationToken);
@@ -54,7 +52,7 @@ public class GetByName
         public override async Task<Role> HandleRequest(Query request, CancellationToken cancellationToken)
         {
             var item = await db.Roles
-                .ProjectTo<Role>(mapper.ConfigurationProvider)
+                .ProjectToRole()
                 .SingleOrDefaultAsync(o => o.Name == request.Name);
 
             if (item == null)

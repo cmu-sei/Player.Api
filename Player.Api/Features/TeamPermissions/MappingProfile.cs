@@ -10,8 +10,8 @@ namespace Player.Api.Features.TeamPermissions
     {
         public MappingProfile()
         {
-            // Nested by the TeamRoles map and the Teams export map (TeamEntity to TeamExport). The
-            // feature itself maps through TeamPermissionMapper; this goes when both have moved to Mapperly.
+            // Nested by the Teams export map (TeamEntity to TeamExport). The feature itself maps through
+            // TeamPermissionMapper; this goes when the export maps move to Mapperly with Views.
             CreateMap<TeamPermissionEntity, TeamPermissionModel>();
         }
     }

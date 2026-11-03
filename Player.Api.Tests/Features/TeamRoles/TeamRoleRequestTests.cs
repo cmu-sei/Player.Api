@@ -82,6 +82,20 @@ public class TeamRoleRequestTests(DatabaseFixture fixture, PlayerAppFactory fact
         Assert.Equal("Observer", got.Name);
     }
 
+    /// <summary>The permission each assignment points at, not the assignment.</summary>
+    [Fact]
+    public async Task Get_returns_the_role_with_its_assigned_permissions()
+    {
+        var role = TestData.TeamRole();
+        await Seed(role, new TeamRolePermissionEntity(role.Id, TestData.TeamPermissions.UploadViewIsos) { Id = Guid.NewGuid() });
+
+        var got = await ReadAsync<TeamRole>(await RootClient.GetAsync($"api/team-roles/{role.Id}", Ct));
+
+        var permission = Assert.Single(got.Permissions);
+        Assert.Equal(TestData.TeamPermissions.UploadViewIsos, permission.Id);
+        Assert.Equal("UploadViewIsos", permission.Name);
+    }
+
     [Fact]
     public async Task Get_reports_a_missing_role_as_not_found()
     {

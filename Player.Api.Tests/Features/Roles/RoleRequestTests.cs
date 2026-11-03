@@ -108,6 +108,20 @@ public class RoleRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal("Administrator", got.Name);
     }
 
+    /// <summary>The permission each assignment points at, not the assignment.</summary>
+    [Fact]
+    public async Task Get_returns_the_role_with_its_assigned_permissions()
+    {
+        var role = TestData.Role();
+        await Seed(role, new RolePermissionEntity(role.Id, TestData.Permissions.ViewNetworks) { Id = Guid.NewGuid() });
+
+        var got = await ReadAsync<Role>(await RootClient.GetAsync($"api/roles/{role.Id}", Ct));
+
+        var permission = Assert.Single(got.Permissions);
+        Assert.Equal(TestData.Permissions.ViewNetworks, permission.Id);
+        Assert.Equal("ViewNetworks", permission.Name);
+    }
+
     [Fact]
     public async Task Get_reports_a_missing_role_as_not_found()
     {
