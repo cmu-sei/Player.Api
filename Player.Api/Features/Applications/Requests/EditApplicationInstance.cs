@@ -7,8 +7,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -52,7 +50,7 @@ public class EditApplicationInstance
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, ApplicationInstance>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, ApplicationInstance>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<ApplicationInstanceEntity>(request.Id, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
@@ -76,11 +74,11 @@ public class EditApplicationInstance
             if (instanceToUpdate.Team.ViewId != application.ViewId)
                 throw new ConflictException("The Team and Application must belong to the same View.");
 
-            mapper.Map(request, instanceToUpdate);
+            request.ApplyTo(instanceToUpdate);
             await db.SaveChangesAsync(cancellationToken);
 
             var instance = await db.ApplicationInstances
-                .ProjectTo<ApplicationInstance>(mapper.ConfigurationProvider)
+                .ProjectToApplicationInstance()
                 .SingleOrDefaultAsync(i => i.Id == instanceToUpdate.Id, cancellationToken);
 
             return instance;

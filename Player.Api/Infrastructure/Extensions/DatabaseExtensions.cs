@@ -16,9 +16,9 @@ using Player.Api.Infrastructure.Authorization;
 using System.Collections.Generic;
 using Player.Api.ViewModels.Webhooks;
 using Player.Api.Data.Data.Models.Webhooks;
-using AutoMapper;
 using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Player.Api.Features.Applications;
 using Player.Api.Features.Permissions;
 using Player.Api.Features.Roles;
 using Player.Api.Features.TeamPermissions;
@@ -44,7 +44,6 @@ namespace Player.Api.Extensions
                     var databaseOptions = services.GetService<DatabaseOptions>();
                     var ctx = services.GetRequiredService<PlayerContext>();
                     var seedDataOptions = services.GetService<SeedDataOptions>();
-                    var mapper = services.GetRequiredService<IMapper>();
                     var viewImporter = services.GetRequiredService<ViewImporter>();
 
                     if (ctx != null)
@@ -63,7 +62,7 @@ namespace Player.Api.Extensions
                             ctx.Database.EnsureCreated();
                         }
 
-                        ProcessSeedDataOptions(seedDataOptions, ctx, mapper, viewImporter);
+                        ProcessSeedDataOptions(seedDataOptions, ctx, viewImporter);
                     }
 
                 }
@@ -80,7 +79,7 @@ namespace Player.Api.Extensions
             return webHost;
         }
 
-        private static void ProcessSeedDataOptions(SeedDataOptions options, PlayerContext context, IMapper mapper, ViewImporter viewImporter)
+        private static void ProcessSeedDataOptions(SeedDataOptions options, PlayerContext context, ViewImporter viewImporter)
         {
             if (options.Permissions.Any())
             {
@@ -228,7 +227,7 @@ namespace Player.Api.Extensions
 
                     if (dbTemplate == null)
                     {
-                        var applicationTemplateEntity = mapper.Map<ApplicationTemplateEntity>(applicationTemplate);
+                        var applicationTemplateEntity = applicationTemplate.ToEntity();
                         context.ApplicationTemplates.Add(applicationTemplateEntity);
                     }
                 }

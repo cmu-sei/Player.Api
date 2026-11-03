@@ -12,8 +12,6 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -69,7 +67,7 @@ public class ExportApplicationTemplates
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IArchiveService archiveService, IMapper mapper, IHttpClientFactory httpClientFactory) : BaseHandler<Query, ArchiveResult>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IArchiveService archiveService, IHttpClientFactory httpClientFactory) : BaseHandler<Query, ArchiveResult>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ViewApplications], [], [], cancellationToken);
@@ -84,7 +82,7 @@ public class ExportApplicationTemplates
             }
 
             var items = await query
-                .ProjectTo<ApplicationTemplate>(mapper.ConfigurationProvider)
+                .ProjectToApplicationTemplate()
                 .ToListAsync(cancellationToken);
 
             var data = new Dictionary<string, object>();

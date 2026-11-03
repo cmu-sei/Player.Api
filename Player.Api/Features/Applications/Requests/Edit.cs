@@ -6,7 +6,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -50,7 +49,7 @@ public class Edit
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, Application>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, Application>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<ApplicationEntity>(request.Id, [SystemPermission.ManageApplications], [ViewPermission.ManageView], [], cancellationToken);
@@ -62,12 +61,12 @@ public class Edit
             if (applicationToUpdate == null)
                 throw new EntityNotFoundException<Application>();
 
-            mapper.Map(request, applicationToUpdate);
+            request.ApplyTo(applicationToUpdate);
 
             db.Applications.Update(applicationToUpdate);
             await db.SaveChangesAsync(cancellationToken);
 
-            return mapper.Map<Application>(applicationToUpdate);
+            return applicationToUpdate.ToApplication();
         }
     }
 }

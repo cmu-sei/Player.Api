@@ -84,9 +84,9 @@ public class MappingConfigurationTests
     /// <para>
     /// Nothing in this application asks for <c>MemberList.None</c>; every entry below is a
     /// <c>ReverseMap()</c> product, which is how AutoMapper configures the reversed direction. That is
-    /// worth knowing before converting the remaining inbound maps to <c>MemberList.Source</c>: two of
-    /// these are inbound, and they cannot opt in without unwinding the <c>ReverseMap()</c> that created
-    /// them into two explicit <c>CreateMap</c> calls.
+    /// worth knowing before converting the remaining inbound maps to <c>MemberList.Source</c>: one of
+    /// these is inbound, and it cannot opt in without unwinding the <c>ReverseMap()</c> that created it
+    /// into two explicit <c>CreateMap</c> calls.
     /// </para>
     /// <para>
     /// Adding a <c>ReverseMap()</c> will fail this test. That is the intent — the new pair needs a
@@ -105,7 +105,6 @@ public class MappingConfigurationTests
         Assert.Equal(
             [
                 "ApplicationInstanceEntity -> ApplicationInstanceExport",
-                "ApplicationTemplate -> ApplicationTemplateEntity",
                 "FileModel -> FileEntity",
             ],
             unvalidatable);

@@ -7,7 +7,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -52,7 +51,7 @@ public class Create
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, Application>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, Application>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ManageApplications], [ViewPermission.ManageView], [], cancellationToken);
@@ -64,12 +63,13 @@ public class Create
             if (!viewExists)
                 throw new EntityNotFoundException<View>();
 
-            var applicationEntity = mapper.Map<ApplicationEntity>(request);
+            var applicationEntity = request.ToEntity();
+            applicationEntity.ViewId = request.ViewId;
 
             db.Applications.Add(applicationEntity);
             await db.SaveChangesAsync(cancellationToken);
 
-            var application = mapper.Map<Application>(applicationEntity);
+            var application = applicationEntity.ToApplication();
             return application;
         }
     }

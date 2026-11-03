@@ -9,7 +9,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -61,7 +60,7 @@ public class ImportApplicationTemplates
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IArchiveService archiveService, IMapper mapper) : BaseHandler<Command, ImportApplicationTemplatesResult>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IArchiveService archiveService) : BaseHandler<Command, ImportApplicationTemplatesResult>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ManageApplications], [], [], cancellationToken);
@@ -90,14 +89,14 @@ public class ImportApplicationTemplates
 
                 if (dbTemplate == null)
                 {
-                    var applicationTemplateEntity = mapper.Map<ApplicationTemplateEntity>(applicationTemplate);
+                    var applicationTemplateEntity = applicationTemplate.ToEntity();
                     db.ApplicationTemplates.Add(applicationTemplateEntity);
                 }
                 else
                 {
                     if (request.OverWriteExisting)
                     {
-                        mapper.Map(applicationTemplate, dbTemplate);
+                        applicationTemplate.ApplyTo(dbTemplate);
                     }
                     else
                     {

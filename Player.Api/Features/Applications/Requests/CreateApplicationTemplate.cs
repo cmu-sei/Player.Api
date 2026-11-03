@@ -8,8 +8,6 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -59,19 +57,19 @@ public class CreateApplicationTemplate
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, ApplicationTemplate>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, ApplicationTemplate>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ManageApplications], cancellationToken);
 
         public override async Task<ApplicationTemplate> HandleRequest(Command request, CancellationToken cancellationToken)
         {
-            var templateEntity = mapper.Map<ApplicationTemplateEntity>(request);
+            var templateEntity = request.ToEntity();
 
             db.ApplicationTemplates.Add(templateEntity);
             await db.SaveChangesAsync(cancellationToken);
 
-            return mapper.Map<ApplicationTemplate>(templateEntity);
+            return templateEntity.ToApplicationTemplate();
         }
     }
 }

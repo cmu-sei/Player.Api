@@ -7,8 +7,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -69,7 +67,7 @@ public class MoveApplicationInstance
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, IEnumerable<ApplicationInstance>>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, IEnumerable<ApplicationInstance>>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<ApplicationInstanceEntity>(request.Id, [SystemPermission.ManageViews], [ViewPermission.ManageView], [TeamPermission.ManageTeam], cancellationToken);
@@ -139,7 +137,7 @@ public class MoveApplicationInstance
             var instances = await db.ApplicationInstances
                 .Where(x => x.TeamId == instanceToUpdate.TeamId)
                 .OrderBy(x => x.DisplayOrder)
-                .ProjectTo<ApplicationInstance>(mapper.ConfigurationProvider)
+                .ProjectToApplicationInstance()
                 .ToArrayAsync(cancellationToken);
 
             return instances;

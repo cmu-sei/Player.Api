@@ -9,50 +9,15 @@ namespace Player.Api.Features.Applications
 {
     public class MappingProfile : Profile
     {
+        /// <summary>
+        /// The application maps still on AutoMapper: the Views export and import nest them. The feature
+        /// itself maps through <see cref="ApplicationMapper"/>, and these move to Mapperly with Views.
+        /// </summary>
         public MappingProfile()
         {
-            CreateMap<ApplicationTemplateEntity, ApplicationTemplate>().ReverseMap();
-            CreateMap<CreateApplicationTemplate.Command, ApplicationTemplateEntity>();
-            CreateMap<EditApplicationTemplate.Command, ApplicationTemplateEntity>();
-
-            CreateMap<ApplicationEntity, Application>();
             CreateMap<ApplicationExport, ApplicationEntity>();
             CreateMap<ApplicationEntity, ApplicationExport>()
                 .ForMember(dest => dest.ApplicationTemplateName, opt => opt.MapFrom(src => src.Template != null ? src.Template.Name : null));
-
-            CreateMap<Create.Command, ApplicationEntity>();
-            CreateMap<Edit.Command, ApplicationEntity>();
-
-            CreateMap<CreateApplicationInstance.Command, ApplicationInstanceEntity>();
-            CreateMap<EditApplicationInstance.Command, ApplicationInstanceEntity>();
-
-            CreateMap<ApplicationInstanceEntity, ApplicationInstance>()
-                .ForMember(dest => dest.Name, opt => opt.MapFrom(src =>
-                    (src.Application.Name ?? src.Application.Template.Name ?? string.Empty)
-                        .Replace("{viewId}", src.Application.ViewId.ToString())
-                        .Replace("{viewName}", src.Application.View.Name ?? string.Empty)
-                        .Replace("{teamId}", src.TeamId.ToString())
-                        .Replace("{teamName}", src.Team.Name ?? string.Empty)))
-
-                .ForMember(dest => dest.Icon, opt => opt.MapFrom(src =>
-                    src.Application.Icon ?? (src.Application.Template != null ? src.Application.Template.Icon : string.Empty)))
-
-                .ForMember(dest => dest.Embeddable, opt => opt.MapFrom(src =>
-                    src.Application.Embeddable ?? (src.Application.Template != null ? src.Application.Template.Embeddable : false)))
-
-                .ForMember(dest => dest.LoadInBackground, opt => opt.MapFrom(src =>
-                    src.Application.LoadInBackground ?? (src.Application.Template != null ? src.Application.Template.LoadInBackground : false)))
-
-                .ForMember(dest => dest.Url, opt => opt.MapFrom(src =>
-                    (src.Application.Url ?? src.Application.Template.Url ?? string.Empty)
-                        .Replace("{viewId}", src.Application.ViewId.ToString())
-                        .Replace("{viewName}", src.Application.View.Name != null ? Uri.EscapeDataString(src.Application.View.Name) : string.Empty)
-                        .Replace("{teamId}", src.TeamId.ToString())
-                        .Replace("{teamName}", src.Team.Name != null ? Uri.EscapeDataString(src.Team.Name) : string.Empty)))
-
-                .ForMember(dest => dest.ViewId, opt => opt.MapFrom(src =>
-                    src.Application.ViewId));
-
             CreateMap<ApplicationInstanceExport, ApplicationInstanceEntity>().ReverseMap();
         }
     }
