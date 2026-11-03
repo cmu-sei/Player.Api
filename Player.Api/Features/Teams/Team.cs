@@ -24,13 +24,6 @@ public class Team
     public bool IsPrimary { get; set; }
 }
 
-public class TeamForm
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; }
-    public Guid? RoleId { get; set; }
-}
-
 /// <summary>A team as written to and read from a view export file.</summary>
 public class TeamExport
 {
