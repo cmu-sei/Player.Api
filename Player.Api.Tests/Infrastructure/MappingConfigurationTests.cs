@@ -84,7 +84,7 @@ public class MappingConfigurationTests
     /// <para>
     /// Nothing in this application asks for <c>MemberList.None</c>; every entry below is a
     /// <c>ReverseMap()</c> product, which is how AutoMapper configures the reversed direction. That is
-    /// worth knowing before converting the remaining inbound maps to <c>MemberList.Source</c>: three of
+    /// worth knowing before converting the remaining inbound maps to <c>MemberList.Source</c>: two of
     /// these are inbound, and they cannot opt in without unwinding the <c>ReverseMap()</c> that created
     /// them into two explicit <c>CreateMap</c> calls.
     /// </para>
@@ -107,7 +107,6 @@ public class MappingConfigurationTests
                 "ApplicationInstanceEntity -> ApplicationInstanceExport",
                 "ApplicationTemplate -> ApplicationTemplateEntity",
                 "FileModel -> FileEntity",
-                "Notification -> NotificationEntity",
             ],
             unvalidatable);
     }

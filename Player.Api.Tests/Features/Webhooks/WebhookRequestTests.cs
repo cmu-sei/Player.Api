@@ -208,6 +208,27 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Equal(EventType.ViewDeleted, Assert.Single(stored.EventTypes).EventType);
     }
 
+    /// <summary>
+    /// The full form writes every member, so omitting the event types removes them all — the PATCH route
+    /// is the one that leaves an omitted list alone.
+    /// </summary>
+    [Fact]
+    public async Task Edit_with_the_full_form_and_no_event_types_removes_them()
+    {
+        var webhook = TestData.Webhook(eventTypes: [EventType.ViewCreated]);
+        await Seed(webhook);
+
+        var edited = await ReadAsync<WebhookSubscription>(await RootClient.PutAsJsonAsync(
+            $"api/webhooks/{webhook.Id}",
+            new { name = "Renamed", callbackUri = "https://example.test/other" },
+            Ct));
+
+        Assert.Empty(edited.EventTypes);
+
+        await using var db = NewContext();
+        Assert.Empty((await db.Webhooks.Include(x => x.EventTypes).SingleAsync(Ct)).EventTypes);
+    }
+
     /// <summary>A full-form edit without a client secret clears the stored secret.</summary>
     [Fact]
     public async Task Edit_with_the_full_form_clears_the_client_secret_it_never_returned()

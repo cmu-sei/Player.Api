@@ -7,7 +7,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -73,7 +72,7 @@ public class Edit
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, WebhookSubscription>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, WebhookSubscription>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ManageWebhookSubscriptions], [], [], cancellationToken);
@@ -88,9 +87,24 @@ public class Edit
             if (toUpdate == null)
                 throw new EntityNotFoundException<WebhookSubscription>();
 
-            mapper.Map(request.Form, toUpdate);
+            // The PUT and PATCH routes send different form types, and only PATCH skips nulls.
+            switch (request.Form)
+            {
+                case WebhookSubscriptionPartialEditForm patch:
+                    patch.ApplyPatchTo(toUpdate);
+                    break;
+                case WebhookSubscriptionForm form:
+                    form.ApplyTo(toUpdate);
+                    break;
+                case null:
+                    // No body: nothing to apply, so the subscription is returned unchanged.
+                    break;
+                default:
+                    throw new ArgumentException($"Unexpected form type {request.Form?.GetType().Name}.", nameof(request));
+            }
+
             await db.SaveChangesAsync(cancellationToken);
-            return mapper.Map<WebhookSubscription>(toUpdate);
+            return toUpdate.ToWebhookSubscription();
         }
     }
 }

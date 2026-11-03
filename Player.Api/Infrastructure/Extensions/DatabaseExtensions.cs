@@ -25,6 +25,7 @@ using Player.Api.Features.TeamPermissions;
 using Player.Api.Features.TeamRoles;
 using Player.Api.Features.Users;
 using Player.Api.Features.Views;
+using Player.Api.Features.Webhooks;
 using System.Threading;
 using System.Text.Json;
 
@@ -207,7 +208,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbSubscriptions.Any(x => x.Name == subscription.Name))
                     {
-                        var newSubscription = mapper.Map<WebhookSubscriptionEntity>(subscription);
+                        var newSubscription = subscription.ToEntity();
                         context.Webhooks.Add(newSubscription);
                     }
                 }

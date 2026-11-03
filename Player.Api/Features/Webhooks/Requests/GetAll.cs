@@ -4,8 +4,6 @@
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -46,7 +44,7 @@ public class GetAll
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, WebhookSubscription[]>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Query, WebhookSubscription[]>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ViewWebhookSubscriptions], [], [], cancellationToken);
@@ -54,7 +52,7 @@ public class GetAll
         public override async Task<WebhookSubscription[]> HandleRequest(Query request, CancellationToken cancellationToken)
         {
             return await db.Webhooks
-                .ProjectTo<WebhookSubscription>(mapper.ConfigurationProvider)
+                .ProjectToWebhookSubscription()
                 .ToArrayAsync(cancellationToken);
         }
     }
