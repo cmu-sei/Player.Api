@@ -923,6 +923,35 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     /// <summary>
+    /// The permissions assigned directly to a team are exported and imported again. They used to be
+    /// exported but fail the import.
+    /// </summary>
+    [Fact]
+    public async Task Export_round_trips_a_teams_permissions_through_Import()
+    {
+        var view = TestData.View("Round trip");
+        var team = TestData.Team(view.Id, "Alpha");
+        await Seed(
+            view,
+            team,
+            new TeamPermissionAssignmentEntity(team.Id, TestData.TeamPermissions.UploadViewIsos) { Id = Guid.NewGuid() });
+
+        var exported = await Export(view.Id, ArchiveType.zip);
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await RootClient.DeleteAsync($"api/views/{view.Id}", Ct));
+
+        var result = await Import(exported);
+
+        Assert.Empty(result.Failures);
+
+        await using var db = NewContext();
+        var assignment = await db.TeamPermissionAssignments.SingleAsync(x => x.TeamId == team.Id, Ct);
+        Assert.Equal(TestData.TeamPermissions.UploadViewIsos, assignment.PermissionId);
+    }
+
+    /// <summary>
     /// The only test that the exporter's archive key and the importer's lookup agree — `Export.cs:122`
     /// writes <c>{id}-{name}</c> and <c>ViewImporter.cs:168</c> reads it back, with nothing shared
     /// between them. A rename on either side fails this test and no test that builds its archive by hand.

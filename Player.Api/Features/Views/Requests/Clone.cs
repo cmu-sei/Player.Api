@@ -8,7 +8,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -56,7 +55,7 @@ public class Clone
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, View>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, View>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.CreateViews], [], [], cancellationToken) &&
@@ -202,7 +201,7 @@ public class Clone
             }
 
             await db.SaveChangesAsync(cancellationToken);
-            return mapper.Map<View>(newView);
+            return newView.ToView();
         }
     }
 }

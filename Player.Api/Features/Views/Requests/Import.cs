@@ -27,6 +27,10 @@ public class Import
     {
         [DataMember] public IFormFile Archive { get; set; } = default!;
         public bool MatchApplicationTemplatesByName { get; set; }
+        /// <summary>
+        /// Match team roles, and the team permissions assigned directly to teams, by name when no role or
+        /// permission with the exported id exists.
+        /// </summary>
         public bool MatchRolesByName { get; set; }
     }
 

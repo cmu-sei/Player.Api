@@ -68,7 +68,7 @@ public static class TestMapper
     /// A local copy of <c>Player.Api.Infrastructure.Mappings.IgnoreNullSourceValues</c>, which is
     /// internal to <c>Player.Api</c>. Duplicated rather than made public — or reached via
     /// <c>InternalsVisibleTo</c> — so the production assembly's surface stays unchanged by the
-    /// existence of tests. <see cref="MappingConfigurationTests"/> guards the duplication.
+    /// existence of tests. The mapping configuration tests guarded the duplication.
     /// </summary>
     private sealed class IgnoreNullSourceValues : IMemberValueResolver<object, object, object, object>
     {

@@ -6,7 +6,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -66,7 +65,7 @@ public class GetByUser
         }
     }
 
-    public class Handler(IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, View[]>
+    public class Handler(IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Query, View[]>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             identityResolver.GetId() == request.UserId ||
@@ -85,7 +84,7 @@ public class GetByUser
 
             var views = user.ViewMemberships.Select(x => x.View);
 
-            return mapper.Map<View[]>(views);
+            return views.ToViews();
         }
     }
 }

@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
@@ -23,7 +22,7 @@ public enum ImportViewFailureType
 
 public record ImportViewFailure(Guid? Id, string Name, string Reason, ImportViewFailureType FailureType = ImportViewFailureType.Other);
 
-public class ViewImporter(IMapper mapper, PlayerContext db, IFileService fileService)
+public class ViewImporter(PlayerContext db, IFileService fileService)
 {
     public async Task<IEnumerable<ImportViewFailure>> Import(ViewExport[] views, Dictionary<string, byte[]> fileData, bool matchApplicationTemplatesByName, bool matchRolesByName, CancellationToken cancellationToken)
     {
@@ -34,6 +33,7 @@ public class ViewImporter(IMapper mapper, PlayerContext db, IFileService fileSer
 
         var dbApplicationTemplates = await db.ApplicationTemplates.ToListAsync(cancellationToken);
         var dbTeamRoles = await db.TeamRoles.ToListAsync(cancellationToken);
+        var dbTeamPermissions = await db.TeamPermissions.ToListAsync(cancellationToken);
 
         foreach (var view in views)
         {
@@ -46,9 +46,10 @@ public class ViewImporter(IMapper mapper, PlayerContext db, IFileService fileSer
             var viewFailures = new List<ImportViewFailure>();
             viewFailures.AddRange(ValidateApplications(view, dbApplicationTemplates, matchApplicationTemplatesByName));
             viewFailures.AddRange(ValidateTeamRoles(view, dbTeamRoles, matchRolesByName));
+            viewFailures.AddRange(ValidateTeamPermissions(view, dbTeamPermissions, matchRolesByName));
             viewFailures.AddRange(ValidateScopes(view));
 
-            var viewEntity = mapper.Map<ViewEntity>(view);
+            var viewEntity = view.ToEntity();
 
             // A view with no creation date (seed data, usually) is created now; one that has a date keeps
             // it, as UTC. Configuration binding parses seed dates as local time and a SQLite-backed export
@@ -161,6 +162,37 @@ public class ViewImporter(IMapper mapper, PlayerContext db, IFileService fileSer
             }
 
             team.RoleId = dbRole.Id;
+        }
+    }
+
+    /// <summary>
+    /// Resolves each team's permissions against this system: by id, then by name when matching by name.
+    /// Team permissions are what team roles grant, so they follow the roles' matching rule. The ids are
+    /// rewritten to this system's, as the role and template ids are.
+    /// </summary>
+    private static IEnumerable<ImportViewFailure> ValidateTeamPermissions(
+        ViewExport view,
+        IEnumerable<TeamPermissionEntity> dbTeamPermissions,
+        bool matchByName)
+    {
+        foreach (var team in view.Teams.Where(x => x.Permissions != null))
+        {
+            foreach (var permission in team.Permissions)
+            {
+                var dbPermission = dbTeamPermissions.FirstOrDefault(x => x.Id == permission.Id) ??
+                    (matchByName ? dbTeamPermissions.FirstOrDefault(x => x.Name == permission.Name) : null);
+
+                if (dbPermission is null)
+                {
+                    yield return new ImportViewFailure(
+                        view.Id,
+                        view.Name,
+                        $"Team {team.Name} ({team.Id}): No matching Team Permission {permission.Name} ({permission.Id}) found");
+                    continue;
+                }
+
+                permission.Id = dbPermission.Id;
+            }
         }
     }
 

@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Player.Api.Data.Data.Models;
 using Player.Api.Features.Applications;
+using Player.Api.Features.TeamPermissions;
 using Player.Api.Features.Teams;
 using Player.Api.Features.Views;
 using Player.Api.Tests.Support;
@@ -21,8 +22,8 @@ namespace Player.Api.Tests.Features.Views;
 /// </summary>
 /// <remarks>
 /// The endpoint's own paths — authorization, a missing <c>views.json</c>, an id that already exists, and
-/// the successful round trip — are in <c>ViewRequestTests</c>; the mapping the importer runs on is in
-/// <c>ViewExportRoundTripTests</c>.
+/// the successful round trips — are in <c>ViewRequestTests</c>. The mapping the importer runs on is
+/// <c>ViewMapper.ToEntity</c>, which these tests exercise through the importer.
 /// </remarks>
 public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
@@ -32,6 +33,64 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     /// </summary>
     private readonly string _basePath =
         Path.Combine(Path.GetTempPath(), $"player-import-tests-{Guid.NewGuid():N}");
+
+    // ---- Team permissions -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_team_permission_is_imported_by_id()
+    {
+        var blue = Team("Blue");
+        blue.Permissions = [new() { Id = TestData.TeamPermissions.UploadViewIsos, Name = "Renamed elsewhere" }];
+
+        var view = Export();
+        view.Teams = [blue];
+
+        Assert.Empty(await Import([view]));
+
+        await using var db = NewContext();
+        var assignment = await db.TeamPermissionAssignments.SingleAsync(Ct);
+        Assert.Equal(blue.Id, assignment.TeamId);
+        Assert.Equal(TestData.TeamPermissions.UploadViewIsos, assignment.PermissionId);
+    }
+
+    /// <summary>
+    /// A permission whose id belongs to another system is found by its name when roles are matched by
+    /// name, which is the switch team permissions follow.
+    /// </summary>
+    [Fact]
+    public async Task A_team_permission_from_another_system_is_matched_by_name_when_roles_are()
+    {
+        var blue = Team("Blue");
+        blue.Permissions = [new() { Id = Guid.NewGuid(), Name = "UploadViewIsos" }];
+
+        var view = Export();
+        view.Teams = [blue];
+
+        Assert.Empty(await Import([view], matchRolesByName: true));
+
+        await using var db = NewContext();
+        Assert.Equal(
+            TestData.TeamPermissions.UploadViewIsos,
+            (await db.TeamPermissionAssignments.SingleAsync(Ct)).PermissionId);
+    }
+
+    [Fact]
+    public async Task A_team_permission_from_another_system_is_rejected_without_matching_by_name()
+    {
+        var blue = Team("Blue");
+        var foreign = new TeamPermissionModel { Id = Guid.NewGuid(), Name = "UploadViewIsos" };
+        blue.Permissions = [foreign];
+
+        var view = Export();
+        view.Teams = [blue];
+
+        var failure = Assert.Single(await Import([view]));
+
+        Assert.Equal(
+            $"Team Blue ({blue.Id}): No matching Team Permission UploadViewIsos ({foreign.Id}) found",
+            failure.Reason);
+        await AssertNotImported(view);
+    }
 
     // ---- Scoped team permissions ----------------------------------------------------------------
 

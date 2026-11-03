@@ -6,7 +6,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -54,7 +53,7 @@ public class Edit
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, View>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, View>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<ViewEntity>(request.Id, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
@@ -71,12 +70,12 @@ public class Edit
                 !await db.Teams.AnyAsync(t => t.Id == request.DefaultTeamId && t.ViewId == viewToUpdate.Id, cancellationToken))
                 throw new ConflictException("The default Team must belong to this View.");
 
-            mapper.Map(request, viewToUpdate);
+            request.ApplyTo(viewToUpdate);
 
             db.Views.Update(viewToUpdate);
             await db.SaveChangesAsync(cancellationToken);
 
-            return mapper.Map<View>(viewToUpdate);
+            return viewToUpdate.ToView();
         }
     }
 }
