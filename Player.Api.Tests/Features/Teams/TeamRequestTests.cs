@@ -528,6 +528,11 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
         Assert.Equal(second.Id, result.Id);
 
+        // The handler refreshes the caller's claims before building the response, so the team it
+        // returns already reads as the caller's primary team.
+        Assert.True(result.IsMember);
+        Assert.True(result.IsPrimary);
+
         await using var db = NewContext();
         Assert.Equal(
             actor.On(second.Id).TeamMembershipId,
@@ -902,6 +907,78 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal(
             [("Primary", true, true), ("Secondary", true, false), ("Sibling", false, false)],
             teams.Select(x => (x.Name, x.IsMember, x.IsPrimary)).OrderBy(x => x.Name, StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// The single-team responses carry the same caller-relative flags as the list: on the caller's
+    /// primary team both are set, on another of its teams only membership, on a team it is not on neither.
+    /// </summary>
+    [Fact]
+    public async Task Get_marks_whether_the_team_is_the_callers_and_its_primary_team()
+    {
+        var view = TestData.View();
+        var role = TestData.TeamRole();
+        var primary = TestData.Team(view.Id, "Primary", role.Id);
+        var secondary = TestData.Team(view.Id, "Secondary", role.Id);
+        var sibling = TestData.Team(view.Id, "Sibling", role.Id);
+        await Seed(view, role, primary, secondary, sibling);
+        var actor = await Actor()
+            .OnTeam(primary, primary: true, viewPermissions: [ViewPermission.ViewView])
+            .OnTeam(secondary)
+            .SeedAsync();
+        var client = Client(actor);
+
+        async Task<(bool, bool)> Flags(TeamEntity team)
+        {
+            var got = await ReadAsync<Team>(await client.GetAsync($"api/teams/{team.Id}", Ct));
+            return (got.IsMember, got.IsPrimary);
+        }
+
+        Assert.Equal((true, true), await Flags(primary));
+        Assert.Equal((true, false), await Flags(secondary));
+        Assert.Equal((false, false), await Flags(sibling));
+    }
+
+    [Fact]
+    public async Task Edit_marks_the_callers_own_team_in_the_response()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Own");
+        await Seed(view, team);
+        var actor = await Actor()
+            .OnTeam(team, primary: true, viewPermissions: [ViewPermission.ManageView])
+            .SeedAsync();
+
+        var edited = await ReadAsync<Team>(await Client(actor).PutAsJsonAsync(
+            $"api/teams/{team.Id}", new { name = "Renamed" }, Ct));
+
+        Assert.Equal("Renamed", edited.Name);
+        Assert.True(edited.IsMember);
+        Assert.True(edited.IsPrimary);
+    }
+
+    /// <summary>
+    /// The flags describe the caller, not the user in the route: a privileged caller on none of the view's
+    /// teams reads neither flag on the subject's own primary team.
+    /// </summary>
+    /// <remarks>
+    /// Pins current behavior. A client that wants the subject's membership reads it from the subject's
+    /// own call, or from the team memberships endpoints.
+    /// </remarks>
+    [Fact]
+    public async Task GetByUserView_marks_teams_for_the_caller_rather_than_the_subject()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Subject's");
+        await Seed(view, team);
+        var subject = await Actor().WithName("Subject").OnTeam(team, primary: true).SeedAsync();
+
+        var teams = await ReadAsync<Team[]>(
+            await RootClient.GetAsync($"api/users/{subject.Id}/views/{view.Id}/teams", Ct));
+
+        var only = Assert.Single(teams);
+        Assert.False(only.IsMember);
+        Assert.False(only.IsPrimary);
     }
 
     // ---- One allowed case per permission value ---------------------------------------------------

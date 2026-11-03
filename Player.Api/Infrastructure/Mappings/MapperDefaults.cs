@@ -12,8 +12,14 @@ using Riok.Mapperly.Abstractions;
     // reach the entity, while Id, navigation properties and server-assigned fields are left alone.
     RequiredMappingStrategy = RequiredMappingStrategy.Target,
 
-    // A null source value is skipped rather than written when the target cannot hold null — int? to
-    // int, Guid? to Guid — so the target keeps the value it already had. Every PATCH-style update
-    // relies on this; it is the convention Startup installs for AutoMapper. False is Mapperly's
-    // default, stated here so it cannot change unnoticed.
+    // A null source value is skipped rather than written when the target cannot hold null, so the
+    // target keeps the value it already had. Every PATCH-style update relies on this. False is
+    // Mapperly's default, stated here so it cannot change unnoticed.
+    //
+    // This is broader than the AutoMapper convention in Startup, which only skips a nullable value
+    // type onto its own underlying type (Guid? to Guid). Mapperly also skips a converting pair such as
+    // int? to long, where AutoMapper wrote 0, and — in a project with nullable reference types
+    // enabled — string? to string, where AutoMapper wrote null. Player.Api has nullable reference
+    // types disabled and no converting pairs in its update commands, so the two agree here; check
+    // both before carrying this file to another application.
     ThrowOnPropertyMappingNullMismatch = false)]
