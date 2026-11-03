@@ -14,7 +14,7 @@ namespace Player.Api.Tests.Features.Users;
 
 /// <summary>
 /// Covers the <c>Users</c> feature over HTTP: the real routes, the real middleware, the real claims
-/// transformer, the real handlers, the real AutoMapper profiles, a real database.
+/// transformer, the real handlers, the real mappers, a real database.
 /// </summary>
 public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     : ApiTestBase(fixture, factory)

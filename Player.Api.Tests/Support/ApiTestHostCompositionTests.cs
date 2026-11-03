@@ -2,7 +2,6 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System.Reflection;
-using AutoMapper;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
@@ -244,13 +243,8 @@ public class ApiTestHostCompositionTests(DatabaseFixture fixture, PlayerAppFacto
     /// The reverse direction, which matters less but not none: something registered only here is a
     /// dependency a handler can take without production being able to supply it.
     /// </summary>
-    /// <remarks>
-    /// AutoMapper's resolver contracts are the whole exemption. <c>ApiTestHost.AddMapper</c> registers the
-    /// application's value resolvers under those as well as under their own types; the application does
-    /// not have to, because its mapper asks for the concrete type. See that method's remarks.
-    /// </remarks>
     [Fact]
-    public void Nothing_beyond_the_mapping_contracts_is_registered_here_alone()
+    public void Nothing_is_registered_here_alone()
     {
         var application = ByServiceType(Production).Keys.ToHashSet();
         var here = ByServiceType(TestHost).Keys.ToList();
@@ -259,9 +253,7 @@ public class ApiTestHostCompositionTests(DatabaseFixture fixture, PlayerAppFacto
 
         Assert.All(
             here.Where(x => !application.Contains(x)),
-            x => Assert.True(
-                IsMappingContract(x),
-                $"{Describe(x)} is registered here and nowhere in the application."));
+            x => Assert.Fail($"{Describe(x)} is registered here and nowhere in the application."));
     }
 
     // ---- Helpers ----------------------------------------------------------------------------------
@@ -297,17 +289,6 @@ public class ApiTestHostCompositionTests(DatabaseFixture fixture, PlayerAppFacto
 
     private static string Join(IEnumerable<ServiceLifetime> lifetimes) =>
         string.Join('/', lifetimes.Order());
-
-    private static readonly Type[] MappingContracts =
-    [
-        typeof(IValueResolver<,,>),
-        typeof(IMemberValueResolver<,,,>),
-        typeof(ITypeConverter<,>),
-        typeof(IMappingAction<,>)
-    ];
-
-    private static bool IsMappingContract(Type type) =>
-        type.IsGenericType && MappingContracts.Contains(type.GetGenericTypeDefinition());
 
     /// <summary>A service type as a failure message should name it.</summary>
     private static string Describe(Type type) =>

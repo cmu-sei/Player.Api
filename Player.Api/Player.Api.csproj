@@ -10,7 +10,6 @@
     <Folder Include="wwwroot\" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="AutoMapper" /> <!-- DO NOT UPDATE. Version 15+ requires a license. Being replaced by Mapperly. -->
     <!-- A source generator: the attributes are only needed at compile time, so nothing ships at runtime. -->
     <PackageReference Include="Riok.Mapperly" ExcludeAssets="runtime" PrivateAssets="all" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" />

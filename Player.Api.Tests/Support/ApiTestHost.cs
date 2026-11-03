@@ -3,7 +3,6 @@
 
 using System.Security.Claims;
 using System.Security.Principal;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
@@ -92,7 +91,6 @@ public sealed class ApiTestHost : IDisposable
         // and a factory registration would have the container dispose it out from under the test.
         services.AddSingleton(db);
 
-        AddMapper(services);
         AddCurrentUser(services, user);
         AddOptions(services, options);
         AddApplicationServices(services);
@@ -103,42 +101,6 @@ public sealed class ApiTestHost : IDisposable
     }
 
     public void Dispose() => _services.Dispose();
-
-    /// <summary>
-    /// The real profiles, so a handler test fails on a broken map.
-    /// </summary>
-    /// <remarks>
-    /// Built over the container rather than reusing the shared <see cref="TestMapper.Mapper"/> so that a
-    /// map can delegate a member to a value resolver with constructor dependencies. Registering the
-    /// resolvers is what <c>AddAutoMapper</c> does in production; without it AutoMapper falls back to
-    /// <see cref="Activator"/> and the map fails on the missing parameterless constructor. No profile
-    /// uses one now — the Teams resolvers became <c>TeamMapper.WithCallerFlags</c> — and this goes when
-    /// AutoMapper does.
-    /// </remarks>
-    private static void AddMapper(IServiceCollection services)
-    {
-        foreach (var type in typeof(Startup).Assembly.GetTypes().Where(t => !t.IsAbstract && !t.IsInterface))
-        {
-            foreach (var contract in type.GetInterfaces().Where(IsMappingContract))
-            {
-                services.AddTransient(contract, type);
-                services.AddTransient(type);
-            }
-        }
-
-        services.AddScoped<IMapper>(p => new Mapper(TestMapper.Configuration, p.GetService));
-    }
-
-    private static readonly Type[] MappingContracts =
-    [
-        typeof(IValueResolver<,,>),
-        typeof(IMemberValueResolver<,,,>),
-        typeof(ITypeConverter<,>),
-        typeof(IMappingAction<,>)
-    ];
-
-    private static bool IsMappingContract(Type contract) =>
-        contract.IsGenericType && MappingContracts.Contains(contract.GetGenericTypeDefinition());
 
     /// <summary>
     /// Production reads the current user off the <see cref="HttpContext"/>, and so do

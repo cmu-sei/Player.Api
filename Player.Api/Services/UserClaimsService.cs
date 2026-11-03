@@ -9,7 +9,6 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Player.Api.Data.Data;
@@ -35,17 +34,14 @@ public class UserClaimsService : IUserClaimsService
     private readonly ClaimsTransformationOptions _options;
     private IMemoryCache _cache;
     private ClaimsPrincipal _currentClaimsPrincipal;
-    private readonly IMapper _mapper;
 
     public UserClaimsService(PlayerContext context,
                                 IMemoryCache cache,
-                                ClaimsTransformationOptions options,
-                                IMapper mapper)
+                                ClaimsTransformationOptions options)
     {
         _context = context;
         _options = options;
         _cache = cache;
-        _mapper = mapper;
     }
 
     public async Task<ClaimsPrincipal> AddUserClaims(ClaimsPrincipal principal, bool update)

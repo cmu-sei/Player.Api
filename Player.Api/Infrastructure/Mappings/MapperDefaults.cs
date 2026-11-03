@@ -16,7 +16,7 @@ using Riok.Mapperly.Abstractions;
     // target keeps the value it already had. Every PATCH-style update relies on this. False is
     // Mapperly's default, stated here so it cannot change unnoticed.
     //
-    // This is broader than the AutoMapper convention in Startup, which only skips a nullable value
+    // This is broader than the AutoMapper convention it replaced, which only skipped a nullable value
     // type onto its own underlying type (Guid? to Guid). Mapperly also skips a converting pair such as
     // int? to long, where AutoMapper wrote 0, and — in a project with nullable reference types
     // enabled — string? to string, where AutoMapper wrote null. Player.Api has nullable reference

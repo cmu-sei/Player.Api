@@ -12,7 +12,7 @@ namespace Player.Api.Tests.Features.Roles;
 
 /// <summary>
 /// Covers the <c>Roles</c> feature over HTTP: the real routes, the real middleware, the real claims
-/// transformer, the real handlers, the real AutoMapper profiles, a real database.
+/// transformer, the real handlers, the real mappers, a real database.
 /// </summary>
 /// <remarks>
 /// Role names are uniquely indexed and every actor asking for specific system permissions is given a role

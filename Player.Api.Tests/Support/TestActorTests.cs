@@ -383,8 +383,7 @@ public class TestActorTests(DatabaseFixture fixture) : DatabaseTestBase(fixture)
         var service = new UserClaimsService(
             Db,
             new MemoryCache(new MemoryCacheOptions()),
-            new ClaimsTransformationOptions { EnableCaching = false, UseRolesFromIdP = false },
-            TestMapper.Mapper);
+            new ClaimsTransformationOptions { EnableCaching = false, UseRolesFromIdP = false });
 
         return await service.GetClaimsPrincipal(actor.Id, true);
     }

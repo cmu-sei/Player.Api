@@ -8,12 +8,6 @@ Run the audit before changing this list:
 dotnet list Player.Api.sln package --vulnerable --include-transitive
 ```
 
-## AutoMapper 13
-
-AutoMapper 13.0.1 has a high-severity advisory. The application is pinned because supported later releases require a commercial license.
-
-AutoMapper is being replaced by [Mapperly](https://mapperly.riok.app/), a source generator, one feature at a time; shared conventions are in `Player.Api/Infrastructure/Mappings/MapperDefaults.cs`. Remove the package once no profile remains, along with the mapping configuration tests and the resolver registrations in the test host.
-
 ## MediatR 12
 
 MediatR 12.4.1 is pinned because version 13 and later require a commercial license.
