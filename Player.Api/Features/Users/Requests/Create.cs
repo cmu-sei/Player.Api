@@ -5,8 +5,6 @@ using System;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -50,14 +48,14 @@ public class Create
         }
     }
 
-    public class Handler(ILogger<Create> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, User>
+    public class Handler(ILogger<Create> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, User>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ManageUsers], [], [], cancellationToken);
 
         public override async Task<User> HandleRequest(Command request, CancellationToken cancellationToken)
         {
-            var userEntity = mapper.Map<UserEntity>(request);
+            var userEntity = request.ToEntity();
 
             db.Users.Add(userEntity);
             await db.SaveChangesAsync(cancellationToken);
@@ -65,7 +63,7 @@ public class Create
             logger.LogWarning($"User {request.Name} ({userEntity.Id}) created by {identityResolver.GetId()}");
 
             return await db.Users
-                .ProjectTo<User>(mapper.ConfigurationProvider)
+                .ProjectToUser()
                 .SingleOrDefaultAsync(o => o.Id == userEntity.Id, cancellationToken);
         }
     }

@@ -6,8 +6,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -51,7 +49,7 @@ public class GetByUserView
         }
     }
 
-    public class Handler(IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, TeamMembership[]>
+    public class Handler(IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Query, TeamMembership[]>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             identityResolver.GetId() == request.UserId ||
@@ -68,7 +66,7 @@ public class GetByUserView
 
             var memberships = await db.TeamMemberships
                 .Where(m => m.UserId == request.UserId && m.ViewMembership.ViewId == request.ViewId)
-                .ProjectTo<TeamMembership>(mapper.ConfigurationProvider)
+                .ProjectToTeamMembership()
                 .ToArrayAsync(cancellationToken);
 
             return memberships;

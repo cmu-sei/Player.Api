@@ -6,8 +6,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -54,7 +52,7 @@ public class Edit
         }
     }
 
-    public class Handler(ILogger<Edit> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, User>
+    public class Handler(ILogger<Edit> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, User>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ManageUsers], [], [], cancellationToken);
@@ -67,13 +65,13 @@ public class Edit
             if (userToUpdate == null)
                 throw new EntityNotFoundException<User>();
 
-            mapper.Map(request, userToUpdate);
+            request.ApplyTo(userToUpdate);
             await db.SaveChangesAsync(cancellationToken);
 
             logger.LogWarning($"User {userToUpdate.Name} ({userToUpdate.Id}) updated by {identityResolver.GetId()}");
 
             return await db.Users
-                .ProjectTo<User>(mapper.ConfigurationProvider)
+                .ProjectToUser()
                 .SingleOrDefaultAsync(o => o.Id == request.Id, cancellationToken);
         }
     }

@@ -17,7 +17,7 @@ namespace Player.Api.Features.Users
 
     public class UserDirectoryEntry : User
     {
-        public UserIdentityAttribute[] IdentityAttributes { get; set; }
+        public UserIdentityAttribute[] IdentityAttributes { get; set; } = [];
     }
 
     public class UserIdentityAttribute

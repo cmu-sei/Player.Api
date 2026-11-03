@@ -23,6 +23,7 @@ using Player.Api.Features.Permissions;
 using Player.Api.Features.Roles;
 using Player.Api.Features.TeamPermissions;
 using Player.Api.Features.TeamRoles;
+using Player.Api.Features.Users;
 using Player.Api.Features.Views;
 using System.Threading;
 using System.Text.Json;
@@ -180,7 +181,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbUserIds.Contains(user.Id))
                     {
-                        var newUser = mapper.Map<UserEntity>(user);
+                        var newUser = user.ToEntity();
 
                         if (!string.IsNullOrEmpty(user.Role))
                         {
