@@ -55,13 +55,13 @@ public class Get
         public override async Task<Team> HandleRequest(Query request, CancellationToken cancellationToken)
         {
             var team = await db.Teams
-                .ProjectToTeamDto()
+                .ProjectToTeam()
                 .SingleOrDefaultAsync(o => o.Id == request.Id, cancellationToken);
 
             if (team == null)
                 throw new EntityNotFoundException<Team>();
 
-            return team.ToTeam(claimsService.GetCurrentClaimsPrincipal());
+            return team.WithCallerFlags(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

@@ -65,10 +65,10 @@ public class GetByView
 
             var teams = await db.Teams
                 .Where(e => e.ViewId == request.ViewId)
-                .ProjectToTeamDto()
+                .ProjectToTeam()
                 .ToArrayAsync(cancellationToken);
 
-            return teams.ToTeams(claimsService.GetCurrentClaimsPrincipal());
+            return teams.WithCallerFlags(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

@@ -15,24 +15,13 @@ public class Team
     public Guid ViewId { get; set; }
     public Guid? RoleId { get; set; }
     public string RoleName { get; set; }
-    public List<TeamPermissionModel> Permissions { get; set; }
+    public List<TeamPermissionModel> Permissions { get; set; } = [];
 
     // Ids of the other Teams in the View that this Team's permissions are scoped onto.
     public List<Guid> ScopedTeamIds { get; set; } = new();
 
     public bool IsMember { get; set; }
     public bool IsPrimary { get; set; }
-}
-
-public class TeamDTO
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; }
-    public Guid ViewId { get; set; }
-    public Guid? RoleId { get; set; }
-    public string RoleName { get; set; }
-    public List<TeamPermissionModel> Permissions { get; set; }
-    public List<Guid> ScopedTeamIds { get; set; } = new();
 }
 
 public class TeamForm
@@ -42,7 +31,15 @@ public class TeamForm
     public Guid? RoleId { get; set; }
 }
 
-public class TeamExport : TeamDTO
+/// <summary>A team as written to and read from a view export file.</summary>
+public class TeamExport
 {
+    public Guid Id { get; set; }
+    public string Name { get; set; }
+    public Guid ViewId { get; set; }
+    public Guid? RoleId { get; set; }
+    public string RoleName { get; set; }
+    public List<TeamPermissionModel> Permissions { get; set; }
+    public List<Guid> ScopedTeamIds { get; set; } = new();
     public List<ApplicationInstanceExport> Applications { get; set; }
 }

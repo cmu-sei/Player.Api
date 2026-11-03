@@ -74,10 +74,10 @@ public class Edit
             logger.LogWarning($"Team {teamToUpdate.Name} ({teamToUpdate.Id}) in View {teamToUpdate.ViewId} updated by {identityResolver.GetId()} added Role: {newRole}");
 
             var team = await db.Teams
-                .ProjectToTeamDto()
+                .ProjectToTeam()
                 .SingleOrDefaultAsync(o => o.Id == teamToUpdate.Id, cancellationToken);
 
-            return team.ToTeam(claimsService.GetCurrentClaimsPrincipal());
+            return team.WithCallerFlags(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

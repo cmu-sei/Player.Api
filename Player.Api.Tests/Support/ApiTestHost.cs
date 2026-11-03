@@ -112,7 +112,7 @@ public sealed class ApiTestHost : IDisposable
     /// map can delegate a member to a value resolver with constructor dependencies. Registering the
     /// resolvers is what <c>AddAutoMapper</c> does in production; without it AutoMapper falls back to
     /// <see cref="Activator"/> and the map fails on the missing parameterless constructor. No profile
-    /// uses one now — the Teams resolvers became <c>TeamMapper.ToTeam</c> — and this goes when
+    /// uses one now — the Teams resolvers became <c>TeamMapper.WithCallerFlags</c> — and this goes when
     /// AutoMapper does.
     /// </remarks>
     private static void AddMapper(IServiceCollection services)

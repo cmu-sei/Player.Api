@@ -93,20 +93,20 @@ public class GetByUserView
             if (!userExists)
                 throw new EntityNotFoundException<User>();
 
-            IQueryable<TeamDTO> teamQuery;
+            IQueryable<Team> teamQuery;
 
             if (identityResolver.GetId() == request.UserId)
             {
                 var visibility = await authorizationService.GetPrimaryVisibilityContext(request.ViewId, cancellationToken);
                 teamQuery = db.Teams
                     .Where(t => t.ViewId == request.ViewId && visibility.TeamIds.Contains(t.Id))
-                    .ProjectToTeamDto();
+                    .ProjectToTeam();
             }
             else if (await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ViewViews], [ViewPermission.ViewView], [], cancellationToken))
             {
                 teamQuery = db.Teams
                     .Where(t => t.ViewId == request.ViewId)
-                    .ProjectToTeamDto();
+                    .ProjectToTeam();
             }
             else
             {
@@ -119,12 +119,12 @@ public class GetByUserView
 
                 teamQuery = db.Teams
                     .Where(t => t.ViewId == request.ViewId && teamIds.Contains(t.Id))
-                    .ProjectToTeamDto();
+                    .ProjectToTeam();
             }
 
             var teams = await teamQuery.ToListAsync(cancellationToken);
 
-            return teams.ToTeams(claimsService.GetCurrentClaimsPrincipal());
+            return teams.WithCallerFlags(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

@@ -22,18 +22,24 @@ public static partial class TeamMapper
     // ---- Entity to view model -------------------------------------------------------------------
 
     /// <summary>
-    /// Projects teams inside the database query, so only the columns <see cref="TeamDTO"/> needs are read.
+    /// Projects teams inside the database query, so only the columns <see cref="Team"/> needs are read.
     /// </summary>
-    public static partial IQueryable<TeamDTO> ProjectToTeamDto(this IQueryable<TeamEntity> query);
+    /// <remarks>
+    /// <see cref="Team.IsMember"/> and <see cref="Team.IsPrimary"/> describe the caller rather than the
+    /// team, so the projection leaves them false. Set them with <see cref="WithCallerFlags(Team, ClaimsPrincipal)"/>.
+    /// </remarks>
+    public static partial IQueryable<Team> ProjectToTeam(this IQueryable<TeamEntity> query);
 
     /// <summary>
-    /// The member configuration for <see cref="ProjectToTeamDto"/>, which Mapperly inlines into the
+    /// The member configuration for <see cref="ProjectToTeam"/>, which Mapperly inlines into the
     /// projection's expression tree.
     /// </summary>
-    [MapProperty(nameof(@TeamEntity.Role.Name), nameof(TeamDTO.RoleName))]
-    [MapProperty(nameof(TeamEntity.Permissions), nameof(TeamDTO.Permissions), Use = nameof(MapAssignedPermissions))]
-    [MapProperty(nameof(TeamEntity.Scopes), nameof(TeamDTO.ScopedTeamIds), Use = nameof(MapScopedTeamIds))]
-    private static partial TeamDTO MapToTeamDto(TeamEntity source);
+    [MapProperty(nameof(@TeamEntity.Role.Name), nameof(Team.RoleName))]
+    [MapProperty(nameof(TeamEntity.Permissions), nameof(Team.Permissions), Use = nameof(MapAssignedPermissions))]
+    [MapProperty(nameof(TeamEntity.Scopes), nameof(Team.ScopedTeamIds), Use = nameof(MapScopedTeamIds))]
+    [MapperIgnoreTarget(nameof(Team.IsMember))]
+    [MapperIgnoreTarget(nameof(Team.IsPrimary))]
+    private static partial Team MapToTeam(TeamEntity source);
 
     // Expression-bodied, so Mapperly can inline them into the projection rather than call them.
     private static List<TeamPermissionModel> MapAssignedPermissions(ICollection<TeamPermissionAssignmentEntity> assignments) =>
@@ -45,41 +51,44 @@ public static partial class TeamMapper
     private static partial TeamPermissionModel MapToTeamPermissionModel(TeamPermissionEntity source);
 
     /// <summary>
-    /// The response model. <see cref="Team.IsMember"/> and <see cref="Team.IsPrimary"/> describe the
-    /// caller rather than the team, so they come from <paramref name="user"/>'s claims.
+    /// Sets <see cref="Team.IsMember"/> and <see cref="Team.IsPrimary"/> from <paramref name="user"/>'s
+    /// claims and returns the same team.
     /// </summary>
-    public static Team ToTeam(this TeamDTO source, ClaimsPrincipal user)
+    public static Team WithCallerFlags(this Team team, ClaimsPrincipal user)
     {
-        if (source == null)
+        if (team == null)
             return null;
 
-        var team = MapToTeam(source);
-        team.IsMember = user.IsTeamMember(source.Id);
-        team.IsPrimary = user.IsPrimaryTeam(source.Id);
+        team.IsMember = user.IsTeamMember(team.Id);
+        team.IsPrimary = user.IsPrimaryTeam(team.Id);
         return team;
     }
 
-    /// <inheritdoc cref="ToTeam"/>
-    public static Team[] ToTeams(this IEnumerable<TeamDTO> source, ClaimsPrincipal user) =>
-        [.. source.Select(x => x.ToTeam(user))];
-
-    [MapperIgnoreTarget(nameof(Team.IsMember))]
-    [MapperIgnoreTarget(nameof(Team.IsPrimary))]
-    private static partial Team MapToTeam(TeamDTO source);
+    /// <inheritdoc cref="WithCallerFlags(Team, ClaimsPrincipal)"/>
+    public static Team[] WithCallerFlags(this IEnumerable<Team> teams, ClaimsPrincipal user) =>
+        [.. teams.Select(x => x.WithCallerFlags(user))];
 
     // ---- Command to entity ----------------------------------------------------------------------
 
     /// <summary>
-    /// A new entity from the create command. A null <see cref="Create.Command.Id"/> or
-    /// <see cref="Create.Command.RoleId"/> leaves the entity's default for the handler to fill.
+    /// A new entity from the create command. A null <see cref="Create.Command.RoleId"/> leaves the
+    /// entity's default for the handler to fill.
     /// </summary>
+    /// <remarks>
+    /// The id and the view come from the route and the caller's choice of id, which the handler
+    /// resolves, so the handler sets both keys and the mapper sets neither.
+    /// </remarks>
     [MapperRequiredMapping(RequiredMappingStrategy.Source)]
+    [MapperIgnoreSource(nameof(Create.Command.Id))]
+    [MapperIgnoreSource(nameof(Create.Command.ViewId))]
     public static partial TeamEntity ToEntity(this Create.Command source);
 
     /// <summary>
     /// Applies the edit command to an existing entity. A null <see cref="Edit.Command.RoleId"/>
     /// keeps the team's current role.
     /// </summary>
+    /// <remarks>The id is the route's, and names the entity being edited; it is never written to it.</remarks>
     [MapperRequiredMapping(RequiredMappingStrategy.Source)]
+    [MapperIgnoreSource(nameof(Edit.Command.Id))]
     public static partial void ApplyTo(this Edit.Command source, TeamEntity target);
 }

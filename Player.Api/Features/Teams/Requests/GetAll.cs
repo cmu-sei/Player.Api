@@ -53,9 +53,9 @@ public class GetAll
         public override async Task<Team[]> HandleRequest(Query request, CancellationToken cancellationToken)
         {
             var items = await db.Teams
-                .ProjectToTeamDto()
+                .ProjectToTeam()
                 .ToArrayAsync(cancellationToken);
-            return items.ToTeams(claimsService.GetCurrentClaimsPrincipal());
+            return items.WithCallerFlags(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

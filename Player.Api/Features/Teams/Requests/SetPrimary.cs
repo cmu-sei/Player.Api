@@ -92,9 +92,9 @@ public class SetPrimary
             await xApiService.EmitTeamSwitchedAsync(teamEntity.ViewId, request.TeamId, cancellationToken);
 
             var team = await db.Teams
-                .ProjectToTeamDto()
+                .ProjectToTeam()
                 .SingleOrDefaultAsync(o => o.Id == request.TeamId, cancellationToken);
-            return team.ToTeam(claimsService.GetCurrentClaimsPrincipal());
+            return team.WithCallerFlags(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

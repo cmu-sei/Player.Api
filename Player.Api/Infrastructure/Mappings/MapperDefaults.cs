@@ -3,8 +3,8 @@
 
 using Riok.Mapperly.Abstractions;
 
-// Defaults for every Mapperly [Mapper] in the application. Unmapped members are compiler warnings,
-// and the build treats warnings as errors, so a member that stops being mapped fails the build.
+// Defaults for every Mapperly [Mapper] in the application. .editorconfig raises unmapped members and
+// projections that cannot be inlined to errors, so a member that stops being mapped fails the build.
 [assembly: MapperDefaults(
     // Outbound maps (entity to view model) must fill every member of the view model, so a response
     // never silently carries a default. Inbound maps (command onto entity) ask the opposite question

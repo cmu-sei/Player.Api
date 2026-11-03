@@ -61,10 +61,10 @@ public class TeamService : ITeamService
         var visibility = await _authorizationService.GetPrimaryVisibilityContext(viewId, ct);
         var teamQuery = _context.Teams
             .Where(t => t.ViewId == viewId && visibility.TeamIds.Contains(t.Id))
-            .ProjectToTeamDto();
+            .ProjectToTeam();
 
         var teams = await teamQuery.ToListAsync(ct);
 
-        return teams.ToTeams(_claimsService.GetCurrentClaimsPrincipal());
+        return teams.WithCallerFlags(_claimsService.GetCurrentClaimsPrincipal());
     }
 }

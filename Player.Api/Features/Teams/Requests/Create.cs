@@ -97,10 +97,10 @@ public class Create
             logger.LogWarning($"Team {teamEntity.Name} ({teamEntity.Id}) in View {teamEntity.ViewId} created by {identityResolver.GetId()}");
 
             var team = await db.Teams
-                .ProjectToTeamDto()
+                .ProjectToTeam()
                 .SingleOrDefaultAsync(o => o.Id == teamEntity.Id, cancellationToken);
 
-            return team.ToTeam(claimsService.GetCurrentClaimsPrincipal());
+            return team.WithCallerFlags(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }
