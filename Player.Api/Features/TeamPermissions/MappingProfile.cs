@@ -10,9 +10,9 @@ namespace Player.Api.Features.TeamPermissions
     {
         public MappingProfile()
         {
+            // Nested by the TeamRoles map and the Teams export map (TeamEntity to TeamExport). The
+            // feature itself maps through TeamPermissionMapper; this goes when both have moved to Mapperly.
             CreateMap<TeamPermissionEntity, TeamPermissionModel>();
-            CreateMap<Create.Command, TeamPermissionEntity>();
-            CreateMap<Edit.Command, TeamPermissionEntity>();
         }
     }
 }

@@ -19,6 +19,8 @@ using Player.Api.Data.Data.Models.Webhooks;
 using AutoMapper;
 using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Player.Api.Features.Permissions;
+using Player.Api.Features.TeamPermissions;
 using Player.Api.Features.Views;
 using System.Threading;
 using System.Text.Json;
@@ -84,7 +86,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbPermissions.Any(x => x.Name == permission.Name))
                     {
-                        var newPermission = mapper.Map<PermissionEntity>(permission);
+                        var newPermission = permission.ToEntity();
                         context.Permissions.Add(newPermission);
                     }
                 }
@@ -130,7 +132,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbTeamPermissions.Any(x => x.Name == teamPermission.Name))
                     {
-                        var newTeamPermission = mapper.Map<TeamPermissionEntity>(teamPermission);
+                        var newTeamPermission = teamPermission.ToEntity();
                         context.TeamPermissions.Add(newTeamPermission);
                     }
                 }

@@ -11,9 +11,9 @@ namespace Player.Api.Features.Permissions
     {
         public MappingProfile()
         {
+            // Nested by the Roles map (RoleEntity.Permissions). The feature itself maps through
+            // PermissionMapper; this goes when Roles moves to Mapperly.
             CreateMap<PermissionEntity, Permission>();
-            CreateMap<Create.Command, PermissionEntity>();
-            CreateMap<Edit.Command, PermissionEntity>();
         }
     }
 }

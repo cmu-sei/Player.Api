@@ -48,6 +48,9 @@ public static partial class TeamMapper
     private static List<Guid> MapScopedTeamIds(ICollection<TeamPermissionScopeEntity> scopes) =>
         scopes.Select(x => x.TargetTeamId).ToList();
 
+    // TeamPermissionMapper owns this mapping. It is declared here, with that mapper's configuration,
+    // because Mapperly 4.3 calls a [UseStaticMapper] method inside a projection instead of inlining it.
+    [IncludeMappingConfiguration(nameof(@TeamPermissionMapper.ToTeamPermissionModel))]
     private static partial TeamPermissionModel MapToTeamPermissionModel(TeamPermissionEntity source);
 
     /// <summary>
