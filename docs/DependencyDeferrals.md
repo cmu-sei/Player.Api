@@ -28,7 +28,7 @@ Revisit by removing the package rather than pinning around it. Confirm that gene
 
 - `ServiceCollectionExtensions` maps `Microsoft.CodeAnalysis.Optional<Guid?>` in Swagger, a Roslyn type that no model uses.
 - `GetNotifications` and `PresenceService` import `Microsoft.Build.Framework`, and `ImportApplicationTemplates` imports `NuGet.Packaging`.
-- `Player.Api.Tests` loses the Newtonsoft.Json 13.x the package supplies and falls back to the vulnerable 11.0.2 that TinCan and IdentityServer4.AccessTokenValidation ask for, so it needs a pin of its own.
+- `Player.Api.Tests` loses the Newtonsoft.Json 13.x the package supplies and resolves the 13.0.3 that TinCanStandard asks for instead.
 
 ## Reviewing warnings
 
