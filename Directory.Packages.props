@@ -58,7 +58,7 @@
 
   <!-- Test-only. -->
   <ItemGroup>
-    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="coverlet.MTP" Version="10.0.1" />
     <!-- Hosts the application in-process for the HTTP tests. Tied to the ASP.NET Core version, so it
          tracks Microsoft.AspNetCore.Authentication.JwtBearer above rather than the test-tool versions
          around it. -->
@@ -66,11 +66,9 @@
     <!-- The SignalR client for the hubs' real-connection tests. Tied to the ASP.NET Core version like
          Mvc.Testing above. -->
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
     <PackageVersion Include="NSubstitute" Version="6.0.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
-    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.v3" Version="4.0.1" />
   </ItemGroup>
 
   <!-- Security pins. See the matching group in Player.Api/Player.Api.csproj. -->
