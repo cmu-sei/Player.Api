@@ -415,8 +415,8 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     /// <summary>
-    /// The global null-source convention at work: a null <c>RoleId</c> leaves the existing role rather
-    /// than clearing a required column.
+    /// A null <c>RoleId</c> leaves the existing role rather than clearing a required column: Mapperly skips
+    /// a null nullable value onto a non-nullable member (<c>MapperDefaults</c>).
     /// </summary>
     [Fact]
     public async Task Edit_leaves_the_role_alone_when_the_caller_omits_it()

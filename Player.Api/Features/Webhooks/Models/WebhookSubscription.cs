@@ -44,8 +44,8 @@ namespace Player.Api.ViewModels.Webhooks
             }
         }
 
-        // So Automapper can map a seeded Client Secret, 
-        // but it won't be returned from the API
+        // So the seed-data mapping can read a seeded Client Secret,
+        // which the ClientSecret property masks and the API never returns
         public string GetClientSecret()
         {
             return _clientSecret;

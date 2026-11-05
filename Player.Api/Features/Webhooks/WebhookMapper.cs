@@ -44,8 +44,8 @@ public static partial class WebhookMapper
     /// <summary>A new subscription from seed data, keeping its id and its secret.</summary>
     /// <remarks>
     /// <see cref="WebhookSubscription.ClientSecret"/> reads back as a mask, so the secret comes from
-    /// <see cref="WebhookSubscription.GetClientSecret"/>, which AutoMapper found by its Get-prefix
-    /// convention. <see cref="WebhookSubscription.ClientSecretSet"/> is derived from it.
+    /// <see cref="WebhookSubscription.GetClientSecret"/>. <see cref="WebhookSubscription.ClientSecretSet"/>
+    /// is derived from it. AutoMapper read the mask instead, so a seeded secret used to be stored empty.
     /// </remarks>
     [MapperRequiredMapping(RequiredMappingStrategy.Source)]
     [MapPropertyFromSource(nameof(WebhookSubscriptionEntity.ClientSecret), Use = nameof(GetClientSecret))]

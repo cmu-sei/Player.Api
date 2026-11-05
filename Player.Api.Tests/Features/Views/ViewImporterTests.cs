@@ -74,6 +74,53 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
             (await db.TeamPermissionAssignments.SingleAsync(Ct)).PermissionId);
     }
 
+    /// <summary>
+    /// A permission listed twice, directly or as two entries that resolve to the same permission here, is
+    /// assigned once. A second row would break the assignment's unique index and fail the whole import.
+    /// </summary>
+    [Fact]
+    public async Task A_team_permission_listed_twice_is_assigned_once()
+    {
+        var blue = Team("Blue");
+        blue.Permissions =
+        [
+            new() { Id = TestData.TeamPermissions.UploadViewIsos, Name = "UploadViewIsos" },
+            new() { Id = TestData.TeamPermissions.UploadViewIsos, Name = "UploadViewIsos" },
+            new() { Id = Guid.NewGuid(), Name = "UploadViewIsos" },
+        ];
+
+        var view = Export();
+        view.Teams = [blue];
+
+        Assert.Empty(await Import([view], matchRolesByName: true));
+
+        await using var db = NewContext();
+        Assert.Equal(
+            TestData.TeamPermissions.UploadViewIsos,
+            (await db.TeamPermissionAssignments.SingleAsync(Ct)).PermissionId);
+    }
+
+    /// <summary>
+    /// The id wins over the name, as it does for roles: a permission whose id exists here is that
+    /// permission even when its exported name is another permission's.
+    /// </summary>
+    [Fact]
+    public async Task A_team_permission_matched_by_id_ignores_its_name()
+    {
+        var blue = Team("Blue");
+        blue.Permissions = [new() { Id = TestData.TeamPermissions.UploadViewIsos, Name = "ViewTeam" }];
+
+        var view = Export();
+        view.Teams = [blue];
+
+        Assert.Empty(await Import([view], matchRolesByName: true));
+
+        await using var db = NewContext();
+        Assert.Equal(
+            TestData.TeamPermissions.UploadViewIsos,
+            (await db.TeamPermissionAssignments.SingleAsync(Ct)).PermissionId);
+    }
+
     [Fact]
     public async Task A_team_permission_from_another_system_is_rejected_without_matching_by_name()
     {
@@ -441,8 +488,8 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
 
     /// <summary>
     /// Which directory the bytes land in is decided by the <c>viewId</c> in the manifest, not by the view
-    /// that ends up owning the row: the write happens through the placeholder view AutoMapper builds
-    /// while unflattening, before EF replaces it with the real one. So the upload directory is not
+    /// that ends up owning the row: the write happens through the placeholder view the import mapping
+    /// builds from it (<c>ViewMapper.MapToFileEntity</c>), before EF replaces it with the real one. So the upload directory is not
     /// partitioned by owner the way it looks — harmless, because the stored path is absolute.
     /// </summary>
     /// <remarks>

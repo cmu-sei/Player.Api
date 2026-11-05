@@ -4,6 +4,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data.Models;
 using Player.Api.Data.Models;
@@ -837,6 +838,31 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         var name = ArchiveName(response);
         Assert.EndsWith(".zip", name);
         Assert.Contains(ViewConstants.ExportFileName, ArchiveHelper.ExtractFiles(bytes, name).Keys);
+    }
+
+    /// <summary>
+    /// Pins what the export file writes for a file: never its server path, and an empty list rather than
+    /// null for a file row with no team ids.
+    /// </summary>
+    [Fact]
+    public async Task Export_writes_files_without_their_path_and_with_a_team_id_list()
+    {
+        var view = TestData.View("Exported");
+        var file = TestData.File(view, "notes.txt");
+        file.TeamIds = null;
+        await Seed(view, file);
+
+        var response = await Export(view.Id, ArchiveType.zip);
+
+        var json = ArchiveHelper.ExtractFiles(
+            await response.Content.ReadAsByteArrayAsync(Ct), ArchiveName(response))[ViewConstants.ExportFileName];
+        using var document = JsonDocument.Parse(json);
+        var exported = Assert.Single(document.RootElement.EnumerateArray());
+
+        var exportedFile = Assert.Single(exported.GetProperty("Files").EnumerateArray());
+        Assert.False(exportedFile.TryGetProperty("Path", out _));
+        Assert.Equal(JsonValueKind.Array, exportedFile.GetProperty("teamIds").ValueKind);
+        Assert.Equal(0, exportedFile.GetProperty("teamIds").GetArrayLength());
     }
 
     /// <summary>

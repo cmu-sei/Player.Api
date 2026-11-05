@@ -202,6 +202,10 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
         Assert.Equal("Original", db.Users.Single(x => x.Id == user.Id).Name);
     }
 
+    /// <summary>
+    /// The seeded secret is stored as given. The view model masks it on read, and the seed mapping once
+    /// read the mask, storing every seeded secret as an empty string.
+    /// </summary>
     [Fact]
     public async Task InitializeDatabase_seeds_webhook_subscriptions()
     {
@@ -221,7 +225,9 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
         host.InitializeDatabase();
 
         await using var db = NewContext();
-        Assert.Equal("https://example.test/hook", db.Webhooks.Single().CallbackUri);
+        var stored = db.Webhooks.Single();
+        Assert.Equal("https://example.test/hook", stored.CallbackUri);
+        Assert.Equal("secret", stored.ClientSecret);
     }
 
     /// <summary>A seed subscription id already stored under another name prevents initialization.</summary>

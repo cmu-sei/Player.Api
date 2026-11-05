@@ -117,8 +117,19 @@ public static partial class ViewMapper
 
     private static partial ViewExport MapToViewExport(ViewExportDTO source);
 
-    // Declared so each file becomes a new FileModel; an upcast FileDTO would carry its path.
-    private static partial FileModel MapToFileModel(FileDTO source);
+    // Written by hand: Mapperly maps a FileDTO onto its base type with a cast, which would leave each
+    // export file entry a FileDTO still carrying its server path, and keep a null team id list null.
+    // A new FileModel matches what AutoMapper wrote.
+    private static FileModel MapToFileModel(FileDTO source) =>
+        source == null
+            ? null
+            : new FileModel
+            {
+                id = source.id,
+                Name = source.Name,
+                viewId = source.viewId,
+                teamIds = CopyTeamIds(source.teamIds)
+            };
 
     // ---- Import: export file to entity ----------------------------------------------------------
 
@@ -132,7 +143,8 @@ public static partial class ViewMapper
     [MapProperty(nameof(ViewExport.Files), nameof(ViewEntity.Files), Use = nameof(ToFileEntities))]
     public static partial ViewEntity ToEntity(this ViewExport source);
 
-    // A missing array imports as none, as it did through AutoMapper.
+    // A missing array maps to none, as it did through AutoMapper. Only a missing Files array gets this
+    // far: ViewImporter's validation reads Teams and Applications first, and fails on a missing one.
     private static ICollection<TeamEntity> ToTeamEntities(TeamExport[] teams) =>
         teams?.Select(x => MapToTeamEntity(x)).ToList() ?? [];
 
