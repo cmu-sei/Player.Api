@@ -274,6 +274,26 @@ public class WebhookRequestTests(DatabaseFixture fixture, PlayerAppFactory facto
         Assert.Equal("test-secret", (await db.Webhooks.SingleAsync(Ct)).ClientSecret);
     }
 
+    /// <summary>A partial form that does send event types replaces them, as the full form does.</summary>
+    [Fact]
+    public async Task Edit_replaces_the_event_types_a_partial_form_sends()
+    {
+        var webhook = TestData.Webhook("Original", eventTypes: [EventType.ViewCreated]);
+        await Seed(webhook);
+
+        var edited = await ReadAsync<WebhookSubscription>(await RootClient.PatchAsJsonAsync(
+            $"api/webhooks/{webhook.Id}",
+            new { eventTypes = new[] { EventType.ViewDeleted } },
+            Ct));
+
+        Assert.Equal("Original", edited.Name);
+        Assert.Equal([EventType.ViewDeleted], edited.EventTypes);
+
+        await using var db = NewContext();
+        var stored = await db.Webhooks.Include(x => x.EventTypes).SingleAsync(Ct);
+        Assert.Equal(EventType.ViewDeleted, Assert.Single(stored.EventTypes).EventType);
+    }
+
     [Fact]
     public async Task Edit_reports_a_missing_subscription_as_not_found()
     {

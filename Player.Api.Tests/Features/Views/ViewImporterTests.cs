@@ -34,6 +34,23 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     private readonly string _basePath =
         Path.Combine(Path.GetTempPath(), $"player-import-tests-{Guid.NewGuid():N}");
 
+    /// <summary>
+    /// A view with no <c>Files</c> array, as seed data that leaves it out of configuration has, imports
+    /// with no files.
+    /// </summary>
+    [Fact]
+    public async Task A_view_without_a_files_array_is_imported_with_no_files()
+    {
+        var view = Export();
+        view.Files = null;
+
+        Assert.Empty(await Import([view]));
+
+        await using var db = NewContext();
+        Assert.True(await db.Views.AnyAsync(x => x.Id == view.Id, Ct));
+        Assert.False(await db.Files.AnyAsync(Ct));
+    }
+
     // ---- Team permissions -----------------------------------------------------------------------
 
     [Fact]

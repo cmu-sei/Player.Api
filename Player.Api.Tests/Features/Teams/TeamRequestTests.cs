@@ -340,7 +340,10 @@ public class TeamRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         var teams = await ReadAsync<Team[]>(
             await Client(actor).GetAsync($"api/me/views/{view.Id}/teams", Ct));
 
-        Assert.Equal("Own", Assert.Single(teams).Name);
+        var only = Assert.Single(teams);
+        Assert.Equal("Own", only.Name);
+        Assert.True(only.IsMember);
+        Assert.True(only.IsPrimary);
     }
 
     [Fact]
