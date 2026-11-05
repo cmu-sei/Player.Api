@@ -3,6 +3,7 @@
 
 using Microsoft.AspNetCore.Authorization;
 using Player.Api.Data.Data.Models;
+using Player.Api.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,7 +26,7 @@ namespace Player.Api.Infrastructure.Authorization
     {
         protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, PrimaryTeamRequirement requirement)
         {
-            if (context.User.HasClaim(PlayerClaimTypes.PrimaryTeam.ToString(), requirement.TeamId.ToString()))
+            if (context.User.IsPrimaryTeam(requirement.TeamId))
             {
                 context.Succeed(requirement);
             }

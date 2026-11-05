@@ -6,8 +6,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -49,7 +47,7 @@ public class GetByView
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, User[]>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Query, User[]>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<ViewEntity>(request.ViewId, [SystemPermission.ViewUsers], [ViewPermission.ViewView], [], cancellationToken);
@@ -67,7 +65,7 @@ public class GetByView
                 .Where(m => m.ViewId == request.ViewId)
                 .Select(m => m.User)
                 .Distinct()
-                .ProjectTo<User>(mapper.ConfigurationProvider)
+                .ProjectToUser()
                 .ToArrayAsync(cancellationToken);
 
             return users;

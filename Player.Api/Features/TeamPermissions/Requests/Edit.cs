@@ -6,7 +6,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -50,7 +49,7 @@ public class Edit
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, TeamPermissionModel>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, TeamPermissionModel>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ManageRoles], [], [], cancellationToken);
@@ -65,10 +64,10 @@ public class Edit
             if (permissionToUpdate.Immutable)
                 throw new ForbiddenException("Cannot update an Immutable TeamPermissionModel");
 
-            mapper.Map(request, permissionToUpdate);
+            request.ApplyTo(permissionToUpdate);
             await db.SaveChangesAsync(cancellationToken);
 
-            return mapper.Map<TeamPermissionModel>(permissionToUpdate);
+            return permissionToUpdate.ToTeamPermissionModel();
         }
     }
 }

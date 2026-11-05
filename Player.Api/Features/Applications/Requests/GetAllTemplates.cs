@@ -5,8 +5,6 @@ using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -47,7 +45,7 @@ public class GetAllTemplates
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, IEnumerable<ApplicationTemplate>>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Query, IEnumerable<ApplicationTemplate>>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ViewApplications, SystemPermission.ViewViews], [ViewPermission.ManageView], [], cancellationToken);
@@ -55,7 +53,7 @@ public class GetAllTemplates
         public override async Task<IEnumerable<ApplicationTemplate>> HandleRequest(Query request, CancellationToken cancellationToken)
         {
             var items = await db.ApplicationTemplates
-                .ProjectTo<ApplicationTemplate>(mapper.ConfigurationProvider)
+                .ProjectToApplicationTemplate()
                 .ToListAsync(cancellationToken);
 
             return items;

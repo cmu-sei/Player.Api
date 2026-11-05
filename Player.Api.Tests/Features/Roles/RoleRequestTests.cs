@@ -12,7 +12,7 @@ namespace Player.Api.Tests.Features.Roles;
 
 /// <summary>
 /// Covers the <c>Roles</c> feature over HTTP: the real routes, the real middleware, the real claims
-/// transformer, the real handlers, the real AutoMapper profiles, a real database.
+/// transformer, the real handlers, the real mappers, a real database.
 /// </summary>
 /// <remarks>
 /// Role names are uniquely indexed and every actor asking for specific system permissions is given a role
@@ -106,6 +106,20 @@ public class RoleRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             await RootClient.GetAsync($"api/roles/{TestData.Roles.Administrator}", Ct));
 
         Assert.Equal("Administrator", got.Name);
+    }
+
+    /// <summary>The permission each assignment points at, not the assignment.</summary>
+    [Fact]
+    public async Task Get_returns_the_role_with_its_assigned_permissions()
+    {
+        var role = TestData.Role();
+        await Seed(role, new RolePermissionEntity(role.Id, TestData.Permissions.ViewNetworks) { Id = Guid.NewGuid() });
+
+        var got = await ReadAsync<Role>(await RootClient.GetAsync($"api/roles/{role.Id}", Ct));
+
+        var permission = Assert.Single(got.Permissions);
+        Assert.Equal(TestData.Permissions.ViewNetworks, permission.Id);
+        Assert.Equal("ViewNetworks", permission.Name);
     }
 
     [Fact]

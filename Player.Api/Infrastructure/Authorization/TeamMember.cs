@@ -2,6 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using Microsoft.AspNetCore.Authorization;
+using Player.Api.Extensions;
 using System;
 using System.Threading.Tasks;
 
@@ -21,7 +22,7 @@ namespace Player.Api.Infrastructure.Authorization
     {
         protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, TeamMemberRequirement requirement)
         {
-            if (context.User.HasClaim(PlayerClaimTypes.TeamMember.ToString(), requirement.TeamId.ToString()))
+            if (context.User.IsTeamMember(requirement.TeamId))
             {
                 context.Succeed(requirement);
             }

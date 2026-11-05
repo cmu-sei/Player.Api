@@ -7,8 +7,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -53,7 +51,7 @@ public class CreateApplicationInstance
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, ApplicationInstance>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, ApplicationInstance>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<TeamEntity>(request.TeamId, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
@@ -75,13 +73,14 @@ public class CreateApplicationInstance
             if (team.ViewId != application.ViewId)
                 throw new ConflictException("The Team and Application must belong to the same View.");
 
-            var instanceEntity = mapper.Map<ApplicationInstanceEntity>(request);
+            var instanceEntity = request.ToEntity();
+            instanceEntity.TeamId = request.TeamId;
 
             db.ApplicationInstances.Add(instanceEntity);
             await db.SaveChangesAsync(cancellationToken);
 
             var instance = await db.ApplicationInstances
-                .ProjectTo<ApplicationInstance>(mapper.ConfigurationProvider)
+                .ProjectToApplicationInstance()
                 .SingleOrDefaultAsync(i => i.Id == instanceEntity.Id, cancellationToken);
 
             return instance;

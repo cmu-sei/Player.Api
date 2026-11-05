@@ -4,6 +4,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data.Models;
 using Player.Api.Data.Models;
@@ -18,7 +19,7 @@ namespace Player.Api.Tests.Features.Views;
 
 /// <summary>
 /// Covers the <c>Views</c> feature over HTTP: the real routes, the real middleware, the real claims
-/// transformer, the real handlers, the real AutoMapper profiles, a real database.
+/// transformer, the real handlers, the real mappers, a real database.
 /// </summary>
 public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     : ApiTestBase(fixture, factory)
@@ -380,6 +381,28 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
             $"api/views/{view.Id}", new { name = "Defaulted", defaultTeamId = team.Id }, Ct));
 
         Assert.Equal(team.Id, edited.DefaultTeamId);
+    }
+
+    /// <summary>The edit writes every member, so a body without a default team clears it.</summary>
+    [Fact]
+    public async Task Edit_clears_the_default_team_when_none_is_given()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        await Seed(view, team);
+        await using (var setup = NewContext())
+        {
+            (await setup.Views.SingleAsync(x => x.Id == view.Id, Ct)).DefaultTeamId = team.Id;
+            await setup.SaveChangesAsync(Ct);
+        }
+
+        var edited = await ReadAsync<View>(await RootClient.PutAsJsonAsync(
+            $"api/views/{view.Id}", new { name = "Undefaulted" }, Ct));
+
+        Assert.Null(edited.DefaultTeamId);
+
+        await using var db = NewContext();
+        Assert.Null((await db.Views.SingleAsync(x => x.Id == view.Id, Ct)).DefaultTeamId);
     }
 
     /// <summary>
@@ -840,6 +863,31 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     /// <summary>
+    /// Pins what the export file writes for a file: never its server path, and an empty list rather than
+    /// null for a file row with no team ids.
+    /// </summary>
+    [Fact]
+    public async Task Export_writes_files_without_their_path_and_with_a_team_id_list()
+    {
+        var view = TestData.View("Exported");
+        var file = TestData.File(view, "notes.txt");
+        file.TeamIds = null;
+        await Seed(view, file);
+
+        var response = await Export(view.Id, ArchiveType.zip);
+
+        var json = ArchiveHelper.ExtractFiles(
+            await response.Content.ReadAsByteArrayAsync(Ct), ArchiveName(response))[ViewConstants.ExportFileName];
+        using var document = JsonDocument.Parse(json);
+        var exported = Assert.Single(document.RootElement.EnumerateArray());
+
+        var exportedFile = Assert.Single(exported.GetProperty("Files").EnumerateArray());
+        Assert.False(exportedFile.TryGetProperty("Path", out _));
+        Assert.Equal(JsonValueKind.Array, exportedFile.GetProperty("teamIds").ValueKind);
+        Assert.Equal(0, exportedFile.GetProperty("teamIds").GetArrayLength());
+    }
+
+    /// <summary>
     /// No <c>ids</c> in the query string means "everything", not "nothing" — the handler only narrows
     /// the query when ids were supplied.
     /// </summary>
@@ -923,6 +971,100 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     }
 
     /// <summary>
+    /// The permissions assigned directly to a team are exported and imported again. They used to be
+    /// exported but fail the import.
+    /// </summary>
+    [Fact]
+    public async Task Export_round_trips_a_teams_permissions_through_Import()
+    {
+        var view = TestData.View("Round trip");
+        var team = TestData.Team(view.Id, "Alpha");
+        await Seed(
+            view,
+            team,
+            new TeamPermissionAssignmentEntity(team.Id, TestData.TeamPermissions.UploadViewIsos) { Id = Guid.NewGuid() });
+
+        var exported = await Export(view.Id, ArchiveType.zip);
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await RootClient.DeleteAsync($"api/views/{view.Id}", Ct));
+
+        var result = await Import(exported);
+
+        Assert.Empty(result.Failures);
+
+        await using var db = NewContext();
+        var assignment = await db.TeamPermissionAssignments.SingleAsync(x => x.TeamId == team.Id, Ct);
+        Assert.Equal(TestData.TeamPermissions.UploadViewIsos, assignment.PermissionId);
+    }
+
+    /// <summary>
+    /// The rest of what a team and an application carry through the export file: a team's permission
+    /// scopes and application instances, and an application's template.
+    /// </summary>
+    [Fact]
+    public async Task Export_round_trips_a_teams_scopes_and_application_instances_through_Import()
+    {
+        var view = TestData.View("Round trip");
+        var scoping = TestData.Team(view.Id, "Scoping");
+        var target = TestData.Team(view.Id, "Target");
+        var template = TestData.ApplicationTemplate("Template");
+        var application = TestData.Application(view.Id, templateId: template.Id);
+        var instance = TestData.ApplicationInstance(scoping.Id, application.Id, displayOrder: 2);
+        await Seed(
+            view,
+            scoping,
+            target,
+            template,
+            application,
+            instance,
+            TestData.TeamPermissionScope(scoping.Id, target.Id));
+
+        var exported = await Export(view.Id, ArchiveType.zip);
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await RootClient.DeleteAsync($"api/views/{view.Id}", Ct));
+
+        var result = await Import(exported);
+
+        Assert.Empty(result.Failures);
+
+        await using var db = NewContext();
+        var scope = await db.TeamPermissionScopes.SingleAsync(x => x.TeamId == scoping.Id, Ct);
+        Assert.Equal(target.Id, scope.TargetTeamId);
+
+        var importedInstance = await db.ApplicationInstances.SingleAsync(x => x.TeamId == scoping.Id, Ct);
+        Assert.Equal(application.Id, importedInstance.ApplicationId);
+        Assert.Equal(2, importedInstance.DisplayOrder);
+
+        Assert.Equal(template.Id, (await db.Applications.SingleAsync(x => x.Id == application.Id, Ct)).ApplicationTemplateId);
+    }
+
+    /// <summary>
+    /// The export file names each team's role and each application's template as well as giving their
+    /// ids, so an import on another system can match them by name.
+    /// </summary>
+    [Fact]
+    public async Task Export_names_each_teams_role_and_each_applications_template()
+    {
+        var view = TestData.View("Exported");
+        var role = TestData.TeamRole("Exported Role");
+        var team = TestData.Team(view.Id, "Alpha", role.Id);
+        var template = TestData.ApplicationTemplate("Exported Template");
+        var application = TestData.Application(view.Id, templateId: template.Id);
+        await Seed(view, role, team, template, application);
+
+        var response = await Export(view.Id, ArchiveType.zip);
+
+        var exported = Assert.Single(ArchiveHelper.ReadExportedViews(
+            await response.Content.ReadAsByteArrayAsync(Ct), ArchiveName(response)));
+        Assert.Equal("Exported Role", Assert.Single(exported.Teams).RoleName);
+        Assert.Equal("Exported Template", Assert.Single(exported.Applications).ApplicationTemplateName);
+    }
+
+    /// <summary>
     /// The only test that the exporter's archive key and the importer's lookup agree — `Export.cs:122`
     /// writes <c>{id}-{name}</c> and <c>ViewImporter.cs:168</c> reads it back, with nothing shared
     /// between them. A rename on either side fails this test and no test that builds its archive by hand.
@@ -958,6 +1100,7 @@ public class ViewRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
         await using var db = NewContext();
         var imported = await db.Files.SingleAsync(Ct);
         Assert.Equal("notes.txt", imported.Name);
+        Assert.Equal([team.Id], imported.TeamIds);
         Assert.Equal("exported bytes", await File.ReadAllTextAsync(imported.Path, Ct));
     }
 

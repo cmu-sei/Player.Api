@@ -4,8 +4,6 @@
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -47,7 +45,7 @@ public class Create
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, TeamRole>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, TeamRole>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ManageRoles], [], [], cancellationToken);
@@ -56,18 +54,18 @@ public class Create
         {
             // Ensure role with this name does not already exist
             var role = await db.TeamRoles
-                .ProjectTo<TeamRole>(mapper.ConfigurationProvider)
+                .ProjectToTeamRole()
                 .SingleOrDefaultAsync(o => o.Name == request.Name, cancellationToken);
 
             if (role != null)
                 throw new ConflictException("A role with that name already exists.");
 
-            var roleEntity = mapper.Map<TeamRoleEntity>(request);
+            var roleEntity = request.ToEntity();
 
             db.TeamRoles.Add(roleEntity);
             await db.SaveChangesAsync(cancellationToken);
 
-            return mapper.Map<TeamRole>(roleEntity);
+            return roleEntity.ToTeamRole();
         }
     }
 }

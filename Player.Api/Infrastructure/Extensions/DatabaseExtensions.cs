@@ -16,10 +16,16 @@ using Player.Api.Infrastructure.Authorization;
 using System.Collections.Generic;
 using Player.Api.ViewModels.Webhooks;
 using Player.Api.Data.Data.Models.Webhooks;
-using AutoMapper;
 using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Player.Api.Features.Applications;
+using Player.Api.Features.Permissions;
+using Player.Api.Features.Roles;
+using Player.Api.Features.TeamPermissions;
+using Player.Api.Features.TeamRoles;
+using Player.Api.Features.Users;
 using Player.Api.Features.Views;
+using Player.Api.Features.Webhooks;
 using System.Threading;
 using System.Text.Json;
 
@@ -38,7 +44,6 @@ namespace Player.Api.Extensions
                     var databaseOptions = services.GetService<DatabaseOptions>();
                     var ctx = services.GetRequiredService<PlayerContext>();
                     var seedDataOptions = services.GetService<SeedDataOptions>();
-                    var mapper = services.GetRequiredService<IMapper>();
                     var viewImporter = services.GetRequiredService<ViewImporter>();
 
                     if (ctx != null)
@@ -57,7 +62,7 @@ namespace Player.Api.Extensions
                             ctx.Database.EnsureCreated();
                         }
 
-                        ProcessSeedDataOptions(seedDataOptions, ctx, mapper, viewImporter);
+                        ProcessSeedDataOptions(seedDataOptions, ctx, viewImporter);
                     }
 
                 }
@@ -74,7 +79,7 @@ namespace Player.Api.Extensions
             return webHost;
         }
 
-        private static void ProcessSeedDataOptions(SeedDataOptions options, PlayerContext context, IMapper mapper, ViewImporter viewImporter)
+        private static void ProcessSeedDataOptions(SeedDataOptions options, PlayerContext context, ViewImporter viewImporter)
         {
             if (options.Permissions.Any())
             {
@@ -84,7 +89,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbPermissions.Any(x => x.Name == permission.Name))
                     {
-                        var newPermission = mapper.Map<PermissionEntity>(permission);
+                        var newPermission = permission.ToEntity();
                         context.Permissions.Add(newPermission);
                     }
                 }
@@ -100,7 +105,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbRoles.Any(x => x.Name == role.Name))
                     {
-                        var newRole = mapper.Map<RoleEntity>(role);
+                        var newRole = role.ToEntity();
                         newRole.Permissions = [];
                         context.Roles.Add(newRole);
                         context.SaveChanges();
@@ -130,7 +135,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbTeamPermissions.Any(x => x.Name == teamPermission.Name))
                     {
-                        var newTeamPermission = mapper.Map<TeamPermissionEntity>(teamPermission);
+                        var newTeamPermission = teamPermission.ToEntity();
                         context.TeamPermissions.Add(newTeamPermission);
                     }
                 }
@@ -146,7 +151,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbTeamRoles.Any(x => x.Name == teamRole.Name))
                     {
-                        var newTeamRole = mapper.Map<TeamRoleEntity>(teamRole);
+                        var newTeamRole = teamRole.ToEntity();
                         newTeamRole.Permissions = [];
                         context.TeamRoles.Add(newTeamRole);
                         context.SaveChanges();
@@ -176,7 +181,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbUserIds.Contains(user.Id))
                     {
-                        var newUser = mapper.Map<UserEntity>(user);
+                        var newUser = user.ToEntity();
 
                         if (!string.IsNullOrEmpty(user.Role))
                         {
@@ -202,7 +207,7 @@ namespace Player.Api.Extensions
                 {
                     if (!dbSubscriptions.Any(x => x.Name == subscription.Name))
                     {
-                        var newSubscription = mapper.Map<WebhookSubscriptionEntity>(subscription);
+                        var newSubscription = subscription.ToEntity();
                         context.Webhooks.Add(newSubscription);
                     }
                 }
@@ -222,7 +227,7 @@ namespace Player.Api.Extensions
 
                     if (dbTemplate == null)
                     {
-                        var applicationTemplateEntity = mapper.Map<ApplicationTemplateEntity>(applicationTemplate);
+                        var applicationTemplateEntity = applicationTemplate.ToEntity();
                         context.ApplicationTemplates.Add(applicationTemplateEntity);
                     }
                 }

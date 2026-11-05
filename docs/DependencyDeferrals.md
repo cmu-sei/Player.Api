@@ -8,12 +8,6 @@ Run the audit before changing this list:
 dotnet list Player.Api.sln package --vulnerable --include-transitive
 ```
 
-## AutoMapper 13
-
-AutoMapper 13.0.1 has a high-severity advisory. The application is pinned because supported later releases require a commercial license.
-
-Revisit when the project approves a licensed release or replaces AutoMapper. Any migration must cover the mapping configuration tests and the custom resolver registrations in the test host.
-
 ## MediatR 12
 
 MediatR 12.4.1 is pinned because version 13 and later require a commercial license.

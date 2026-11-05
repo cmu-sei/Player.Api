@@ -5,8 +5,6 @@ using System;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -48,7 +46,7 @@ public class Get
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, ViewMembership>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Query, ViewMembership>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             // TODO: Allow same user?
@@ -57,7 +55,7 @@ public class Get
         public override async Task<ViewMembership> HandleRequest(Query request, CancellationToken cancellationToken)
         {
             var item = await db.ViewMemberships
-                 .ProjectTo<ViewMembership>(mapper.ConfigurationProvider)
+                 .ProjectToViewMembership()
                  .SingleOrDefaultAsync(o => o.Id == request.Id);
 
             if (item == null)

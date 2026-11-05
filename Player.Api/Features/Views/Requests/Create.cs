@@ -6,7 +6,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -56,7 +55,6 @@ public class Create
     public class Handler(IIdentityResolver identityResolver,
                          IPlayerAuthorizationService authorizationService,
                          PlayerContext db,
-                         IMapper mapper,
                          RoleOptions roleOptions) : BaseHandler<Command, View>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
@@ -64,7 +62,7 @@ public class Create
 
         public override async Task<View> HandleRequest(Command request, CancellationToken cancellationToken)
         {
-            var viewEntity = mapper.Map<ViewEntity>(request);
+            var viewEntity = request.ToEntity();
 
             if (request.Id.HasValue && request.Id.Value != Guid.Empty)
                 viewEntity.Id = request.Id.Value;
@@ -107,7 +105,7 @@ public class Create
             var item = await db.Views
                 .SingleOrDefaultAsync(o => o.Id == viewEntity.Id, cancellationToken);
 
-            return mapper.Map<View>(item);
+            return item.ToView();
         }
     }
 }

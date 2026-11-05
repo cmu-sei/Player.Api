@@ -5,8 +5,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -51,18 +49,16 @@ public class GetAll
     public class Handler(
         IPlayerAuthorizationService authorizationService,
         ClaimsTransformationOptions claimsOptions,
-        PlayerContext db,
-        IMapper mapper) : BaseHandler<Query, UserDirectoryEntry[]>
+        PlayerContext db) : BaseHandler<Query, UserDirectoryEntry[]>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ViewUsers], [ViewPermission.ManageView], [TeamPermission.ManageTeam], cancellationToken);
 
         public override async Task<UserDirectoryEntry[]> HandleRequest(Query request, CancellationToken cancellationToken)
         {
-            var users = await db.Users
-                .ProjectTo<User>(mapper.ConfigurationProvider)
+            var directoryEntries = await db.Users
+                .ProjectToUserDirectoryEntry()
                 .ToArrayAsync(cancellationToken);
-            var directoryEntries = mapper.Map<UserDirectoryEntry[]>(users);
 
             var canViewIdentityAttributes = await authorizationService.Authorize(
                 [SystemPermission.ViewUsers],

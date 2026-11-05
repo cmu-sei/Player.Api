@@ -19,9 +19,9 @@
       Restore-time warnings stay warnings. These report facts about dependencies rather than defects
       in this code, and none of them can be fixed here today:
 
-      - NU1901-NU1904 are the NuGet audit. AutoMapper 13 and MediatR 12 are pinned deliberately
-        (later versions require a commercial license), so the audit has findings that a build failure
-        would only make invisible by blocking every build.
+      - NU1901-NU1904 are the NuGet audit. MediatR 12 is pinned deliberately (later versions require
+        a commercial license), so the audit can have findings that a build failure would only make
+        invisible by blocking every build.
 
       The known deferrals and their review triggers are tracked in docs/DependencyDeferrals.md.
     -->

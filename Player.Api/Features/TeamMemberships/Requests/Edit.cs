@@ -6,8 +6,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -53,7 +51,7 @@ public class Edit
         }
     }
 
-    public class Handler(ILogger<Edit> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, TeamMembership>
+    public class Handler(ILogger<Edit> logger, IIdentityResolver identityResolver, IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, TeamMembership>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<TeamMembershipEntity>(request.Id, [SystemPermission.ManageViews], [ViewPermission.ManageView], [], cancellationToken);
@@ -67,13 +65,13 @@ public class Edit
             if (membershipToUpdate == null)
                 throw new EntityNotFoundException<TeamMembership>();
 
-            mapper.Map(request, membershipToUpdate);
+            request.ApplyTo(membershipToUpdate);
             await db.SaveChangesAsync(cancellationToken);
 
             logger.LogWarning($"Team Membership updated by {identityResolver.GetId()} = User: {membershipToUpdate.UserId}, Role: {membershipToUpdate.RoleId}, Team: {membershipToUpdate.TeamId}, ViewMembership: {membershipToUpdate.ViewMembershipId}");
 
             return await db.TeamMemberships
-                .ProjectTo<TeamMembership>(mapper.ConfigurationProvider)
+                .ProjectToTeamMembership()
                 .SingleOrDefaultAsync(o => o.Id == membershipToUpdate.Id, cancellationToken);
         }
     }

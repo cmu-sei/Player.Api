@@ -1,8 +1,6 @@
 // Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
@@ -32,14 +30,14 @@ public class TeamService : ITeamService
     private readonly PlayerContext _context;
     private readonly IPlayerAuthorizationService _authorizationService;
     private readonly ClaimsPrincipal _user;
-    private readonly IMapper _mapper;
+    private readonly IUserClaimsService _claimsService;
 
-    public TeamService(PlayerContext context, IPrincipal user, IPlayerAuthorizationService authorizationService, IMapper mapper)
+    public TeamService(PlayerContext context, IPrincipal user, IPlayerAuthorizationService authorizationService, IUserClaimsService claimsService)
     {
         _context = context;
         _authorizationService = authorizationService;
         _user = user as ClaimsPrincipal;
-        _mapper = mapper;
+        _claimsService = claimsService;
     }
 
     public async Task<IEnumerable<Team>> GetByViewIdForCurrentUserAsync(Guid viewId, CancellationToken ct)
@@ -63,10 +61,10 @@ public class TeamService : ITeamService
         var visibility = await _authorizationService.GetPrimaryVisibilityContext(viewId, ct);
         var teamQuery = _context.Teams
             .Where(t => t.ViewId == viewId && visibility.TeamIds.Contains(t.Id))
-            .ProjectTo<TeamDTO>(_mapper.ConfigurationProvider);
+            .ProjectToTeam();
 
         var teams = await teamQuery.ToListAsync(ct);
 
-        return _mapper.Map<IEnumerable<Team>>(teams);
+        return teams.WithCallerFlags(_claimsService.GetCurrentClaimsPrincipal());
     }
 }

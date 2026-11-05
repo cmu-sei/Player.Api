@@ -4,8 +4,6 @@
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -16,6 +14,7 @@ using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
+using Player.Api.Services;
 using Player.Api.ViewModels;
 
 namespace Player.Api.Features.Teams;
@@ -46,7 +45,7 @@ public class GetAll
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, Team[]>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IUserClaimsService claimsService) : BaseHandler<Query, Team[]>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ViewViews], [], [], cancellationToken);
@@ -54,9 +53,9 @@ public class GetAll
         public override async Task<Team[]> HandleRequest(Query request, CancellationToken cancellationToken)
         {
             var items = await db.Teams
-                .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)
+                .ProjectToTeam()
                 .ToArrayAsync(cancellationToken);
-            return mapper.Map<Team[]>(items);
+            return items.WithCallerFlags(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

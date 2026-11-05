@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Player.Api.Data.Data.Models;
 using Player.Api.Features.Applications;
+using Player.Api.Features.TeamPermissions;
 using Player.Api.Features.Teams;
 using Player.Api.Features.Views;
 using Player.Api.Tests.Support;
@@ -21,8 +22,8 @@ namespace Player.Api.Tests.Features.Views;
 /// </summary>
 /// <remarks>
 /// The endpoint's own paths — authorization, a missing <c>views.json</c>, an id that already exists, and
-/// the successful round trip — are in <c>ViewRequestTests</c>; the mapping the importer runs on is in
-/// <c>ViewExportRoundTripTests</c>.
+/// the successful round trips — are in <c>ViewRequestTests</c>. The mapping the importer runs on is
+/// <c>ViewMapper.ToEntity</c>, which these tests exercise through the importer.
 /// </remarks>
 public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixture)
 {
@@ -32,6 +33,128 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     /// </summary>
     private readonly string _basePath =
         Path.Combine(Path.GetTempPath(), $"player-import-tests-{Guid.NewGuid():N}");
+
+    /// <summary>
+    /// A view with no <c>Files</c> array, as seed data that leaves it out of configuration has, imports
+    /// with no files.
+    /// </summary>
+    [Fact]
+    public async Task A_view_without_a_files_array_is_imported_with_no_files()
+    {
+        var view = Export();
+        view.Files = null;
+
+        Assert.Empty(await Import([view]));
+
+        await using var db = NewContext();
+        Assert.True(await db.Views.AnyAsync(x => x.Id == view.Id, Ct));
+        Assert.False(await db.Files.AnyAsync(Ct));
+    }
+
+    // ---- Team permissions -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_team_permission_is_imported_by_id()
+    {
+        var blue = Team("Blue");
+        blue.Permissions = [new() { Id = TestData.TeamPermissions.UploadViewIsos, Name = "Renamed elsewhere" }];
+
+        var view = Export();
+        view.Teams = [blue];
+
+        Assert.Empty(await Import([view]));
+
+        await using var db = NewContext();
+        var assignment = await db.TeamPermissionAssignments.SingleAsync(Ct);
+        Assert.Equal(blue.Id, assignment.TeamId);
+        Assert.Equal(TestData.TeamPermissions.UploadViewIsos, assignment.PermissionId);
+    }
+
+    /// <summary>
+    /// A permission whose id belongs to another system is found by its name when roles are matched by
+    /// name, which is the switch team permissions follow.
+    /// </summary>
+    [Fact]
+    public async Task A_team_permission_from_another_system_is_matched_by_name_when_roles_are()
+    {
+        var blue = Team("Blue");
+        blue.Permissions = [new() { Id = Guid.NewGuid(), Name = "UploadViewIsos" }];
+
+        var view = Export();
+        view.Teams = [blue];
+
+        Assert.Empty(await Import([view], matchRolesByName: true));
+
+        await using var db = NewContext();
+        Assert.Equal(
+            TestData.TeamPermissions.UploadViewIsos,
+            (await db.TeamPermissionAssignments.SingleAsync(Ct)).PermissionId);
+    }
+
+    /// <summary>
+    /// A permission listed twice, directly or as two entries that resolve to the same permission here, is
+    /// assigned once. A second row would break the assignment's unique index and fail the whole import.
+    /// </summary>
+    [Fact]
+    public async Task A_team_permission_listed_twice_is_assigned_once()
+    {
+        var blue = Team("Blue");
+        blue.Permissions =
+        [
+            new() { Id = TestData.TeamPermissions.UploadViewIsos, Name = "UploadViewIsos" },
+            new() { Id = TestData.TeamPermissions.UploadViewIsos, Name = "UploadViewIsos" },
+            new() { Id = Guid.NewGuid(), Name = "UploadViewIsos" },
+        ];
+
+        var view = Export();
+        view.Teams = [blue];
+
+        Assert.Empty(await Import([view], matchRolesByName: true));
+
+        await using var db = NewContext();
+        Assert.Equal(
+            TestData.TeamPermissions.UploadViewIsos,
+            (await db.TeamPermissionAssignments.SingleAsync(Ct)).PermissionId);
+    }
+
+    /// <summary>
+    /// The id wins over the name, as it does for roles: a permission whose id exists here is that
+    /// permission even when its exported name is another permission's.
+    /// </summary>
+    [Fact]
+    public async Task A_team_permission_matched_by_id_ignores_its_name()
+    {
+        var blue = Team("Blue");
+        blue.Permissions = [new() { Id = TestData.TeamPermissions.UploadViewIsos, Name = "ViewTeam" }];
+
+        var view = Export();
+        view.Teams = [blue];
+
+        Assert.Empty(await Import([view], matchRolesByName: true));
+
+        await using var db = NewContext();
+        Assert.Equal(
+            TestData.TeamPermissions.UploadViewIsos,
+            (await db.TeamPermissionAssignments.SingleAsync(Ct)).PermissionId);
+    }
+
+    [Fact]
+    public async Task A_team_permission_from_another_system_is_rejected_without_matching_by_name()
+    {
+        var blue = Team("Blue");
+        var foreign = new TeamPermissionModel { Id = Guid.NewGuid(), Name = "UploadViewIsos" };
+        blue.Permissions = [foreign];
+
+        var view = Export();
+        view.Teams = [blue];
+
+        var failure = Assert.Single(await Import([view]));
+
+        Assert.Equal(
+            $"Team Blue ({blue.Id}): No matching Team Permission UploadViewIsos ({foreign.Id}) found",
+            failure.Reason);
+        await AssertNotImported(view);
+    }
 
     // ---- Scoped team permissions ----------------------------------------------------------------
 
@@ -382,8 +505,8 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
 
     /// <summary>
     /// Which directory the bytes land in is decided by the <c>viewId</c> in the manifest, not by the view
-    /// that ends up owning the row: the write happens through the placeholder view AutoMapper builds
-    /// while unflattening, before EF replaces it with the real one. So the upload directory is not
+    /// that ends up owning the row: the write happens through the placeholder view the import mapping
+    /// builds from it (<c>ViewMapper.MapToFileEntity</c>), before EF replaces it with the real one. So the upload directory is not
     /// partitioned by owner the way it looks — harmless, because the stored path is absolute.
     /// </summary>
     /// <remarks>

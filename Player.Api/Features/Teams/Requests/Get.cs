@@ -5,8 +5,6 @@ using System;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -18,6 +16,7 @@ using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions;
+using Player.Api.Services;
 using Player.Api.ViewModels;
 
 namespace Player.Api.Features.Teams;
@@ -48,7 +47,7 @@ public class Get
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, Team>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IUserClaimsService claimsService) : BaseHandler<Query, Team>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize<TeamEntity>(request.Id, [SystemPermission.ViewViews], [ViewPermission.ViewView], [TeamPermission.ViewTeam], cancellationToken);
@@ -56,13 +55,13 @@ public class Get
         public override async Task<Team> HandleRequest(Query request, CancellationToken cancellationToken)
         {
             var team = await db.Teams
-                .ProjectTo<TeamDTO>(mapper.ConfigurationProvider)
+                .ProjectToTeam()
                 .SingleOrDefaultAsync(o => o.Id == request.Id, cancellationToken);
 
             if (team == null)
                 throw new EntityNotFoundException<Team>();
 
-            return mapper.Map<Team>(team);
+            return team.WithCallerFlags(claimsService.GetCurrentClaimsPrincipal());
         }
     }
 }

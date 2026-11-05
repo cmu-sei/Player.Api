@@ -11,8 +11,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -71,7 +69,6 @@ public class Export
 
     public class Handler(
             IPlayerAuthorizationService authorizationService,
-            IMapper mapper,
             PlayerContext db,
             IArchiveService archiveService) : BaseHandler<Query, ArchiveResult>
     {
@@ -88,7 +85,7 @@ public class Export
             }
 
             var items = await query
-                .ProjectTo<ViewExportDTO>(mapper.ConfigurationProvider)
+                .ProjectToViewExportDto()
                 .ToListAsync(cancellationToken);
 
             var data = new Dictionary<string, object>();
@@ -130,7 +127,7 @@ public class Export
                 }
             }
 
-            var export = mapper.Map<ViewExport[]>(items);
+            var export = items.ToViewExports();
 
             var json = JsonSerializer.Serialize(export, new JsonSerializerOptions()
             {

@@ -8,8 +8,6 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -51,7 +49,7 @@ public class GetApplicationTemplate
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, ApplicationTemplate>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Query, ApplicationTemplate>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ViewApplications], [ViewPermission.ManageView], [], cancellationToken);
@@ -59,7 +57,7 @@ public class GetApplicationTemplate
         public override async Task<ApplicationTemplate> HandleRequest(Query request, CancellationToken cancellationToken)
         {
             var item = await db.ApplicationTemplates
-                .ProjectTo<ApplicationTemplate>(mapper.ConfigurationProvider)
+                .ProjectToApplicationTemplate()
                 .SingleOrDefaultAsync(o => o.Id == request.Id, cancellationToken);
 
             return item;

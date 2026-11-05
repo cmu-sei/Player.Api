@@ -27,7 +27,6 @@ using Player.Api.Infrastructure.Mappings;
 using Player.Api.Options;
 using Player.Api.Services;
 using Microsoft.IdentityModel.JsonWebTokens;
-using AutoMapper.Internal;
 using Player.Api.Infrastructure.Endpoints;
 using Player.Api.Infrastructure.Exceptions.Middleware;
 using Microsoft.AspNetCore.Http.Json;
@@ -248,13 +247,6 @@ public class Startup
         });
 
         ApplyPolicies(services);
-
-        services.AddAutoMapper(cfg =>
-        {
-            cfg.Internal().ForAllPropertyMaps(
-                pm => pm.SourceType != null && Nullable.GetUnderlyingType(pm.SourceType) == pm.DestinationType,
-                (pm, c) => c.MapFrom<object, object, object, object>(new IgnoreNullSourceValues(), pm.SourceMember.Name));
-        }, typeof(Startup));
 
         var endpointTypes = typeof(Program).Assembly.GetTypes()
             .Where(t => typeof(IEndpoint).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);

@@ -5,8 +5,6 @@ using System;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -47,7 +45,7 @@ public class Get
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Query, TeamPermissionModel>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Query, TeamPermissionModel>
     {
         public override async Task<bool> Authorize(Query request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ViewRoles, SystemPermission.ViewViews], [ViewPermission.ViewView], [TeamPermission.ManageTeam], cancellationToken);
@@ -55,7 +53,7 @@ public class Get
         public override async Task<TeamPermissionModel> HandleRequest(Query request, CancellationToken cancellationToken)
         {
             var permission = await db.TeamPermissions
-                .ProjectTo<TeamPermissionModel>(mapper.ConfigurationProvider)
+                .ProjectToTeamPermissionModel()
                 .SingleOrDefaultAsync(x => x.Id == request.Id);
 
             if (permission == null)

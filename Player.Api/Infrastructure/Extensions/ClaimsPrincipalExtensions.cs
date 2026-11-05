@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Security.Claims;
+using Player.Api.Infrastructure.Authorization;
 
 namespace Player.Api.Extensions
 {
@@ -25,6 +26,19 @@ namespace Player.Api.Extensions
                 return Guid.Parse(principal.FindFirst(@"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value);
             }
         }
+
+        /// <summary>
+        /// Whether the principal is a member of the team, by its <see cref="PlayerClaimTypes.TeamMember"/> claim.
+        /// </summary>
+        public static bool IsTeamMember(this ClaimsPrincipal principal, Guid teamId) =>
+            principal.HasClaim(PlayerClaimTypes.TeamMember.ToString(), teamId.ToString());
+
+        /// <summary>
+        /// Whether the team is the principal's primary team in its view, by its
+        /// <see cref="PlayerClaimTypes.PrimaryTeam"/> claim.
+        /// </summary>
+        public static bool IsPrimaryTeam(this ClaimsPrincipal principal, Guid teamId) =>
+            principal.HasClaim(PlayerClaimTypes.PrimaryTeam.ToString(), teamId.ToString());
 
         /// <summary>
         /// Normalize scope claims to handle array or single string

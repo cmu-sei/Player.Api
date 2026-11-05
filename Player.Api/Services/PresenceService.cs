@@ -1,7 +1,6 @@
 // Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-using AutoMapper;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Build.Framework;
 using Microsoft.EntityFrameworkCore;
@@ -39,7 +38,6 @@ namespace Player.Api.Services
         private readonly IHubContext<ViewHub> _hub;
         private readonly ConnectionCacheService _connectionCacheService;
         private readonly ClaimsPrincipal _user;
-        private readonly IMapper _mapper;
         private readonly TelemetryService _telemetryService;
 
         public PresenceService(
@@ -48,7 +46,6 @@ namespace Player.Api.Services
             IPlayerAuthorizationService authorizationService,
             IHubContext<ViewHub> hub,
             IPrincipal user,
-            IMapper mapper,
             TelemetryService telemetryService,
             ConnectionCacheService connectionCacheService)
         {
@@ -56,7 +53,6 @@ namespace Player.Api.Services
             _authorizationService = authorizationService;
             _hub = hub;
             _user = user as ClaimsPrincipal;
-            _mapper = mapper;
             _connectionCacheService = connectionCacheService;
             _telemetryService = telemetryService;
         }

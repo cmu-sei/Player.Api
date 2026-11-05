@@ -549,7 +549,7 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         var view = TestData.View();
         var team = TestData.Team(view.Id);
         var template = TestData.ApplicationTemplate(
-            "Template Name", "https://example.test/template", embeddable: true);
+            "Template Name", "https://example.test/template", embeddable: true, loadInBackground: true);
         var application = TestData.Application(
             view.Id,
             name: null,
@@ -566,6 +566,32 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         Assert.Equal("https://example.test/template", created.Url);
         Assert.Equal(template.Icon, created.Icon);
         Assert.True(created.Embeddable);
+        Assert.True(created.LoadInBackground);
+    }
+
+    /// <summary>A property the application sets wins over its template's, including a false one.</summary>
+    [Fact]
+    public async Task CreateApplicationInstance_prefers_the_applications_own_properties_to_the_templates()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id);
+        var template = TestData.ApplicationTemplate(embeddable: true, loadInBackground: true);
+        var application = TestData.Application(view.Id, "Own Name", "https://example.test/own", template.Id);
+        application.Icon = "https://example.test/own-icon.png";
+        application.Embeddable = false;
+        application.LoadInBackground = false;
+        await Seed(view, team, template, application);
+
+        var created = await ReadAsync<ApplicationInstance>(await RootClient.PostAsJsonAsync(
+            $"api/teams/{team.Id}/application-instances",
+            new { applicationId = application.Id },
+            Ct));
+
+        Assert.Equal("Own Name", created.Name);
+        Assert.Equal("https://example.test/own", created.Url);
+        Assert.Equal("https://example.test/own-icon.png", created.Icon);
+        Assert.False(created.Embeddable);
+        Assert.False(created.LoadInBackground);
     }
 
     /// <summary>

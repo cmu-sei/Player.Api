@@ -1,7 +1,6 @@
 // Copyright 2022 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Player.Api.Data.Data;
@@ -9,6 +8,7 @@ using Player.Api.Data.Data.Models;
 using Player.Api.Extensions;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Exceptions;
+using Player.Api.Infrastructure.Mappings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -41,17 +41,15 @@ namespace Player.Api.Services
         private readonly PlayerContext _context;
         private readonly IPlayerAuthorizationService _authorizationService;
         private readonly ClaimsPrincipal _user;
-        private readonly IMapper _mapper;
         private IUserClaimsService _claimsService;
         private IConfiguration _configuration;
 
 
-        public NotificationService(PlayerContext context, IPrincipal user, IPlayerAuthorizationService authorizationService, IMapper mapper, IUserClaimsService claimsService, IConfiguration configuration)
+        public NotificationService(PlayerContext context, IPrincipal user, IPlayerAuthorizationService authorizationService, IUserClaimsService claimsService, IConfiguration configuration)
         {
             _context = context;
             _authorizationService = authorizationService;
             _user = user as ClaimsPrincipal;
-            _mapper = mapper;
             _claimsService = claimsService;
             _configuration = configuration;
         }
@@ -64,7 +62,7 @@ namespace Player.Api.Services
             var items = await _context.Notifications.ToListAsync(ct);
             // Databases do not preserve DateTimeKind, so we need to add UTC kind
             items.ForEach(item => item.BroadcastTime = DateTime.SpecifyKind(item.BroadcastTime, DateTimeKind.Utc));
-            return _mapper.Map<IEnumerable<ViewModels.Notification>>(items);
+            return items.ToNotifications();
         }
 
         public async Task<IEnumerable<ViewModels.Notification>> GetByViewAsync(Guid viewId, CancellationToken ct)
@@ -75,7 +73,7 @@ namespace Player.Api.Services
             var items = await _context.Notifications.Where(x => x.ToId == viewId && x.ToType == NotificationType.View && x.Priority != NotificationPriority.System).OrderByDescending(y => y.BroadcastTime).ToListAsync();
             // Databases do not preserve DateTimeKind, so we need to add UTC kind
             items.ForEach(item => item.BroadcastTime = DateTime.SpecifyKind(item.BroadcastTime, DateTimeKind.Utc));
-            return _mapper.Map<IEnumerable<ViewModels.Notification>>(items);
+            return items.ToNotifications();
         }
 
         public async Task<IEnumerable<ViewModels.Notification>> GetAllViewNotificationsAsync(Guid viewId, CancellationToken ct)
@@ -84,7 +82,7 @@ namespace Player.Api.Services
             var items = await ViewNotifications(viewId).OrderByDescending(y => y.BroadcastTime).ToListAsync();
             // Databases do not preserve DateTimeKind, so we need to add UTC kind
             items.ForEach(item => item.BroadcastTime = DateTime.SpecifyKind(item.BroadcastTime, DateTimeKind.Utc));
-            return _mapper.Map<IEnumerable<ViewModels.Notification>>(items);
+            return items.ToNotifications();
         }
 
         public async Task<IEnumerable<ViewModels.Notification>> GetByTeamAsync(Guid teamId, CancellationToken ct)
@@ -95,7 +93,7 @@ namespace Player.Api.Services
             var items = await _context.Notifications.Where(x => x.ToId == teamId && x.ToType == NotificationType.Team && x.Priority != NotificationPriority.System).OrderByDescending(y => y.BroadcastTime).ToListAsync();
             // Databases do not preserve DateTimeKind, so we need to add UTC kind
             items.ForEach(item => item.BroadcastTime = DateTime.SpecifyKind(item.BroadcastTime, DateTimeKind.Utc));
-            return _mapper.Map<IEnumerable<ViewModels.Notification>>(items);
+            return items.ToNotifications();
         }
 
         public async Task<IEnumerable<ViewModels.Notification>> GetByUserAsync(Guid viewId, Guid userId, CancellationToken ct)
@@ -118,7 +116,7 @@ namespace Player.Api.Services
             var items = await _context.Notifications.Where(x => x.ViewId == viewId && x.ToId == userId && x.ToType == NotificationType.User && x.Priority != NotificationPriority.System).OrderByDescending(y => y.BroadcastTime).ToListAsync();
             // Databases do not preserve DateTimeKind, so we need to add UTC kind
             items.ForEach(item => item.BroadcastTime = DateTime.SpecifyKind(item.BroadcastTime, DateTimeKind.Utc));
-            return _mapper.Map<IEnumerable<ViewModels.Notification>>(items);
+            return items.ToNotifications();
         }
 
         /// <summary>
@@ -160,7 +158,7 @@ namespace Player.Api.Services
                 notificationEntity.Text = "Failed to join View notifications.";
             }
 
-            var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
+            var returnNotification = notificationEntity.ToNotification();
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
             returnNotification.IconUrl = GetIconUrl(notificationEntity.Priority, notificationEntity.FromName);
@@ -183,7 +181,7 @@ namespace Player.Api.Services
             var wasSuccess = true;
             var canPost = true;
             var messageTime = DateTime.Now.ToUniversalTime();
-            var notificationEntity = _mapper.Map<NotificationEntity>(incomingData);
+            var notificationEntity = incomingData.ToEntity();
             notificationEntity.ToId = viewId;
             notificationEntity.ToType = NotificationType.View;
             notificationEntity.BroadcastTime = messageTime;
@@ -194,7 +192,7 @@ namespace Player.Api.Services
             _context.Notifications.Add(notificationEntity);
             await _context.SaveChangesAsync(cancellationToken);
 
-            var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
+            var returnNotification = notificationEntity.ToNotification();
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
             returnNotification.IconUrl = GetIconUrl(notificationEntity.Priority, notificationEntity.FromName);
@@ -244,7 +242,7 @@ namespace Player.Api.Services
                 notificationEntity.Text = "Failed to join Team notifications.";
             }
 
-            var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
+            var returnNotification = notificationEntity.ToNotification();
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
             returnNotification.IconUrl = GetIconUrl(notificationEntity.Priority, notificationEntity.FromName);
@@ -268,7 +266,7 @@ namespace Player.Api.Services
             var canPost = true;
             var messageTime = DateTime.Now.ToUniversalTime();
             var requestedTeam = _context.Teams.Find(teamId);
-            NotificationEntity notificationEntity = _mapper.Map<NotificationEntity>(incomingData);
+            NotificationEntity notificationEntity = incomingData.ToEntity();
             notificationEntity.ToId = teamId;
             notificationEntity.ToType = NotificationType.Team;
             notificationEntity.BroadcastTime = messageTime;
@@ -279,7 +277,7 @@ namespace Player.Api.Services
             _context.Notifications.Add(notificationEntity);
             await _context.SaveChangesAsync(ct);
 
-            var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
+            var returnNotification = notificationEntity.ToNotification();
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
             returnNotification.IconUrl = GetIconUrl(notificationEntity.Priority, notificationEntity.FromName);
@@ -328,7 +326,7 @@ namespace Player.Api.Services
                 notificationEntity.Text = String.Format("Failed to join {0} notifications.", notificationEntity.ToName);
             }
 
-            var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
+            var returnNotification = notificationEntity.ToNotification();
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
             returnNotification.IconUrl = GetIconUrl(notificationEntity.Priority, notificationEntity.FromName);
@@ -360,7 +358,7 @@ namespace Player.Api.Services
             var canPost = true;
             var messageTime = DateTime.Now.ToUniversalTime();
 
-            var notificationEntity = _mapper.Map<NotificationEntity>(incomingData);
+            var notificationEntity = incomingData.ToEntity();
             notificationEntity.ViewId = viewId;
             notificationEntity.ToId = userId;
             notificationEntity.ToType = NotificationType.User;
@@ -372,7 +370,7 @@ namespace Player.Api.Services
             _context.Notifications.Add(notificationEntity);
             await _context.SaveChangesAsync(cancellationToken);
 
-            var returnNotification = _mapper.Map<ViewModels.Notification>(notificationEntity);
+            var returnNotification = notificationEntity.ToNotification();
             returnNotification.WasSuccess = wasSuccess;
             returnNotification.CanPost = canPost;
             returnNotification.IconUrl = GetIconUrl(notificationEntity.Priority, notificationEntity.FromName);

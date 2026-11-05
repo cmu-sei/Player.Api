@@ -4,7 +4,6 @@
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -46,19 +45,19 @@ public class Create
         }
     }
 
-    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db, IMapper mapper) : BaseHandler<Command, Permission>
+    public class Handler(IPlayerAuthorizationService authorizationService, PlayerContext db) : BaseHandler<Command, Permission>
     {
         public override async Task<bool> Authorize(Command request, CancellationToken cancellationToken) =>
             await authorizationService.Authorize([SystemPermission.ManageRoles], [], [], cancellationToken);
 
         public override async Task<Permission> HandleRequest(Command request, CancellationToken cancellationToken)
         {
-            var permissionEntity = mapper.Map<PermissionEntity>(request);
+            var permissionEntity = request.ToEntity();
 
             db.Permissions.Add(permissionEntity);
             await db.SaveChangesAsync(cancellationToken);
 
-            return mapper.Map<Permission>(permissionEntity);
+            return permissionEntity.ToPermission();
         }
     }
 }

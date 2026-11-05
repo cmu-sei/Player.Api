@@ -14,7 +14,7 @@ namespace Player.Api.Tests.Features.Users;
 
 /// <summary>
 /// Covers the <c>Users</c> feature over HTTP: the real routes, the real middleware, the real claims
-/// transformer, the real handlers, the real AutoMapper profiles, a real database.
+/// transformer, the real handlers, the real mappers, a real database.
 /// </summary>
 public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
     : ApiTestBase(fixture, factory)
@@ -326,6 +326,22 @@ public class UserRequestTests(DatabaseFixture fixture, PlayerAppFactory factory)
 
         await using var db = NewContext();
         Assert.Equal("After", (await db.Users.SingleAsync(x => x.Id == user.Id, Ct)).Name);
+    }
+
+    /// <summary>The edit writes every member, so a body without a role clears the user's role.</summary>
+    [Fact]
+    public async Task Edit_clears_the_role_when_none_is_given()
+    {
+        var user = TestData.User(roleId: TestData.Roles.ContentDeveloper);
+        await Seed(user);
+
+        var edited = await ReadAsync<User>(await RootClient.PutAsJsonAsync(
+            $"api/users/{user.Id}", new { name = user.Name }, Ct));
+
+        Assert.Null(edited.RoleId);
+
+        await using var db = NewContext();
+        Assert.Null((await db.Users.SingleAsync(x => x.Id == user.Id, Ct)).RoleId);
     }
 
     [Fact]
