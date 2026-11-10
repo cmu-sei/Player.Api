@@ -153,28 +153,109 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
     }
 
     /// <summary>Deleting a template an application uses is answered with a 500, and both rows are kept.</summary>
+    /// <summary>
+    /// Applications inherit their name, url and icon from the template, so deleting one out from under
+    /// them is refused — with a reason the admin can act on rather than a database error.
+    /// </summary>
     [Fact]
     public async Task DeleteApplicationTemplate_is_refused_while_an_application_uses_it()
     {
         var view = TestData.View();
-        var template = TestData.ApplicationTemplate();
+        var otherView = TestData.View("Other View");
+        var template = TestData.ApplicationTemplate("Virtual Machines");
         var application = TestData.Application(view.Id, "Kept", templateId: template.Id);
-        await Seed(view, template, application);
+        var second = TestData.Application(view.Id, "Also Kept", templateId: template.Id);
+        var third = TestData.Application(otherView.Id, "Elsewhere", templateId: template.Id);
+        await Seed(view, otherView, template, application, second, third);
 
         var problem = await AssertProblem(
-            HttpStatusCode.InternalServerError,
+            HttpStatusCode.Conflict,
             await RootClient.DeleteAsync($"api/application-templates/{template.Id}", Ct));
 
         Assert.Equal(
-            "An error occurred while saving the entity changes. See the inner exception for details.",
-            problem.Detail);
+            "Virtual Machines is used by 3 Applications in 2 Views. Choose a template to move them to before deleting it.",
+            problem.Title);
 
         await using var db = NewContext();
         Assert.True(await db.ApplicationTemplates.AnyAsync(x => x.Id == template.Id, Ct));
+        Assert.Equal(3, await db.Applications.CountAsync(x => x.ApplicationTemplateId == template.Id, Ct));
+    }
 
-        var kept = await db.Applications.SingleAsync(Ct);
-        Assert.Equal("Kept", kept.Name);
-        Assert.Equal(template.Id, kept.ApplicationTemplateId);
+    /// <summary>
+    /// The way out of a duplicate template: its applications move to the one that stays, then it goes,
+    /// in one request — and only its own applications move.
+    /// </summary>
+    [Fact]
+    public async Task DeleteApplicationTemplate_moves_its_applications_to_the_replacement()
+    {
+        var view = TestData.View();
+        var duplicate = TestData.ApplicationTemplate("Virtual Machines");
+        var kept = TestData.ApplicationTemplate("Virtual Machines Kept");
+        var unrelated = TestData.ApplicationTemplate("Map");
+        var moved = TestData.Application(view.Id, "Moved", templateId: duplicate.Id);
+        var untouched = TestData.Application(view.Id, "Untouched", templateId: unrelated.Id);
+        await Seed(view, duplicate, kept, unrelated, moved, untouched);
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await RootClient.DeleteAsync(
+                $"api/application-templates/{duplicate.Id}?replacementTemplateId={kept.Id}", Ct));
+
+        await using var db = NewContext();
+        Assert.False(await db.ApplicationTemplates.AnyAsync(x => x.Id == duplicate.Id, Ct));
+        Assert.Equal(kept.Id, (await db.Applications.SingleAsync(x => x.Id == moved.Id, Ct)).ApplicationTemplateId);
+        Assert.Equal(unrelated.Id, (await db.Applications.SingleAsync(x => x.Id == untouched.Id, Ct)).ApplicationTemplateId);
+    }
+
+    [Fact]
+    public async Task DeleteApplicationTemplate_ignores_a_replacement_when_nothing_uses_it()
+    {
+        var template = TestData.ApplicationTemplate();
+        await Seed(template);
+
+        await AssertStatus(
+            HttpStatusCode.NoContent,
+            await RootClient.DeleteAsync(
+                $"api/application-templates/{template.Id}?replacementTemplateId={Guid.NewGuid()}", Ct));
+
+        await using var db = NewContext();
+        Assert.False(await db.ApplicationTemplates.AnyAsync(Ct));
+    }
+
+    [Fact]
+    public async Task DeleteApplicationTemplate_refuses_a_missing_replacement()
+    {
+        var view = TestData.View();
+        var template = TestData.ApplicationTemplate();
+        var application = TestData.Application(view.Id, templateId: template.Id);
+        await Seed(view, template, application);
+
+        var problem = await AssertProblem(
+            HttpStatusCode.NotFound,
+            await RootClient.DeleteAsync(
+                $"api/application-templates/{template.Id}?replacementTemplateId={Guid.NewGuid()}", Ct));
+
+        Assert.Equal("The replacement Application Template was not found.", problem.Title);
+
+        await using var db = NewContext();
+        Assert.Equal(template.Id, (await db.Applications.SingleAsync(Ct)).ApplicationTemplateId);
+    }
+
+    [Fact]
+    public async Task DeleteApplicationTemplate_refuses_itself_as_the_replacement()
+    {
+        var view = TestData.View();
+        var template = TestData.ApplicationTemplate();
+        var application = TestData.Application(view.Id, templateId: template.Id);
+        await Seed(view, template, application);
+
+        await AssertProblem(
+            HttpStatusCode.Conflict,
+            await RootClient.DeleteAsync(
+                $"api/application-templates/{template.Id}?replacementTemplateId={template.Id}", Ct));
+
+        await using var db = NewContext();
+        Assert.True(await db.ApplicationTemplates.AnyAsync(x => x.Id == template.Id, Ct));
     }
 
     [Fact]
