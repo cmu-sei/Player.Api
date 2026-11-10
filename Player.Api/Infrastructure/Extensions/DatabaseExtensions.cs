@@ -217,19 +217,35 @@ namespace Player.Api.Extensions
 
             if (options.ApplicationTemplates.Any())
             {
-                var dbTemplates = context.ApplicationTemplates
-                    .Where(x => options.ApplicationTemplates.Select(y => y.Id).Contains(x.Id))
-                    .ToList();
+                var dbTemplates = context.ApplicationTemplates.ToList();
+                var redirectedIds = new Dictionary<Guid, Guid>();
 
                 foreach (var applicationTemplate in options.ApplicationTemplates)
                 {
-                    var dbTemplate = dbTemplates.SingleOrDefault(x => x.Id == applicationTemplate.Id);
+                    if (dbTemplates.Any(x => x.Id == applicationTemplate.Id))
+                        continue;
 
-                    if (dbTemplate == null)
+                    // A template already present under another id but with the same name is used in place
+                    // of the configured one rather than seeded beside it.
+                    var sameName = dbTemplates.FirstOrDefault(x =>
+                        ApplicationTemplateNames.SameName(x.Name, applicationTemplate.Name));
+
+                    if (sameName != null)
                     {
-                        var applicationTemplateEntity = applicationTemplate.ToEntity();
-                        context.ApplicationTemplates.Add(applicationTemplateEntity);
+                        redirectedIds[applicationTemplate.Id] = sameName.Id;
+                        continue;
                     }
+
+                    var applicationTemplateEntity = applicationTemplate.ToEntity();
+                    context.ApplicationTemplates.Add(applicationTemplateEntity);
+                    dbTemplates.Add(applicationTemplateEntity);
+                }
+
+                // Seeded views that name a skipped template by id point at the one used in its place.
+                foreach (var app in options.Views.SelectMany(x => x.Applications ?? []))
+                {
+                    if (app.ApplicationTemplateId is Guid id && redirectedIds.TryGetValue(id, out var existingId))
+                        app.ApplicationTemplateId = existingId;
                 }
 
                 context.SaveChanges();

@@ -81,7 +81,7 @@ public class ImportApplicationTemplates
 
             var applicationTemplates = JsonSerializer.Deserialize<ApplicationTemplate[]>(applicationTemplateEntry.Value);
 
-            var dbTemplates = await db.ApplicationTemplates.Where(x => applicationTemplates.Select(y => y.Id).Contains(x.Id)).ToListAsync(cancellationToken);
+            var dbTemplates = await db.ApplicationTemplates.ToListAsync(cancellationToken);
 
             foreach (var applicationTemplate in applicationTemplates)
             {
@@ -89,13 +89,31 @@ public class ImportApplicationTemplates
 
                 if (dbTemplate == null)
                 {
+                    // A template from another installation arrives with its own id, so matching by id
+                    // alone would add a second template of the same name beside the local one.
+                    if (dbTemplates.Any(x => ApplicationTemplateNames.SameName(x.Name, applicationTemplate.Name)))
+                    {
+                        failures.Add($"{applicationTemplate.Name} ({applicationTemplate.Id}): {ApplicationTemplateNames.TakenMessage(applicationTemplate.Name)}");
+                        continue;
+                    }
+
                     var applicationTemplateEntity = applicationTemplate.ToEntity();
                     db.ApplicationTemplates.Add(applicationTemplateEntity);
+                    dbTemplates.Add(applicationTemplateEntity);
                 }
                 else
                 {
                     if (request.OverWriteExisting)
                     {
+                        // As with Edit, keeping the name a template already has is allowed even if another
+                        // template shares it, so existing duplicates can still be overwritten.
+                        if (!ApplicationTemplateNames.SameName(applicationTemplate.Name, dbTemplate.Name) &&
+                            dbTemplates.Any(x => x.Id != dbTemplate.Id && ApplicationTemplateNames.SameName(x.Name, applicationTemplate.Name)))
+                        {
+                            failures.Add($"{applicationTemplate.Name} ({applicationTemplate.Id}): {ApplicationTemplateNames.TakenMessage(applicationTemplate.Name)}");
+                            continue;
+                        }
+
                         applicationTemplate.ApplyTo(dbTemplate);
                     }
                     else

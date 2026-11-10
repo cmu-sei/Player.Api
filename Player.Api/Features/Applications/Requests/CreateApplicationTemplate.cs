@@ -18,6 +18,7 @@ using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
+using Player.Api.Infrastructure.Exceptions;
 using Player.Api.ViewModels;
 
 namespace Player.Api.Features.Applications;
@@ -64,6 +65,9 @@ public class CreateApplicationTemplate
 
         public override async Task<ApplicationTemplate> HandleRequest(Command request, CancellationToken cancellationToken)
         {
+            if (await db.ApplicationTemplates.IsTakenAsync(request.Name, null, cancellationToken))
+                throw new ConflictException(ApplicationTemplateNames.TakenMessage(request.Name));
+
             var templateEntity = request.ToEntity();
 
             db.ApplicationTemplates.Add(templateEntity);

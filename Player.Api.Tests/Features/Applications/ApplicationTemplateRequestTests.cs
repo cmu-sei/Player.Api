@@ -85,6 +85,60 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         Assert.False(await db.ApplicationTemplates.AnyAsync(Ct));
     }
 
+    [Theory]
+    [InlineData("Virtual Machines")]
+    [InlineData("virtual machines")]
+    [InlineData("  Virtual Machines ")]
+    public async Task CreateApplicationTemplate_refuses_a_name_already_in_use(string name)
+    {
+        await Seed(TestData.ApplicationTemplate("Virtual Machines"));
+
+        var problem = await AssertProblem(
+            HttpStatusCode.Conflict,
+            await RootClient.PostAsJsonAsync("api/application-templates", new { name }, Ct));
+
+        Assert.Equal($"An Application Template named {name.Trim()} already exists.", problem.Title);
+
+        await using var db = NewContext();
+        Assert.Equal(1, await db.ApplicationTemplates.CountAsync(Ct));
+    }
+
+    [Fact]
+    public async Task EditApplicationTemplate_refuses_a_rename_onto_another_templates_name()
+    {
+        var taken = TestData.ApplicationTemplate("Virtual Machines");
+        var template = TestData.ApplicationTemplate("Map");
+        await Seed(taken, template);
+
+        await AssertProblem(HttpStatusCode.Conflict, await RootClient.PutAsJsonAsync(
+            $"api/application-templates/{template.Id}", new { name = "VIRTUAL MACHINES" }, Ct));
+
+        await using var db = NewContext();
+        Assert.Equal("Map", (await db.ApplicationTemplates.SingleAsync(x => x.Id == template.Id, Ct)).Name);
+    }
+
+    /// <summary>
+    /// Installations that already hold duplicates must still be able to edit them — keeping the name
+    /// while changing the url, or renaming one out of the clash.
+    /// </summary>
+    [Fact]
+    public async Task EditApplicationTemplate_allows_editing_a_template_that_already_shares_its_name()
+    {
+        var first = TestData.ApplicationTemplate("Virtual Machines");
+        var duplicate = TestData.ApplicationTemplate("Virtual Machines");
+        await Seed(first, duplicate);
+
+        await AssertStatus(HttpStatusCode.OK, await RootClient.PutAsJsonAsync(
+            $"api/application-templates/{duplicate.Id}",
+            new { name = "Virtual Machines", url = "https://example.test/changed" }, Ct));
+
+        await AssertStatus(HttpStatusCode.OK, await RootClient.PutAsJsonAsync(
+            $"api/application-templates/{duplicate.Id}", new { name = "Virtual Machines (old)" }, Ct));
+
+        await using var db = NewContext();
+        Assert.Equal("Virtual Machines (old)", (await db.ApplicationTemplates.SingleAsync(x => x.Id == duplicate.Id, Ct)).Name);
+    }
+
     [Fact]
     public async Task EditApplicationTemplate_updates_the_template()
     {
@@ -152,7 +206,6 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         Assert.False(await db.ApplicationTemplates.AnyAsync(Ct));
     }
 
-    /// <summary>Deleting a template an application uses is answered with a 500, and both rows are kept.</summary>
     /// <summary>
     /// Applications inherit their name, url and icon from the template, so deleting one out from under
     /// them is refused — with a reason the admin can act on rather than a database error.
@@ -650,6 +703,50 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
 
         await using var db = NewContext();
         Assert.Equal("Changed", (await db.ApplicationTemplates.SingleAsync(Ct)).Name);
+    }
+
+    /// <summary>
+    /// A template exported from another installation carries that installation's id, so an id match
+    /// alone would add a second "Virtual Machines" beside the local one.
+    /// </summary>
+    [Fact]
+    public async Task ImportApplicationTemplates_reports_a_template_whose_name_is_already_in_use()
+    {
+        var foreign = TestData.ApplicationTemplate("Virtual Machines", "https://other.test/vm");
+        await Seed(foreign);
+        var exported = await Export();
+
+        await using (var db = NewContext())
+        {
+            db.ApplicationTemplates.Remove(await db.ApplicationTemplates.SingleAsync(Ct));
+            db.ApplicationTemplates.Add(TestData.ApplicationTemplate("virtual machines", "https://local.test/vm"));
+            await db.SaveChangesAsync(Ct);
+        }
+
+        var result = await Import(exported);
+
+        Assert.Equal(
+            [$"Virtual Machines ({foreign.Id}): An Application Template named Virtual Machines already exists."],
+            result.Failures);
+
+        await using var check = NewContext();
+        Assert.Equal("https://local.test/vm", (await check.ApplicationTemplates.SingleAsync(Ct)).Url);
+    }
+
+    /// <summary>
+    /// Overwriting a template that already shares its name with another keeps working, as Edit does.
+    /// </summary>
+    [Fact]
+    public async Task ImportApplicationTemplates_overwrites_an_existing_duplicate_when_asked()
+    {
+        var first = TestData.ApplicationTemplate("Virtual Machines", "https://example.test/one");
+        var duplicate = TestData.ApplicationTemplate("Virtual Machines", "https://example.test/two");
+        await Seed(first, duplicate);
+
+        var exported = await Export();
+        var result = await Import(exported, overWriteExisting: true);
+
+        Assert.Empty(result.Failures);
     }
 
     [Fact]
