@@ -293,6 +293,71 @@ public class DatabaseExtensionsTests(DatabaseFixture fixture) : ServiceTestBase(
     }
 
     /// <summary>
+    /// A template configured under a new id must not be seeded beside an existing one of the same name —
+    /// that is how an installation ends up listing two "Virtual Machines" templates.
+    /// </summary>
+    [Fact]
+    public async Task InitializeDatabase_does_not_seed_a_template_whose_name_is_already_in_use()
+    {
+        var existing = TestData.ApplicationTemplate("Virtual Machines");
+        await Seed(existing);
+
+        var host = HostWithSeedData(seed =>
+            seed.ApplicationTemplates =
+            [
+                new ApplicationTemplate { Id = Guid.NewGuid(), Name = " virtual machines", Url = "https://example.test/vm" },
+                new ApplicationTemplate { Id = Guid.NewGuid(), Name = "Map", Url = "https://example.test/map" },
+                new ApplicationTemplate { Id = Guid.NewGuid(), Name = "Map", Url = "https://example.test/map2" }
+            ]);
+
+        host.InitializeDatabase();
+
+        await using var db = NewContext();
+        var names = db.ApplicationTemplates.Select(x => x.Name).OrderBy(x => x).ToList();
+        Assert.Equal(["Map", "Virtual Machines"], names);
+        Assert.Equal(existing.Id, db.ApplicationTemplates.Single(x => x.Name == "Virtual Machines").Id);
+    }
+
+    /// <summary>
+    /// A seeded view that names its template only by the configured id still starts when that template
+    /// was skipped for an existing one of the same name: its application points at the existing one.
+    /// </summary>
+    [Fact]
+    public async Task InitializeDatabase_points_seeded_views_at_the_template_used_in_place_of_a_skipped_one()
+    {
+        var existing = TestData.ApplicationTemplate("Virtual Machines");
+        await Seed(existing);
+
+        var seedTemplateId = Guid.NewGuid();
+        var viewId = Guid.NewGuid();
+        var host = HostWithSeedData(seed =>
+        {
+            seed.ApplicationTemplates =
+            [
+                new ApplicationTemplate { Id = seedTemplateId, Name = "virtual machines " }
+            ];
+            seed.Views =
+            [
+                new ViewExport
+                {
+                    Id = viewId,
+                    Name = "Seeded View",
+                    Teams = [],
+                    Applications = [new ApplicationExport { Id = Guid.NewGuid(), ApplicationTemplateId = seedTemplateId }],
+                    Files = []
+                }
+            ];
+        });
+
+        host.InitializeDatabase();
+
+        await using var db = NewContext();
+        var app = db.Applications.Single(x => x.ViewId == viewId);
+        Assert.Equal(existing.Id, app.ApplicationTemplateId);
+        Assert.Equal(1, db.ApplicationTemplates.Count());
+    }
+
+    /// <summary>
     /// Views are seeded through the same importer the import endpoint uses, so a configured view arrives
     /// with its teams.
     /// </summary>

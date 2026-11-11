@@ -63,6 +63,12 @@ public class EditApplicationTemplate
             if (templateToUpdate == null)
                 throw new EntityNotFoundException<ApplicationTemplate>();
 
+            // Only a rename is checked, so a template that already shares its name with another can
+            // still be edited — and renamed out of the clash.
+            if (!ApplicationTemplateNames.SameName(request.Name, templateToUpdate.Name) &&
+                await db.ApplicationTemplates.IsTakenAsync(request.Name, request.Id, cancellationToken))
+                throw new ConflictException(ApplicationTemplateNames.TakenMessage(request.Name));
+
             request.ApplyTo(templateToUpdate);
             await db.SaveChangesAsync(cancellationToken);
 

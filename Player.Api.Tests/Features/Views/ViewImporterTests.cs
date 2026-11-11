@@ -400,6 +400,27 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     }
 
     /// <summary>
+    /// Matching by name follows the rule that keeps template names unique: case and surrounding spaces
+    /// do not count.
+    /// </summary>
+    [Fact]
+    public async Task An_application_template_name_match_ignores_case_and_surrounding_spaces()
+    {
+        var template = TestData.ApplicationTemplate("Local Template");
+        await Seed(template);
+
+        var view = Export();
+        view.Applications =
+            [Application(view.Id, templateId: Guid.NewGuid(), templateName: " local template ")];
+
+        Assert.Empty(await Import([view], matchApplicationTemplatesByName: true));
+
+        await using var db = NewContext();
+        var imported = await db.Applications.SingleAsync(x => x.ViewId == view.Id, Ct);
+        Assert.Equal(template.Id, imported.ApplicationTemplateId);
+    }
+
+    /// <summary>
     /// Same manifest and same local template as the test above, with the flag off: the name is not
     /// consulted, so the unknown id is a failure.
     /// </summary>

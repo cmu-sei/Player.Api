@@ -12,6 +12,8 @@ using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
 using Player.Api.Services;
 
+using Player.Api.Features.Applications;
+
 namespace Player.Api.Features.Views;
 
 public enum ImportViewFailureType
@@ -127,7 +129,7 @@ public class ViewImporter(PlayerContext db, IFileService fileService)
         foreach (var app in view.Applications.Where(x => x.ApplicationTemplateId.HasValue || !string.IsNullOrEmpty(x.ApplicationTemplateName)))
         {
             var dbApp = dbTemplates.FirstOrDefault(x => x.Id == app.ApplicationTemplateId) ??
-                (matchByName ? dbTemplates.FirstOrDefault(x => x.Name == app.ApplicationTemplateName) : null);
+                (matchByName ? dbTemplates.FirstOrDefault(x => ApplicationTemplateNames.SameName(x.Name, app.ApplicationTemplateName)) : null);
 
             if (dbApp is null)
             {
