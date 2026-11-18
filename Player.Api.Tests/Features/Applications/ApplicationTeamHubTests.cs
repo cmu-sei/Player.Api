@@ -3,6 +3,7 @@
 
 using System.Net;
 using System.Net.Http.Json;
+using Player.Api.Data.Data.Models;
 using Player.Api.Features.Applications.EventHandlers;
 using Player.Api.Hubs;
 using Player.Api.Tests.Support;
@@ -195,6 +196,69 @@ public class ApplicationTeamHubTests(DatabaseFixture fixture, PlayerAppFactory f
             $"api/application-templates/{template.Id}?replacementTemplateId={replacement.Id}", Ct));
 
         Assert.Single(ApplicationsChanged(team.Id));
+    }
+
+    // ---- Teams and views ------------------------------------------------------------------------
+
+    /// <summary>An application's name and url can show the team's name as <c>{teamName}</c>.</summary>
+    [Fact]
+    public async Task Renaming_a_team_tells_the_team()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Before");
+        var other = TestData.Team(view.Id, "Other");
+        var application = TestData.Application(view.Id);
+        await Seed(view, team, other, application,
+            TestData.ApplicationInstance(team.Id, application.Id),
+            TestData.ApplicationInstance(other.Id, application.Id));
+
+        await AssertStatus(HttpStatusCode.OK, await RootClient.PutAsJsonAsync(
+            $"api/teams/{team.Id}", new { name = "After" }, Ct));
+
+        Assert.Single(ApplicationsChanged(team.Id));
+        Assert.Empty(ApplicationsChanged(other.Id));
+    }
+
+    [Fact]
+    public async Task Editing_a_team_without_renaming_it_tells_no_one()
+    {
+        var view = TestData.View();
+        var team = TestData.Team(view.Id, "Unchanged");
+        var role = TestData.TeamRole();
+        var application = TestData.Application(view.Id);
+        await Seed(view, team, role, application, TestData.ApplicationInstance(team.Id, application.Id));
+
+        await AssertStatus(HttpStatusCode.OK, await RootClient.PutAsJsonAsync(
+            $"api/teams/{team.Id}", new { name = "Unchanged", roleId = role.Id }, Ct));
+
+        Assert.Empty(ApplicationsChanged(team.Id));
+    }
+
+    /// <summary>
+    /// An application's name and url can show the view's name as <c>{viewName}</c>, so a rename tells every
+    /// team in the view that shows an application, and no team in another view.
+    /// </summary>
+    [Fact]
+    public async Task Renaming_a_view_tells_its_teams()
+    {
+        var view = TestData.View("Before");
+        var other = TestData.View("Other");
+        var red = TestData.Team(view.Id, "Red");
+        var blue = TestData.Team(view.Id, "Blue");
+        var elsewhere = TestData.Team(other.Id, "Elsewhere");
+        var application = TestData.Application(view.Id);
+        var otherApplication = TestData.Application(other.Id);
+        await Seed(view, other, red, blue, elsewhere, application, otherApplication,
+            TestData.ApplicationInstance(red.Id, application.Id),
+            TestData.ApplicationInstance(blue.Id, application.Id),
+            TestData.ApplicationInstance(elsewhere.Id, otherApplication.Id));
+
+        await AssertStatus(HttpStatusCode.OK, await RootClient.PutAsJsonAsync(
+            $"api/views/{view.Id}", new { name = "After", status = ViewStatus.Active }, Ct));
+
+        Assert.Single(ApplicationsChanged(red.Id));
+        Assert.Single(ApplicationsChanged(blue.Id));
+        Assert.Empty(ApplicationsChanged(elsewhere.Id));
     }
 
     // ---- Helpers --------------------------------------------------------------------------------
