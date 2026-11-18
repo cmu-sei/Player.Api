@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 using System.Security.Principal;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -166,6 +167,24 @@ public class Startup
             {
                 ValidateAudience = _authOptions.ValidateAudience,
                 ValidAudiences = validAudiences
+            };
+
+            // A browser can't set headers on a WebSocket, so the SignalR client sends the token from its
+            // accessTokenFactory as access_token. Unlike a token fixed in the hub url, it is fresh on every
+            // reconnect.
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+
+                    if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                    {
+                        context.Token = accessToken;
+                    }
+
+                    return Task.CompletedTask;
+                }
             };
         });
 
