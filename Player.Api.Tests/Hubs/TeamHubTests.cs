@@ -32,6 +32,22 @@ public class TeamHubTests
     }
 
     /// <summary>
+    /// Group names are compared as strings, and the server sends to the id in its canonical form, so a caller
+    /// that writes the id in capitals or braces joins the same group as everyone else.
+    /// </summary>
+    [Fact]
+    public async Task Join_names_the_group_by_the_canonical_team_id()
+    {
+        var joined = Message(_teamId, "Successfully joined Red Team notifications.");
+        _notifications.JoinTeam(_teamId, Arg.Any<CancellationToken>()).Returns(joined);
+
+        await Hub().Join(_teamId.ToString("B").ToUpperInvariant());
+
+        await _harness.Groups.Received(1).AddToGroupAsync(
+            HubHarness.ConnectionId, _teamId.ToString(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
     /// A refused join is reported by <c>WasSuccess</c>, and the hub has to read it: joining the group anyway
     /// would deliver every later team broadcast to a caller with no claim on the team.
     /// </summary>

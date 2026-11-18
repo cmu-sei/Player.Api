@@ -31,7 +31,7 @@ namespace Player.Api.Hubs
             var notification = await _notificationService.JoinUser(viewId, userId, _ct);
             if (notification.WasSuccess)
             {
-                await Groups.AddToGroupAsync(Context.ConnectionId, getGroupString(viewString, userString));
+                await Groups.AddToGroupAsync(Context.ConnectionId, GetGroupString(viewId, userId));
             }
             await Clients.Caller.SendAsync("Reply", notification);
         }
@@ -51,7 +51,7 @@ namespace Player.Api.Hubs
             }
             else
             {
-                await Clients.Group(getGroupString(viewString, userString)).SendAsync("Reply", notification);
+                await Clients.Group(GetGroupString(viewId, userId)).SendAsync("Reply", notification);
             }
         }
 
@@ -65,12 +65,13 @@ namespace Player.Api.Hubs
 
         public async Task Leave(string viewString, string userString)
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, getGroupString(viewString, userString));
+            var viewId = Guid.Parse(viewString);
+            var userId = Guid.Parse(userString);
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, GetGroupString(viewId, userId));
         }
 
-        private string getGroupString(string viewString, string userString)
-        {
-            return String.Format("{0}_{1}", viewString, userString);
-        }
+        // Group names are compared as strings, so name the group by the parsed ids: the server sends to
+        // "{viewId}_{userId}" in canonical form, whatever casing or braces the caller used.
+        private static string GetGroupString(Guid viewId, Guid userId) => $"{viewId}_{userId}";
     }
 }

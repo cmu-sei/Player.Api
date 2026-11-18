@@ -38,6 +38,22 @@ public class UserHubTests
     }
 
     /// <summary>
+    /// Group names are compared as strings, and the server sends to the ids in their canonical form, so a
+    /// caller that writes them in capitals or braces joins the same group as everyone else.
+    /// </summary>
+    [Fact]
+    public async Task Join_names_the_group_by_the_canonical_view_and_user_ids()
+    {
+        var joined = Message(_userId, "Successfully joined Test User notifications.");
+        _notifications.JoinUser(_viewId, _userId, Arg.Any<CancellationToken>()).Returns(joined);
+
+        await Hub().Join(_viewId.ToString("B").ToUpperInvariant(), _userId.ToString("B").ToUpperInvariant());
+
+        await _harness.Groups.Received(1).AddToGroupAsync(
+            HubHarness.ConnectionId, Group, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
     /// Joining someone else's notifications is refused through <c>WasSuccess</c>, and the hub has to read it:
     /// adding the connection to that user's group anyway would deliver another user's private notifications.
     /// </summary>

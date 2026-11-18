@@ -32,7 +32,9 @@ namespace Player.Api.Hubs
             var notification = await _notificationService.JoinTeam(id, _ct);
             if (notification.WasSuccess)
             {
-                await Groups.AddToGroupAsync(Context.ConnectionId, idString);
+                // Group names are compared as strings, so name the group by the parsed id: the server sends to
+                // id.ToString(), whatever casing or braces the caller used.
+                await Groups.AddToGroupAsync(Context.ConnectionId, id.ToString());
             }
             await Clients.Caller.SendAsync("Reply", notification);
         }
@@ -51,7 +53,7 @@ namespace Player.Api.Hubs
             }
             else
             {
-                await Clients.Group(idString).SendAsync("Reply", notification);
+                await Clients.Group(id.ToString()).SendAsync("Reply", notification);
             }
         }
 
@@ -64,7 +66,8 @@ namespace Player.Api.Hubs
 
         public async Task Leave(string idString)
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, idString);
+            var id = Guid.Parse(idString);
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, id.ToString());
         }
     }
 }

@@ -48,7 +48,9 @@ namespace Player.Api.Hubs
                 return;
             }
 
-            await Groups.AddToGroupAsync(Context.ConnectionId, idString);
+            // Group names are compared as strings, so name the group by the parsed id: the server sends to
+            // id.ToString(), whatever casing or braces the caller used.
+            await Groups.AddToGroupAsync(Context.ConnectionId, id.ToString());
 
             try
             {
@@ -91,7 +93,7 @@ namespace Player.Api.Hubs
             }
             else
             {
-                await Clients.Group(idString).SendAsync("Reply", notification);
+                await Clients.Group(id.ToString()).SendAsync("Reply", notification);
             }
         }
 
@@ -104,6 +106,8 @@ namespace Player.Api.Hubs
 
         public async Task Leave(string idString)
         {
+            var id = Guid.Parse(idString);
+
             // remove connection from presence service
             var presenceId = Context.Items["presenceId"];
 
@@ -113,7 +117,7 @@ namespace Player.Api.Hubs
                 Context.Items.Remove("presenceId");
             }
 
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, idString);
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, id.ToString());
         }
 
         public override async Task OnDisconnectedAsync(Exception ex)
