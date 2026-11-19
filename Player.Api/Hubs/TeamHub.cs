@@ -66,8 +66,11 @@ namespace Player.Api.Hubs
 
         public async Task Leave(string idString)
         {
-            var id = Guid.Parse(idString);
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, id.ToString());
+            // A connection is only ever in a group named by a valid id, so there is nothing to leave otherwise.
+            if (Guid.TryParse(idString, out var id))
+            {
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, id.ToString());
+            }
         }
     }
 }

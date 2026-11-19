@@ -133,6 +133,34 @@ public class TeamHubTests
             HubHarness.ConnectionId, _teamId.ToString(), Arg.Any<CancellationToken>());
     }
 
+    /// <summary>A post or a leave written with capitals or braces reaches the canonical group.</summary>
+    [Fact]
+    public async Task Post_and_Leave_use_the_canonical_team_id()
+    {
+        var posted = Message(_teamId, "Ten minutes remaining.");
+        _notifications.PostToTeam(_teamId, Arg.Any<Notification>(), Arg.Any<CancellationToken>()).Returns(posted);
+
+        await Hub().Post(_teamId.ToString("B").ToUpperInvariant(), "Ten minutes remaining.");
+        await Hub().Leave(_teamId.ToString("B").ToUpperInvariant());
+
+        Assert.Same(posted, HubHarness.Sent<Notification>(_harness.Group(_teamId.ToString()), "Reply"));
+        await _harness.Groups.Received(1).RemoveFromGroupAsync(
+            HubHarness.ConnectionId, _teamId.ToString(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// A connection is only ever in a group named by a valid id, so leaving with a malformed one has nothing to
+    /// do, and doesn't fail a client's teardown.
+    /// </summary>
+    [Fact]
+    public async Task Leave_with_a_malformed_id_does_nothing()
+    {
+        await Hub().Leave("not-a-guid");
+
+        await _harness.Groups.DidNotReceive().RemoveFromGroupAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
     /// <summary>Every method takes the team id as a string, so an unparseable one is the caller's error.</summary>
     [Fact]
     public async Task A_malformed_team_id_is_rejected()

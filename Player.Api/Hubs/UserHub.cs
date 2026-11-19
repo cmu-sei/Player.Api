@@ -65,9 +65,11 @@ namespace Player.Api.Hubs
 
         public async Task Leave(string viewString, string userString)
         {
-            var viewId = Guid.Parse(viewString);
-            var userId = Guid.Parse(userString);
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, GetGroupString(viewId, userId));
+            // A connection is only ever in a group named by valid ids, so there is nothing to leave otherwise.
+            if (Guid.TryParse(viewString, out var viewId) && Guid.TryParse(userString, out var userId))
+            {
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, GetGroupString(viewId, userId));
+            }
         }
 
         // Group names are compared as strings, so name the group by the parsed ids: the server sends to

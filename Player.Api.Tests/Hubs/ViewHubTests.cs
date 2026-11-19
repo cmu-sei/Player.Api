@@ -191,6 +191,40 @@ public class ViewHubTests
         Assert.False(_harness.Items.ContainsKey("presenceId"));
     }
 
+    /// <summary>A post or a leave written with capitals or braces reaches the canonical group.</summary>
+    [Fact]
+    public async Task Post_and_Leave_use_the_canonical_view_id()
+    {
+        var posted = Message(_viewId, "Ten minutes remaining.");
+        _notifications.PostToView(_viewId, Arg.Any<Notification>(), Arg.Any<CancellationToken>()).Returns(posted);
+
+        await Hub().Post(_viewId.ToString("B").ToUpperInvariant(), "Ten minutes remaining.");
+        await Hub().Leave(_viewId.ToString("B").ToUpperInvariant());
+
+        Assert.Same(posted, HubHarness.Sent<Notification>(_harness.Group(_viewId.ToString()), "Reply"));
+        await _harness.Groups.Received(1).RemoveFromGroupAsync(
+            HubHarness.ConnectionId, _viewId.ToString(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// The presence is the connection's own, so it is released whatever id the client leaves with; a malformed
+    /// id names no group the connection could be in, so there is no group to leave.
+    /// </summary>
+    [Fact]
+    public async Task Leave_with_a_malformed_id_still_releases_the_presence()
+    {
+        var presenceId = Guid.NewGuid();
+        _harness.Items["presenceId"] = presenceId;
+
+        await Hub().Leave("not-a-guid");
+
+        await _presence.Received(1).RemoveConnectionFromView(
+            presenceId, _harness.UserId, HubHarness.ConnectionId, Arg.Any<CancellationToken>());
+        await _harness.Groups.DidNotReceive().RemoveFromGroupAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        Assert.False(_harness.Items.ContainsKey("presenceId"));
+    }
+
     /// <summary>
     /// A connection that never joined — or that has already left — has no presence to release, and leaving the
     /// group is still attempted, which SignalR treats as a no-op.
