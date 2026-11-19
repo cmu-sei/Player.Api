@@ -161,7 +161,7 @@ public class TeamHubTests
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>Every method takes the team id as a string, so an unparseable one is the caller's error.</summary>
+    /// <summary>Join reads the team id as a Guid, so an unparseable one is the caller's error.</summary>
     [Fact]
     public async Task A_malformed_team_id_is_rejected()
     {
