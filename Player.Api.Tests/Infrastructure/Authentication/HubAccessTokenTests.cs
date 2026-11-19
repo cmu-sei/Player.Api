@@ -25,25 +25,52 @@ public class HubAccessTokenTests(PlayerAppFactory factory)
         Assert.Equal("hub-token", await TokenRead(path, "?access_token=hub-token"));
     }
 
-    [Fact]
-    public async Task Other_requests_ignore_access_token()
+    [Theory]
+    [InlineData("/api/views")]
+    [InlineData("/hubsx/team")]
+    [InlineData("/api/hubs/team")]
+    public async Task Other_requests_ignore_access_token(string path)
     {
-        Assert.Null(await TokenRead("/api/views", "?access_token=hub-token"));
+        Assert.Null(await TokenRead(path, "?access_token=hub-token"));
     }
 
-    [Fact]
-    public async Task A_hub_request_without_access_token_is_left_to_the_authorization_header()
+    [Theory]
+    [InlineData("?bearer=old-token")]
+    [InlineData("?access_token=")]
+    public async Task A_hub_request_without_access_token_is_left_to_the_authorization_header(string query)
     {
-        Assert.Null(await TokenRead("/hubs/team", "?bearer=old-token"));
+        Assert.Null(await TokenRead("/hubs/team", query));
     }
 
-    private async Task<string> TokenRead(string path, string query)
+    /// <summary>
+    /// A client whose hub url still carries the token it loaded with, as <c>?bearer=</c> (which the middleware
+    /// copies into the Authorization header), reconnects with the factory's current token.
+    /// </summary>
+    [Fact]
+    public async Task Access_token_wins_over_the_authorization_header()
+    {
+        Assert.Equal("fresh-token",
+            await TokenRead("/hubs/team", "?bearer=stale-token&access_token=fresh-token", "Bearer stale-token"));
+    }
+
+    /// <summary>The client appends the factory's token, so a url that already carried one gives two.</summary>
+    [Fact]
+    public async Task The_last_access_token_is_the_one_read()
+    {
+        Assert.Equal("fresh-token", await TokenRead("/hubs/team", "?access_token=stale-token&access_token=fresh-token"));
+    }
+
+    private async Task<string> TokenRead(string path, string query, string authorization = null)
     {
         var options = factory.Services.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
             .Get(JwtBearerDefaults.AuthenticationScheme);
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Path = path;
         httpContext.Request.QueryString = new QueryString(query);
+        if (authorization != null)
+        {
+            httpContext.Request.Headers.Authorization = authorization;
+        }
         var context = new MessageReceivedContext(
             httpContext,
             new AuthenticationScheme(JwtBearerDefaults.AuthenticationScheme, null, typeof(JwtBearerHandler)),

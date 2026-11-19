@@ -171,12 +171,13 @@ public class Startup
 
             // A browser can't set headers on a WebSocket, so the SignalR client sends the token from its
             // accessTokenFactory as access_token. Unlike a token fixed in the hub url, it is fresh on every
-            // reconnect.
+            // reconnect, so it wins over an Authorization header filled from ?bearer=. The client appends it, so
+            // when the url already carried one, the last is the factory's.
             options.Events = new JwtBearerEvents
             {
                 OnMessageReceived = context =>
                 {
-                    var accessToken = context.Request.Query["access_token"];
+                    var accessToken = context.Request.Query["access_token"].LastOrDefault();
 
                     if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
                     {
