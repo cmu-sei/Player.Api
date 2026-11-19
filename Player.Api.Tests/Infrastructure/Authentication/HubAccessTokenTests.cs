@@ -15,7 +15,7 @@ namespace Player.Api.Tests.Infrastructure.Authentication;
 /// client's <c>accessTokenFactory</c> puts it, so a reconnect authenticates with the client's current token.
 /// The test host swaps the bearer handler for its own, so these run the configured event directly.
 /// </summary>
-public class HubAccessTokenTests(DatabaseFixture fixture, PlayerAppFactory factory) : ApiTestBase(fixture, factory)
+public class HubAccessTokenTests(PlayerAppFactory factory)
 {
     [Theory]
     [InlineData("/hubs/team")]
@@ -39,7 +39,7 @@ public class HubAccessTokenTests(DatabaseFixture fixture, PlayerAppFactory facto
 
     private async Task<string> TokenRead(string path, string query)
     {
-        var options = Factory.Services.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
+        var options = factory.Services.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
             .Get(JwtBearerDefaults.AuthenticationScheme);
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Path = path;
