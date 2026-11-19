@@ -2,6 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -58,6 +59,12 @@ public class Delete
 
             if (applicationToDelete == null)
                 throw new EntityNotFoundException<Application>();
+
+            // Track the instances so they are deleted with the application rather than by the database's
+            // cascade, which raises no event; their deletion is how the teams that showed it are told.
+            await db.ApplicationInstances
+                .Where(x => x.ApplicationId == request.Id)
+                .LoadAsync(cancellationToken);
 
             db.Applications.Remove(applicationToDelete);
             await db.SaveChangesAsync(cancellationToken);
