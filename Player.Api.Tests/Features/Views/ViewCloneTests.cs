@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data.Models;
+using Player.Api.Features.Applications;
 using Player.Api.Features.Views;
 using Player.Api.Tests.Support;
 
@@ -205,6 +206,31 @@ public class ViewCloneTests(DatabaseFixture fixture, PlayerAppFactory factory)
         Assert.Equal("https://player.test/console", clonedConsole.Url);
         Assert.Equal("https://player.test/icon.png", clonedConsole.Icon);
         Assert.Equal(template.Id, clonedConsole.ApplicationTemplateId);
+    }
+
+    /// <summary>
+    /// An application saved before urls were checked can hold a script url. A clone refuses to copy it, and
+    /// says which application to fix, rather than carry it into a new view.
+    /// </summary>
+    [Theory]
+    [InlineData("javascript:alert(document.domain)")]
+    [InlineData("data:text/html,<script>alert(1)</script>")]
+    public async Task Cloning_refuses_a_view_with_an_application_url_of_another_scheme_and_creates_nothing(string url)
+    {
+        var view = TestData.View();
+        var portal = TestData.Application(view.Id, "Portal", "https://player.test/portal");
+        var legacy = TestData.Application(view.Id, "Legacy", url);
+        await Seed(view, portal, legacy);
+
+        var problem = await AssertProblem(
+            HttpStatusCode.Conflict,
+            await RootClient.PostAsJsonAsync($"api/views/{view.Id}/clone", new { }, Ct));
+
+        Assert.Equal($"Application Legacy ({legacy.Id}): {ApplicationUrls.InvalidMessage}", problem.Title);
+        Assert.DoesNotContain(url, problem.Title);
+        await using var db = NewContext();
+        Assert.Equal(1, await db.Views.CountAsync(Ct));
+        Assert.Equal(2, await db.Applications.CountAsync(Ct));
     }
 
     [Fact]
