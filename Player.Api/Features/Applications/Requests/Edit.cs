@@ -61,6 +61,9 @@ public class Edit
             if (applicationToUpdate == null)
                 throw new EntityNotFoundException<Application>();
 
+            if (!ApplicationUrls.IsAllowed(request.Url))
+                throw new ConflictException(ApplicationUrls.InvalidMessage);
+
             request.ApplyTo(applicationToUpdate);
 
             db.Applications.Update(applicationToUpdate);

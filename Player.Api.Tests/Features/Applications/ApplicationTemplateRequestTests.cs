@@ -103,6 +103,41 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
         Assert.Equal(1, await db.ApplicationTemplates.CountAsync(Ct));
     }
 
+    /// <summary>
+    /// A template's url is loaded into an iframe in Player for every application built from it, so a
+    /// scheme other than http or https is refused; the rule itself is in <see cref="ApplicationUrlsTests"/>.
+    /// </summary>
+    [Fact]
+    public async Task CreateApplicationTemplate_refuses_a_url_with_another_scheme()
+    {
+        var problem = await AssertProblem(HttpStatusCode.Conflict, await RootClient.PostAsJsonAsync(
+            "api/application-templates",
+            new { name = "Virtual Machines", url = "javascript:alert(document.domain)" },
+            Ct));
+
+        Assert.Equal(ApplicationUrls.InvalidMessage, problem.Title);
+        await using var db = NewContext();
+        Assert.False(await db.ApplicationTemplates.AnyAsync(Ct));
+    }
+
+    [Fact]
+    public async Task EditApplicationTemplate_refuses_a_url_with_another_scheme()
+    {
+        var template = TestData.ApplicationTemplate("Virtual Machines", "https://example.test/vm");
+        await Seed(template);
+
+        var problem = await AssertProblem(HttpStatusCode.Conflict, await RootClient.PutAsJsonAsync(
+            $"api/application-templates/{template.Id}",
+            new { name = "Virtual Machines", url = "data:text/html,<script>alert(1)</script>" },
+            Ct));
+
+        Assert.Equal(ApplicationUrls.InvalidMessage, problem.Title);
+        await using var db = NewContext();
+        Assert.Equal(
+            "https://example.test/vm",
+            (await db.ApplicationTemplates.SingleAsync(x => x.Id == template.Id, Ct)).Url);
+    }
+
     [Fact]
     public async Task EditApplicationTemplate_refuses_a_rename_onto_another_templates_name()
     {
@@ -731,6 +766,39 @@ public class ApplicationTemplateRequestTests(DatabaseFixture fixture, PlayerAppF
 
         await using var check = NewContext();
         Assert.Equal("https://local.test/vm", (await check.ApplicationTemplates.SingleAsync(Ct)).Url);
+    }
+
+    /// <summary>
+    /// A template whose url has a scheme other than http or https is reported rather than imported, and
+    /// does not overwrite the stored one even when asked to. The archive is exported from a row written
+    /// straight to the database, as one from an installation without this check could hold it.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ImportApplicationTemplates_reports_a_template_whose_url_has_another_scheme(bool overWriteExisting)
+    {
+        var template = TestData.ApplicationTemplate("Hostile", "javascript:alert(document.domain)");
+        await Seed(template);
+        var exported = await Export();
+
+        await using (var db = NewContext())
+        {
+            var stored = await db.ApplicationTemplates.SingleAsync(Ct);
+            if (overWriteExisting)
+                stored.Url = "https://example.test/safe";
+            else
+                db.ApplicationTemplates.Remove(stored);
+            await db.SaveChangesAsync(Ct);
+        }
+
+        var result = await Import(exported, overWriteExisting);
+
+        Assert.Equal([$"Hostile ({template.Id}): {ApplicationUrls.InvalidMessage}"], result.Failures);
+
+        string[] expected = overWriteExisting ? ["https://example.test/safe"] : [];
+        await using var check = NewContext();
+        Assert.Equal(expected, await check.ApplicationTemplates.Select(x => x.Url).ToListAsync(Ct));
     }
 
     /// <summary>

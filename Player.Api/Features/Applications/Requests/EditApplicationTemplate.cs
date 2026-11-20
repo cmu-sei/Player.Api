@@ -63,6 +63,9 @@ public class EditApplicationTemplate
             if (templateToUpdate == null)
                 throw new EntityNotFoundException<ApplicationTemplate>();
 
+            if (!ApplicationUrls.IsAllowed(request.Url))
+                throw new ConflictException(ApplicationUrls.InvalidMessage);
+
             // Only a rename is checked, so a template that already shares its name with another can
             // still be edited — and renamed out of the clash.
             if (!ApplicationTemplateNames.SameName(request.Name, templateToUpdate.Name) &&

@@ -126,6 +126,14 @@ public class ViewImporter(PlayerContext db, IFileService fileService)
         IEnumerable<ApplicationTemplateEntity> dbTemplates,
         bool matchByName)
     {
+        foreach (var app in view.Applications.Where(x => !ApplicationUrls.IsAllowed(x.Url)))
+        {
+            yield return new ImportViewFailure(
+                view.Id,
+                view.Name,
+                $"Application {app.Name} ({app.Id}): {ApplicationUrls.InvalidMessage}");
+        }
+
         foreach (var app in view.Applications.Where(x => x.ApplicationTemplateId.HasValue || !string.IsNullOrEmpty(x.ApplicationTemplateName)))
         {
             var dbApp = dbTemplates.FirstOrDefault(x => x.Id == app.ApplicationTemplateId) ??

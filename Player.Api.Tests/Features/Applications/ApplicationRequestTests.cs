@@ -70,6 +70,43 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
         Assert.Equal(template.Id, created.ApplicationTemplateId);
     }
 
+    /// <summary>
+    /// The url is loaded into an iframe in Player, so a scheme other than http or https is refused; the
+    /// rule itself is in <see cref="ApplicationUrlsTests"/>.
+    /// </summary>
+    [Theory]
+    [InlineData("javascript:alert(document.domain)")]
+    [InlineData("data:text/html,<script>alert(1)</script>")]
+    public async Task Create_refuses_a_url_with_another_scheme(string url)
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        var problem = await AssertProblem(HttpStatusCode.Conflict, await RootClient.PostAsJsonAsync(
+            $"api/views/{view.Id}/applications", new { name = "Console", url }, Ct));
+
+        Assert.Equal(ApplicationUrls.InvalidMessage, problem.Title);
+        Assert.False(await ReadBack(db => db.Applications.AnyAsync(x => x.ViewId == view.Id, Ct)));
+    }
+
+    /// <summary>
+    /// Relative and placeholder urls are what Player's templates and Blueprint use, so they are kept.
+    /// </summary>
+    [Theory]
+    [InlineData("/vm/views/{viewId}")]
+    [InlineData("{vmUrl}/views/{playerViewId}{theme}")]
+    public async Task Create_keeps_a_relative_or_placeholder_url(string url)
+    {
+        var view = TestData.View();
+        await Seed(view);
+
+        var response = await RootClient.PostAsJsonAsync(
+            $"api/views/{view.Id}/applications", new { name = "Console", url }, Ct);
+
+        await AssertStatus(HttpStatusCode.Created, response);
+        Assert.Equal(url, (await ReadAsync<Application>(response)).Url);
+    }
+
     [Fact]
     public async Task Create_reports_a_missing_view_as_not_found()
     {
@@ -162,6 +199,23 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
 
         await using var db = NewContext();
         Assert.Equal("After", (await db.Applications.SingleAsync(x => x.Id == application.Id, Ct)).Name);
+    }
+
+    [Fact]
+    public async Task Edit_refuses_a_url_with_another_scheme()
+    {
+        var view = TestData.View();
+        var application = TestData.Application(view.Id, "Before");
+        await Seed(view, application);
+
+        var problem = await AssertProblem(HttpStatusCode.Conflict, await RootClient.PutAsJsonAsync(
+            $"api/applications/{application.Id}",
+            new { name = "After", url = "javascript:alert(document.domain)" },
+            Ct));
+
+        Assert.Equal(ApplicationUrls.InvalidMessage, problem.Title);
+        await using var db = NewContext();
+        Assert.Equal("Before", (await db.Applications.SingleAsync(x => x.Id == application.Id, Ct)).Name);
     }
 
     [Fact]

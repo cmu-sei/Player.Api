@@ -65,6 +65,9 @@ public class CreateApplicationTemplate
 
         public override async Task<ApplicationTemplate> HandleRequest(Command request, CancellationToken cancellationToken)
         {
+            if (!ApplicationUrls.IsAllowed(request.Url))
+                throw new ConflictException(ApplicationUrls.InvalidMessage);
+
             if (await db.ApplicationTemplates.IsTakenAsync(request.Name, null, cancellationToken))
                 throw new ConflictException(ApplicationTemplateNames.TakenMessage(request.Name));
 
