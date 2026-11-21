@@ -76,6 +76,11 @@ public static partial class ApplicationUrls
                 prefix.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
                 prefix.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
 
+        // A scheme starts with a letter, so a prefix whose own first character is anything else can't
+        // become one, whatever its placeholders hold ("2026-{teamName}:summary").
+        if (prefix[0] != Hole && !char.IsAsciiLetter(prefix[0]))
+            return true;
+
         // With placeholders in it, the prefix can only be kept from becoming a scheme by text of its own
         // that no scheme may hold. Spaces the placeholders could leave at the start do not count.
         return prefix.Replace(Hole.ToString(), string.Empty).TrimStart().Any(c => !IsSchemeCharacter(c));

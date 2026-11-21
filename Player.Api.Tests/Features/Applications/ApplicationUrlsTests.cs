@@ -44,6 +44,7 @@ public class ApplicationUrlsTests
     [InlineData("//example.test/app")]
     [InlineData("/vm/{viewId}/notes:today")]
     [InlineData("{vmUrl}?at=12:00")]
+    [InlineData("2026-{teamName}:summary")]
     [InlineData(" https://example.test/app ")]
     public void An_http_or_relative_url_is_allowed(string url)
     {
