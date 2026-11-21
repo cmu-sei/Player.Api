@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Player.Api.Data.Data;
 using Player.Api.Data.Data.Models;
+using Player.Api.Features.Applications;
 using Player.Api.Features.Teams;
 using Player.Api.Infrastructure.Authorization;
 using Player.Api.Infrastructure.Endpoints;
@@ -83,6 +84,11 @@ public class Clone
 
             if (view == null)
                 throw new EntityNotFoundException<View>();
+
+            // An application saved before urls were checked is not copied into a new view.
+            var refused = view.Applications.FirstOrDefault(x => !ApplicationUrls.IsAllowed(x.Url));
+            if (refused != null)
+                throw new ConflictException($"Application {refused.GetName()} ({refused.Id}): {ApplicationUrls.InvalidMessage}");
 
             var newView = view.Clone();
             newView.Name = $"Clone of {newView.Name}";

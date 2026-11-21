@@ -442,11 +442,11 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     }
 
     /// <summary>
-    /// An application that names no template is a URL of its own, not a broken reference, so it is
-    /// skipped rather than rejected.
+    /// An application that names no template is a URL of its own, not a broken reference, so no
+    /// template is looked up for it.
     /// </summary>
     [Fact]
-    public async Task An_application_with_no_template_is_imported_without_validation()
+    public async Task An_application_with_no_template_is_imported_without_a_template_lookup()
     {
         var view = Export();
         view.Applications = [Application(view.Id, name: "Standalone")];
@@ -457,6 +457,112 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
         var imported = await db.Applications.SingleAsync(x => x.ViewId == view.Id, Ct);
         Assert.Equal("Standalone", imported.Name);
         Assert.Null(imported.ApplicationTemplateId);
+    }
+
+    // ---- Application urls -----------------------------------------------------------------------
+
+    /// <summary>
+    /// An application's url is loaded into an iframe in Player, and a <c>javascript:</c> one would run in
+    /// Player's origin, so a url with any scheme but http or https rejects the view. Applications with no
+    /// template and with one are both checked, since an application's own url wins over its template's.
+    /// </summary>
+    [Theory]
+    [InlineData("javascript:alert(document.domain)", false)]
+    [InlineData(" JavaScript:alert(1)", false)]
+    [InlineData("java\tscript:alert(1)", false)]
+    [InlineData("data:text/html,<script>alert(1)</script>", false)]
+    [InlineData("{teamName}:alert(1)", false)]
+    [InlineData("{teamName} javascript:alert(document.domain)", false)]
+    [InlineData("javascript:alert(document.domain)", true)]
+    public async Task An_application_whose_url_has_another_scheme_is_rejected(string url, bool withTemplate)
+    {
+        var template = TestData.ApplicationTemplate("Local Template");
+        await Seed(template);
+
+        var view = Export();
+        var app = Application(view.Id, templateId: withTemplate ? template.Id : null);
+        app.Url = url;
+        view.Applications = [app];
+
+        var failure = Assert.Single(await Import([view]));
+
+        Assert.Equal(view.Id, failure.Id);
+        Assert.Equal(
+            $"Application Console ({app.Id}): {ApplicationUrls.InvalidMessage}",
+            failure.Reason);
+        await AssertNotImported(view);
+    }
+
+    /// <summary>
+    /// An application that leaves its name to its template is reported under the template's name, as
+    /// the export names that template, rather than with a blank.
+    /// </summary>
+    [Fact]
+    public async Task A_url_failure_names_an_application_without_a_name_by_its_template()
+    {
+        var template = TestData.ApplicationTemplate("Local Template");
+        await Seed(template);
+
+        var view = Export();
+        var app = Application(view.Id, templateName: "Local Template");
+        app.Name = null;
+        app.Url = "javascript:alert(document.domain)";
+        view.Applications = [app];
+
+        var failure = Assert.Single(await Import([view], matchApplicationTemplatesByName: true));
+
+        Assert.Equal(
+            $"Application Local Template ({app.Id}): {ApplicationUrls.InvalidMessage}",
+            failure.Reason);
+        await AssertNotImported(view);
+    }
+
+    /// <summary>
+    /// The forms Player's seed data, Blueprint and the operator url variables produce still import:
+    /// http(s) urls with placeholders anywhere, a placeholder for the whole address, and relative urls.
+    /// No url at all is allowed too, as the application then takes its template's.
+    /// </summary>
+    [Theory]
+    [InlineData("http://localhost:4303/views/{viewId}?{theme}")]
+    [InlineData("https://{vm-ui}/views/{viewId}")]
+    [InlineData("{vmUrl}/views/{playerViewId}{theme}")]
+    [InlineData("/vm/views/{viewId}")]
+    [InlineData("https://example.test/pasted\n")]
+    [InlineData(null)]
+    public async Task An_application_with_an_http_or_relative_url_is_imported(string url)
+    {
+        var view = Export();
+        var app = Application(view.Id);
+        app.Url = url;
+        view.Applications = [app];
+
+        Assert.Empty(await Import([view]));
+
+        await using var db = NewContext();
+        Assert.Equal(url, (await db.Applications.SingleAsync(x => x.Id == app.Id, Ct)).Url);
+    }
+
+    /// <summary>
+    /// The url failure is reported beside the view's other failures rather than in place of them.
+    /// </summary>
+    [Fact]
+    public async Task A_url_failure_is_reported_beside_a_missing_template()
+    {
+        var view = Export();
+        var badUrl = Application(view.Id, name: "Bad Url");
+        badUrl.Url = "javascript:alert(1)";
+        var missingTemplate = Application(view.Id, name: "Missing Template", templateId: Guid.NewGuid());
+        view.Applications = [badUrl, missingTemplate];
+
+        var failures = await Import([view]);
+
+        Assert.Equal(
+            [
+                $"Application Bad Url ({badUrl.Id}): {ApplicationUrls.InvalidMessage}",
+                $"Application Missing Template ({missingTemplate.Id}): No matching Application Template found",
+            ],
+            failures.Select(x => x.Reason));
+        await AssertNotImported(view);
     }
 
     // ---- Files ----------------------------------------------------------------------------------
