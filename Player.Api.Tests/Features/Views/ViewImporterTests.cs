@@ -472,6 +472,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     [InlineData("java\tscript:alert(1)", false)]
     [InlineData("data:text/html,<script>alert(1)</script>", false)]
     [InlineData("{teamName}:alert(1)", false)]
+    [InlineData("{teamName} javascript:alert(document.domain)", false)]
     [InlineData("javascript:alert(document.domain)", true)]
     public async Task An_application_whose_url_has_another_scheme_is_rejected(string url, bool withTemplate)
     {
@@ -493,6 +494,30 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     }
 
     /// <summary>
+    /// An application that leaves its name to its template is reported under the template's name, as
+    /// the export names that template, rather than with a blank.
+    /// </summary>
+    [Fact]
+    public async Task A_url_failure_names_an_application_without_a_name_by_its_template()
+    {
+        var template = TestData.ApplicationTemplate("Local Template");
+        await Seed(template);
+
+        var view = Export();
+        var app = Application(view.Id, templateName: "Local Template");
+        app.Name = null;
+        app.Url = "javascript:alert(document.domain)";
+        view.Applications = [app];
+
+        var failure = Assert.Single(await Import([view], matchApplicationTemplatesByName: true));
+
+        Assert.Equal(
+            $"Application Local Template ({app.Id}): {ApplicationUrls.InvalidMessage}",
+            failure.Reason);
+        await AssertNotImported(view);
+    }
+
+    /// <summary>
     /// The forms Player's seed data, Blueprint and the operator url variables produce still import:
     /// http(s) urls with placeholders anywhere, a placeholder for the whole address, and relative urls.
     /// No url at all is allowed too, as the application then takes its template's.
@@ -502,6 +527,7 @@ public class ViewImporterTests(DatabaseFixture fixture) : ServiceTestBase(fixtur
     [InlineData("https://{vm-ui}/views/{viewId}")]
     [InlineData("{vmUrl}/views/{playerViewId}{theme}")]
     [InlineData("/vm/views/{viewId}")]
+    [InlineData("https://example.test/pasted\n")]
     [InlineData(null)]
     public async Task An_application_with_an_http_or_relative_url_is_imported(string url)
     {

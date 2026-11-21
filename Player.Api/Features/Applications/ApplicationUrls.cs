@@ -20,36 +20,67 @@ public static partial class ApplicationUrls
         "An Application's Url must be an absolute http or https URL, or a relative one.";
 
     /// <summary>
-    /// A placeholder. It stands for text that is only known later, some of it chosen by users (a team
-    /// name), so it is checked as a letter: one in front of a colon then reads as a scheme of its own,
-    /// which is refused, rather than as a relative path. <c>{teamName}:alert(1)</c> would otherwise pass
-    /// and become <c>javascript:alert(1)</c> for a team named "javascript".
+    /// Stands in for each placeholder while the url is checked. Control characters are refused before
+    /// it is used, so it cannot be mistaken for one the url holds.
+    /// </summary>
+    private const char Hole = '\0';
+
+    /// <summary>
+    /// A placeholder: <c>{viewId}</c>, <c>{teamName}</c>, <c>{theme}</c>, an <c>Applications:UrlVariables</c>
+    /// key, or any other text in braces, which is left as it is when nothing fills it in.
     /// </summary>
     [GeneratedRegex(@"\{[^{}]*\}")]
     private static partial Regex Placeholder();
 
-    /// <summary>A scheme and its colon, as a browser reads one at the start of a url.</summary>
-    [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9+.\-]*:")]
+    /// <summary>A scheme, as a browser reads one before the first colon of a url.</summary>
+    [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9+.\-]*$")]
     private static partial Regex Scheme();
 
     /// <summary>
     /// Whether <paramref name="url"/> may be saved as an Application's or Application Template's url. No
     /// url is allowed, as an Application inherits its template's.
     /// </summary>
+    /// <remarks>
+    /// A placeholder is filled in after this check, some of them with names users choose, so one before
+    /// the first colon is assumed to become whatever completes another scheme: any letters, or nothing.
+    /// Nothing matters as much as letters, since browsers strip the spaces that then lead the url:
+    /// <c>{teamName} javascript:</c> is <c>javascript:</c> for a team with no name. The filled-in values
+    /// cannot add a colon, a space or a control character themselves: the view and team names are
+    /// escaped with <see cref="Uri.EscapeDataString(string)"/>, the ids are guids, <c>{theme}</c> becomes
+    /// a query parameter, and the url variables are the operator's.
+    /// </remarks>
     public static bool IsAllowed(string url)
     {
         if (string.IsNullOrWhiteSpace(url))
             return true;
 
-        // Browsers drop tabs and newlines anywhere in a url, which can put a scheme back together
-        // ("java\tscript:"), and strip other control characters from its ends.
+        // Browsers strip the spaces and control characters around a url, so a pasted one may keep its
+        // newline. Inside, they drop tabs and newlines, which can put a scheme back together
+        // ("java\tscript:").
+        url = url.Trim();
         if (url.Any(char.IsControl))
             return false;
 
-        var scheme = Scheme().Match(Placeholder().Replace(url.Trim(), "x"));
+        var template = Placeholder().Replace(url, Hole.ToString());
 
-        return !scheme.Success ||
-            scheme.Value.Equals($"{Uri.UriSchemeHttp}:", StringComparison.OrdinalIgnoreCase) ||
-            scheme.Value.Equals($"{Uri.UriSchemeHttps}:", StringComparison.OrdinalIgnoreCase);
+        // Only an operator's url variable can put a colon in, so the url's own first colon is where any
+        // scheme a user could choose ends.
+        var colon = template.IndexOf(':');
+        if (colon < 0)
+            return true;
+
+        var prefix = template[..colon];
+
+        if (!prefix.Contains(Hole))
+            return !Scheme().IsMatch(prefix) ||
+                prefix.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+                prefix.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+
+        // With placeholders in it, the prefix can only be kept from becoming a scheme by text of its own
+        // that no scheme may hold. Spaces the placeholders could leave at the start do not count.
+        return prefix.Replace(Hole.ToString(), string.Empty).TrimStart().Any(c => !IsSchemeCharacter(c));
     }
+
+    private static bool IsSchemeCharacter(char c) =>
+        char.IsAsciiLetterOrDigit(c) || c is '+' or '.' or '-';
 }

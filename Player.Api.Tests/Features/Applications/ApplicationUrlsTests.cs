@@ -42,6 +42,8 @@ public class ApplicationUrlsTests
     [InlineData("assets/app/index.html")]
     [InlineData("./app?team={teamName}")]
     [InlineData("//example.test/app")]
+    [InlineData("/vm/{viewId}/notes:today")]
+    [InlineData("{vmUrl}?at=12:00")]
     [InlineData(" https://example.test/app ")]
     public void An_http_or_relative_url_is_allowed(string url)
     {
@@ -69,11 +71,25 @@ public class ApplicationUrlsTests
     }
 
     /// <summary>
-    /// Browsers drop tabs and newlines inside a url and strip control characters from its ends, so any
-    /// of them could hide a scheme from a check that reads the text as stored.
+    /// A pasted url can bring a newline or tab with it. Browsers strip those from the ends, so they are
+    /// allowed there.
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.test/app\n")]
+    [InlineData("\thttps://example.test/app\r\n")]
+    [InlineData("{vmUrl}/views/{viewId}\n")]
+    public void Whitespace_around_a_url_is_allowed(string url)
+    {
+        Assert.True(ApplicationUrls.IsAllowed(url));
+    }
+
+    /// <summary>
+    /// Inside a url, browsers drop tabs and newlines, and they strip other control characters from its
+    /// ends, so any of them could hide a scheme from a check that reads the text as stored.
     /// </summary>
     [Theory]
     [InlineData("java\tscript:alert(1)")]
+    [InlineData("java\tscript:alert(1)\n")]
     [InlineData("java\nscript:alert(1)")]
     [InlineData("\u0001javascript:alert(1)")]
     [InlineData("https://example.test/\r\napp")]
@@ -83,12 +99,18 @@ public class ApplicationUrlsTests
     }
 
     /// <summary>
-    /// A placeholder is filled in later, some of them from names users choose, so one in a scheme's
-    /// place counts as an unknown scheme. A team named "javascript" would otherwise turn the first url
-    /// into <c>javascript:alert(1)</c>.
+    /// A placeholder is filled in later, some of them from names users choose, so one before the first
+    /// colon is assumed to complete another scheme, with letters or with nothing. A team named
+    /// "javascript" turns the first url into <c>javascript:alert(1)</c>; a team or view with no name
+    /// turns the next ones into it too, the spaces left in front being stripped by the browser.
     /// </summary>
     [Theory]
     [InlineData("{teamName}:alert(1)")]
+    [InlineData("{teamName} javascript:alert(document.domain)")]
+    [InlineData("{viewName}javascript:alert(1)")]
+    [InlineData("{a}{b}javascript:alert(1)")]
+    [InlineData("{viewName} {teamName}:alert(1)")]
+    [InlineData("{not:a:variable}javascript:alert(1)")]
     [InlineData("java{viewName}script:alert(1)")]
     [InlineData("{scheme}://example.test/app")]
     [InlineData("http{s}://example.test/app")]

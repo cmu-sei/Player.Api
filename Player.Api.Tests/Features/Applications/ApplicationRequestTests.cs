@@ -680,6 +680,26 @@ public class ApplicationRequestTests(DatabaseFixture fixture, PlayerAppFactory f
     }
 
     /// <summary>
+    /// The names are escaped into the url, spaces, control characters and colons included, so a name
+    /// cannot add a scheme to a url <see cref="ApplicationUrls.IsAllowed"/> let through: it relies on this.
+    /// </summary>
+    [Fact]
+    public async Task CreateApplicationInstance_escapes_the_names_it_substitutes_into_the_url()
+    {
+        var view = TestData.View(" java\tscript:");
+        var team = TestData.Team(view.Id, "\njavascript:alert(1)");
+        var application = TestData.Application(view.Id, "Console", "/a?view={viewName}&team={teamName}");
+        await Seed(view, team, application);
+
+        var created = await ReadAsync<ApplicationInstance>(await RootClient.PostAsJsonAsync(
+            $"api/teams/{team.Id}/application-instances",
+            new { applicationId = application.Id },
+            Ct));
+
+        Assert.Equal("/a?view=%20java%09script%3A&team=%0Ajavascript%3Aalert%281%29", created.Url);
+    }
+
+    /// <summary>
     /// An instance is a placement within one view, so a cross-view pairing is refused with a 409 naming
     /// the rule.
     /// </summary>

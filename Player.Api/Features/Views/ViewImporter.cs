@@ -126,12 +126,13 @@ public class ViewImporter(PlayerContext db, IFileService fileService)
         IEnumerable<ApplicationTemplateEntity> dbTemplates,
         bool matchByName)
     {
+        // An application that takes its name from its template is named by the template, as Clone names it.
         foreach (var app in view.Applications.Where(x => !ApplicationUrls.IsAllowed(x.Url)))
         {
             yield return new ImportViewFailure(
                 view.Id,
                 view.Name,
-                $"Application {app.Name} ({app.Id}): {ApplicationUrls.InvalidMessage}");
+                $"Application {app.Name ?? app.ApplicationTemplateName} ({app.Id}): {ApplicationUrls.InvalidMessage}");
         }
 
         foreach (var app in view.Applications.Where(x => x.ApplicationTemplateId.HasValue || !string.IsNullOrEmpty(x.ApplicationTemplateName)))
