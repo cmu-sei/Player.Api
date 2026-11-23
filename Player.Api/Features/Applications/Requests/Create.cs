@@ -63,6 +63,9 @@ public class Create
             if (!viewExists)
                 throw new EntityNotFoundException<View>();
 
+            if (!ApplicationUrls.IsAllowed(request.Url))
+                throw new ConflictException(ApplicationUrls.InvalidMessage);
+
             var applicationEntity = request.ToEntity();
             applicationEntity.ViewId = request.ViewId;
 

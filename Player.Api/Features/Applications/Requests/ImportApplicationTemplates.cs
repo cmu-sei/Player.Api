@@ -85,6 +85,12 @@ public class ImportApplicationTemplates
 
             foreach (var applicationTemplate in applicationTemplates)
             {
+                if (!ApplicationUrls.IsAllowed(applicationTemplate.Url))
+                {
+                    failures.Add($"{applicationTemplate.Name} ({applicationTemplate.Id}): {ApplicationUrls.InvalidMessage}");
+                    continue;
+                }
+
                 var dbTemplate = dbTemplates.SingleOrDefault(x => x.Id == applicationTemplate.Id);
 
                 if (dbTemplate == null)
