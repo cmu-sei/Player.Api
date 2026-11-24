@@ -36,6 +36,22 @@ public class ViewHubTests
     }
 
     /// <summary>
+    /// Group names are compared as strings, and the server sends to the id in its canonical form, so a caller
+    /// that writes the id in capitals or braces joins the same group as everyone else.
+    /// </summary>
+    [Fact]
+    public async Task Join_names_the_group_by_the_canonical_view_id()
+    {
+        var joined = Message(_viewId, "Successfully joined Exercise One notifications.");
+        _notifications.JoinView(_viewId, Arg.Any<CancellationToken>()).Returns(joined);
+
+        await Hub().Join(_viewId.ToString("B").ToUpperInvariant());
+
+        await _harness.Groups.Received(1).AddToGroupAsync(
+            HubHarness.ConnectionId, _viewId.ToString(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
     /// A refused join is reported by <c>WasSuccess</c>, and the hub has to read it: joining the group anyway
     /// would deliver every later view broadcast to a caller with no claim on the view. The refusal is still
     /// relayed, because the client distinguishes a refusal from a dropped connection.
@@ -172,6 +188,40 @@ public class ViewHubTests
             presenceId, _harness.UserId, HubHarness.ConnectionId, Arg.Any<CancellationToken>());
         await _harness.Groups.Received(1).RemoveFromGroupAsync(
             HubHarness.ConnectionId, _viewId.ToString(), Arg.Any<CancellationToken>());
+        Assert.False(_harness.Items.ContainsKey("presenceId"));
+    }
+
+    /// <summary>A post or a leave written with capitals or braces reaches the canonical group.</summary>
+    [Fact]
+    public async Task Post_and_Leave_use_the_canonical_view_id()
+    {
+        var posted = Message(_viewId, "Ten minutes remaining.");
+        _notifications.PostToView(_viewId, Arg.Any<Notification>(), Arg.Any<CancellationToken>()).Returns(posted);
+
+        await Hub().Post(_viewId.ToString("B").ToUpperInvariant(), "Ten minutes remaining.");
+        await Hub().Leave(_viewId.ToString("B").ToUpperInvariant());
+
+        Assert.Same(posted, HubHarness.Sent<Notification>(_harness.Group(_viewId.ToString()), "Reply"));
+        await _harness.Groups.Received(1).RemoveFromGroupAsync(
+            HubHarness.ConnectionId, _viewId.ToString(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// The presence is the connection's own, so it is released whatever id the client leaves with; a malformed
+    /// id names no group the connection could be in, so there is no group to leave.
+    /// </summary>
+    [Fact]
+    public async Task Leave_with_a_malformed_id_still_releases_the_presence()
+    {
+        var presenceId = Guid.NewGuid();
+        _harness.Items["presenceId"] = presenceId;
+
+        await Hub().Leave("not-a-guid");
+
+        await _presence.Received(1).RemoveConnectionFromView(
+            presenceId, _harness.UserId, HubHarness.ConnectionId, Arg.Any<CancellationToken>());
+        await _harness.Groups.DidNotReceive().RemoveFromGroupAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         Assert.False(_harness.Items.ContainsKey("presenceId"));
     }
 

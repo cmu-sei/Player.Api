@@ -38,6 +38,22 @@ public class UserHubTests
     }
 
     /// <summary>
+    /// Group names are compared as strings, and the server sends to the ids in their canonical form, so a
+    /// caller that writes them in capitals or braces joins the same group as everyone else.
+    /// </summary>
+    [Fact]
+    public async Task Join_names_the_group_by_the_canonical_view_and_user_ids()
+    {
+        var joined = Message(_userId, "Successfully joined Test User notifications.");
+        _notifications.JoinUser(_viewId, _userId, Arg.Any<CancellationToken>()).Returns(joined);
+
+        await Hub().Join(_viewId.ToString("B").ToUpperInvariant(), _userId.ToString("B").ToUpperInvariant());
+
+        await _harness.Groups.Received(1).AddToGroupAsync(
+            HubHarness.ConnectionId, Group, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
     /// Joining someone else's notifications is refused through <c>WasSuccess</c>, and the hub has to read it:
     /// adding the connection to that user's group anyway would deliver another user's private notifications.
     /// </summary>
@@ -135,6 +151,37 @@ public class UserHubTests
 
         await _harness.Groups.Received(1).RemoveFromGroupAsync(
             HubHarness.ConnectionId, Group, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A post or a leave written with capitals or braces reaches the canonical group.</summary>
+    [Fact]
+    public async Task Post_and_Leave_use_the_canonical_view_and_user_ids()
+    {
+        var posted = Message(_userId, "Your VM is ready.");
+        _notifications.PostToUser(_viewId, _userId, Arg.Any<Notification>(), Arg.Any<CancellationToken>())
+            .Returns(posted);
+
+        await Hub().Post(_viewId.ToString("B").ToUpperInvariant(), _userId.ToString("B").ToUpperInvariant(), "Your VM is ready.");
+        await Hub().Leave(_viewId.ToString("B").ToUpperInvariant(), _userId.ToString("B").ToUpperInvariant());
+
+        Assert.Same(posted, HubHarness.Sent<Notification>(_harness.Group(Group), "Reply"));
+        await _harness.Groups.Received(1).RemoveFromGroupAsync(
+            HubHarness.ConnectionId, Group, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// A connection is only ever in a group named by valid ids, so leaving with a malformed one has nothing to
+    /// do, and doesn't fail a client's teardown.
+    /// </summary>
+    [Theory]
+    [InlineData("not-a-guid", null)]
+    [InlineData(null, "not-a-guid")]
+    public async Task Leave_with_a_malformed_id_does_nothing(string view, string user)
+    {
+        await Hub().Leave(view ?? _viewId.ToString(), user ?? _userId.ToString());
+
+        await _harness.Groups.DidNotReceive().RemoveFromGroupAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     private UserHub Hub() => _harness.Attach(new UserHub(_notifications));
