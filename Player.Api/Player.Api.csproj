@@ -48,6 +48,8 @@
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <!-- Through Swashbuckle.AspNetCore 10.1.0, which carries 2.3.0. -->
     <PackageReference Include="Microsoft.OpenApi" />
+    <!-- Through Microsoft.ApplicationInsights.AspNetCore 3.2.0, which carries 1.19.0. -->
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Player.Api.Data\Player.Api.Data.csproj" />
