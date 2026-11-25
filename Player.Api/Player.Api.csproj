@@ -48,6 +48,24 @@
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <!-- Through Swashbuckle.AspNetCore 10.1.0, which carries 2.3.0. -->
     <PackageReference Include="Microsoft.OpenApi" />
+    <!-- Through Microsoft.ApplicationInsights.AspNetCore 3.2.0, which carries 1.19.0. Crucible.Common.ServiceDefaults
+         0.0.3 also brings it, at 1.15.0, which the advisory does not cover. -->
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+  </ItemGroup>
+  <!-- Not security fixes. OpenTelemetry.Api and the SDK grant InternalsVisibleTo to the SDK, Extensions.Hosting
+       and the exporters, so the whole family has to stay at one version. Microsoft.ApplicationInsights.AspNetCore
+       3.2.0 raises the API and SDK to 1.19.1 and the pin above raises the API to 1.20.1, while
+       Crucible.Common.ServiceDefaults 0.0.3 brings the exporters at 1.15.3. With the API pinned here too, an
+       update that needs a newer OpenTelemetry.Api fails restore (NU1605) until this group moves with it. The
+       group can go once every one of these packages resolves to the same version without it. -->
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Api" />
+    <PackageReference Include="OpenTelemetry.Api.ProviderBuilderExtensions" />
+    <PackageReference Include="OpenTelemetry" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Player.Api.Data\Player.Api.Data.csproj" />
