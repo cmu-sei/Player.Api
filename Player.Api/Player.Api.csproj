@@ -48,8 +48,21 @@
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <!-- Through Swashbuckle.AspNetCore 10.1.0, which carries 2.3.0. -->
     <PackageReference Include="Microsoft.OpenApi" />
-    <!-- Through Microsoft.ApplicationInsights.AspNetCore 3.2.0, which carries 1.19.0. -->
+    <!-- Through Microsoft.ApplicationInsights.AspNetCore 3.2.0, which carries 1.19.0, and
+         Crucible.Common.ServiceDefaults 0.0.3, which carries 1.15.0. -->
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+  </ItemGroup>
+  <!-- Not security fixes. OpenTelemetry.Instrumentation.AspNetCore 1.20.2 raises OpenTelemetry.Api to 1.20.1,
+       and these packages use its internals (and each other's), so they are kept at the same version. They
+       arrive through Crucible.Common.ServiceDefaults 0.0.3 at 1.15.3, and OpenTelemetry and
+       OpenTelemetry.Extensions.Hosting also through Microsoft.ApplicationInsights.AspNetCore 3.2.0 at 1.19.1.
+       They can go with the pin above. -->
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Player.Api.Data\Player.Api.Data.csproj" />
