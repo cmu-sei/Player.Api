@@ -82,6 +82,8 @@
 
   <!-- OpenTelemetry kept at one version. See the matching group in Player.Api/Player.Api.csproj. -->
   <ItemGroup>
+    <PackageVersion Include="OpenTelemetry.Api" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Api.ProviderBuilderExtensions" Version="1.20.1" />
     <PackageVersion Include="OpenTelemetry" Version="1.20.1" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
     <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.20.1" />
